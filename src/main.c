@@ -7,6 +7,11 @@ int main(int argc, char **argv) {
     if (argc == 2) {
         hFileReader fr = sbFileReader_open(argv[1]);
 
+        if (!sbFileReader_ok(fr)) {
+            fprintf(stderr, "Error getting input stream.\n");
+            return -1;
+        }
+
         hScanner sc = sbScanner_create(fr);
 
         sbLexToken t;

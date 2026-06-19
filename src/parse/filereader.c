@@ -6,33 +6,49 @@
  * we may also want to have multiple files open for imports and stuff... */
 
 struct sbFileReader {
+    flag valid;
     FILE *file;
 };
 
 hFileReader sbFileReader_open(const char *filename) {
-    hFileReader fr = malloc(sizeof(struct sbFileReader));
-    fr->file = fopen(filename, "r");
-    if (!fr->file) {
-        perror("Error opening file for reading:");
+    hFileReader r = malloc(sizeof(struct sbFileReader));
+    r->file = fopen(filename, "r");
+    if (!r->file) {
+        perror("Error opening file for reading");
+        r->valid = 0;
     } else {
-        return fr;
+        r->valid = 1;
     }
 
-    return fr;
+    return r;
 }
 
-char sbFileReader_next(hFileReader r) {
-    char c = fgetc(r->file);
-    return c;
+flag sbFileReader_ok(hFileReader r) {
+    return r->valid;
 }
 
-char sbFileReader_peek(hFileReader r) {
-    char c = fgetc(r->file);
-    ungetc(c, r->file);
-    return c;
+int sbFileReader_next(hFileReader r) {
+    if (r->valid) {
+        char c = fgetc(r->file);
+        return c;
+    } else {
+        return EOF;
+    }
+}
+
+int sbFileReader_peek(hFileReader r) {
+    if (r->valid) {
+        char c = fgetc(r->file);
+        ungetc(c, r->file);
+        return c;
+    } else {
+        return EOF;
+    }
 }
 
 void sbFileReader_close(hFileReader r) {
-    fclose(r->file);
+    if (r->valid) {
+        fclose(r->file);
+    }
     free(r);
 }

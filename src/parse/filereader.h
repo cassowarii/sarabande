@@ -4,8 +4,10 @@ typedef struct sbFileReader *hFileReader;
 
 hFileReader sbFileReader_open(const char *filename);
 
-char sbFileReader_next(hFileReader r);
+flag sbFileReader_ok(hFileReader r);
 
-char sbFileReader_peek(hFileReader r);
+int sbFileReader_next(hFileReader r);
+
+int sbFileReader_peek(hFileReader r);
 
 void sbFileReader_close(hFileReader r);
