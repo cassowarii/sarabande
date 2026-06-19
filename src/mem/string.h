@@ -1,3 +1,3 @@
 #include "common.h"
 
-usize mystrncpy(char *dst, char *src, usize limit);
+usize sbstrncpy(char *dst, char *src, usize limit);

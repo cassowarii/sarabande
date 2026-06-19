@@ -30,7 +30,12 @@ int main(int argc, char **argv) {
             } else if (t.type == T_INTEGER) {
                 printf("(INT %d)", t.i);
             } else {
-                printf("  %c  ", t.type);
+                switch (t.type) {
+                    case T_DOUBLEEQUALS:
+                        printf("  ==  "); break;
+                    default:
+                        printf("  %c  ", t.type);
+                }
             }
         } while (t.type != T_EOF);
 

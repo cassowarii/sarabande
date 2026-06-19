@@ -1,6 +1,6 @@
 #include "string.h"
 
-usize mystrncpy(char *dst, char *src, usize limit) {
+usize sbstrncpy(char *dst, char *src, usize limit) {
     usize count = 0;
     char ch = 0;
 

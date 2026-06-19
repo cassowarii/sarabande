@@ -37,26 +37,29 @@ hArena sbArena_create(usize initial_size) {
 void *sbArena_alloc(hArena arena, usize size) {
     while (size % ALIGN != 0) size++;
 
-    if (size > arena->current->capacity - arena->current->used) {
-        /* not enough space in current block. need to move to next block or allocate a new one */
-        if (arena->current != arena->last) {
-            /* move to next block */
-            if (arena->current->next) {
-                arena->current = arena->current->next;
-            } else {
-                PANIC("lost track of memory block in arena somehow; should not happen");
-            }
-        } else {
-            /* need to allocate a new block */
-            usize new_capacity = arena->current->capacity;
-            if (size > new_capacity) new_capacity = size;
-            struct block *block = calloc(sizeof(struct block) + new_capacity, 1);
-            block->capacity = new_capacity;
-            block->next = NULL;
+    if (arena->current->used > arena->current->capacity) {
+        PANIC("somehow arena values are out of sync");
+    }
 
-            arena->current->next = block;
-            arena->current = arena->last = block;
+    while (arena->current != arena->last && size > arena->current->capacity - arena->current->used) {
+        /* move to next block until we find one that fits */
+        if (arena->current->next) {
+            arena->current = arena->current->next;
+        } else {
+            PANIC("lost track of memory block in arena somehow; should not happen");
         }
+    }
+
+    if (size > arena->current->capacity - arena->current->used) {
+        /* if still doesn't fit, we must be at the end, need to allocate a new block */
+        usize new_capacity = arena->current->capacity;
+        if (size > new_capacity) new_capacity = size;
+        struct block *block = calloc(sizeof(struct block) + new_capacity, 1);
+        block->capacity = new_capacity;
+        block->next = NULL;
+
+        arena->current->next = block;
+        arena->current = arena->last = block;
     }
 
     void *allocated_ptr = &arena->current->data[arena->current->used];
