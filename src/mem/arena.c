@@ -22,7 +22,7 @@ hArena sbArena_create(usize initial_size) {
 
     while (initial_size % ALIGN != 0) initial_size++;
 
-    struct block *block = malloc(initial_size);
+    struct block *block = calloc(sizeof(struct block) + initial_size, 1);
     block->used = 0;
     block->next = NULL;
     block->capacity = initial_size;
@@ -50,7 +50,7 @@ void *sbArena_alloc(hArena arena, usize size) {
             /* need to allocate a new block */
             usize new_capacity = arena->current->capacity;
             if (size > new_capacity) new_capacity = size;
-            struct block *block = malloc(sizeof(struct block) + new_capacity);
+            struct block *block = calloc(sizeof(struct block) + new_capacity, 1);
             block->capacity = new_capacity;
             block->next = NULL;
 

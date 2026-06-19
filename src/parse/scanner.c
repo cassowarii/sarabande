@@ -12,6 +12,8 @@
  * after this stage so we can differentiate between things like 'a.b (1)' and 'a.b(1)',
  * which have different semantics. */
 
+#define MEM_BLOCK_SIZE 65536
+
 typedef struct sbScanner {
     hFileReader file_reader;
     hArena arena;
@@ -20,7 +22,7 @@ typedef struct sbScanner {
 
 hScanner sbScanner_create(hFileReader fr) {
     hScanner sc = malloc(sizeof(sbScanner));
-    sc->arena = sbArena_create(65536);
+    sc->arena = sbArena_create(MEM_BLOCK_SIZE);
     sc->file_reader = fr;
     sc->next_token = (sbLexToken) {0};
 
