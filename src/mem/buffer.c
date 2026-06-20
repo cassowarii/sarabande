@@ -1,0 +1,65 @@
+#include "buffer.h"
+
+#include <string.h>
+
+void sbBuffer_initialize(hBuffer buf, usize initial_size) {
+    char *data = malloc(initial_size);
+
+    if (data) {
+        *buf = (sbBuffer) {
+            .size = 0,
+            .capacity = initial_size,
+            .data = data,
+        };
+    } else {
+        *buf = (sbBuffer) {0};
+    }
+}
+
+void *sbBuffer_expand(hBuffer buf, usize expand_size) {
+    if (expand_size == 0) return NULL;
+
+    if (buf->capacity == 0 || buf->data == NULL) {
+        fprintf(stderr, "cannot expand invalid buffer!\n");
+        return NULL;
+    }
+
+    char *result;
+    usize new_size = buf->size + expand_size;
+    if (new_size > buf->capacity) {
+        /* not enough space to fit requested chunk. reallocate to fit */
+        usize new_capacity = buf->capacity * 3 / 2;
+        if (new_capacity < new_size) {
+            new_capacity = new_size;
+        }
+
+        char *new_data = realloc(buf->data, new_capacity);
+        if (new_data) {
+            buf->data = new_data;
+        } else {
+            fprintf(stderr, "failed to expand buffer!");
+            return NULL;
+        }
+    }
+
+    result = &buf->data[buf->size];
+    buf->size = new_size;
+    memset(result, 0, expand_size);
+    return result;
+}
+
+void sbBuffer_append(hBuffer buf, const char *data, usize data_length) {
+    if (data_length == 0) return;
+
+    char *put = sbBuffer_expand(buf, data_length);
+    memcpy(put, data, data_length);
+}
+
+void sbBuffer_reset(hBuffer buf) {
+    buf->size = 0;
+}
+
+void sbBuffer_deinitialize(hBuffer buf) {
+    free(buf->data);
+    *buf = (sbBuffer) {0};
+}

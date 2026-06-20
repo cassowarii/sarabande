@@ -1,8 +1,5 @@
 #include "scanner.h"
 
-#include "filereader.h"
-#include "mem/mem.h"
-
 /* This is like, the pre lexing stage. I mean, this does a lot of the tokenizing,
  * but it includes stuff like spaces and newlines, too. Think of this as 'normalizing'
  * the input. The lexer in the second stage will use some additional context and state
@@ -13,59 +10,75 @@
  * which have different semantics. */
 
 #define MEM_BLOCK_SIZE 65536
-#define TOKEN_BUFFER_SIZE 256
+#define TOKEN_BUFFER_SIZE 64
 
-typedef struct sbScanner {
-    hFileReader file_reader;
-    hArena arena;
-    sbLexToken next_token;
-} sbScanner;
+static void check_if_start(hScanner sc);
+static sbLexToken compute_next_token(hScanner sc);
 
-hScanner sbScanner_create(hFileReader fr) {
-    hScanner sc = malloc(sizeof(sbScanner));
+void sbScanner_initialize(hScanner sc, hFileReader fr) {
     sc->arena = sbArena_create(MEM_BLOCK_SIZE);
     sc->file_reader = fr;
     sc->next_token = (sbLexToken) {0};
 
-    return sc;
+    sbBuffer_initialize(&sc->dynamic_buffer, 8);
 }
 
 sbLexToken sbScanner_peek(hScanner sc) {
+    check_if_start(sc);
     return sc->next_token;
 }
 
-void sbScanner_destroy(hScanner sc) {
+sbLexToken sbScanner_next(hScanner sc) {
+    check_if_start(sc);
+    sbLexToken to_return = sc->next_token;
+    sc->next_token = compute_next_token(sc);
+    return to_return;
+}
+
+void sbScanner_deinitialize(hScanner sc) {
     sbArena_destroy(sc->arena);
-    free(sc);
+    sbBuffer_deinitialize(&sc->dynamic_buffer);
 }
 
 /* yeah, yeah, unicode! get off my achin' back! i'll do it later! (maybe) */
 
-flag is_digit(char c) {
+static flag is_digit(char c) {
     return ('0' <= c && c <= '9');
 }
 
-flag is_alpha(char c) {
+static flag is_alpha(char c) {
     return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_';
 }
 
-flag is_space(char c) {
+static flag is_space(char c) {
     return c == ' ' || c == '\t' || c == '\r';
 }
 
-flag is_start_identifier(char c) {
+static flag is_start_identifier(char c) {
     return is_alpha(c);
 }
 
-flag is_mid_identifier(char c) {
+static flag is_mid_identifier(char c) {
     return is_start_identifier(c) || is_digit(c);
 }
 
-flag is_end_identifier(char c) {
+static flag is_end_identifier(char c) {
     return is_mid_identifier(c) || c == '?';
 }
 
-flag is_base_digit(char c, int base) {
+static flag is_start_symbol(char c) {
+    return is_start_identifier(c);
+}
+
+static flag is_mid_symbol(char c) {
+    return is_mid_identifier(c);
+}
+
+static flag is_end_symbol(char c) {
+    return is_end_identifier(c) || c == '=';
+}
+
+static flag is_base_digit(char c, int base) {
     if (base == 10) {
         return is_digit(c);
     } else if (base == 16) {
@@ -79,7 +92,7 @@ flag is_base_digit(char c, int base) {
     }
 }
 
-int base_digit_value(char c) {
+static int base_digit_value(char c) {
     if (is_digit(c)) {
         return c - '0';
     } else if ('a' <= c && c <= 'z') {
@@ -94,33 +107,77 @@ int base_digit_value(char c) {
 #define NEXT sbFileReader_next(sc->file_reader)
 #define PEEK sbFileReader_peek(sc->file_reader)
 
-usize read_identifier(hScanner sc, char *token_buffer, usize max_size) {
+char token_buffer[TOKEN_BUFFER_SIZE];
+usize tb_length = 0;
+
+static void finalize_char_buffer(hScanner sc) {
+    /* move the currently buffered string into the dynamic_buffer */
+    sbBuffer_append(&sc->dynamic_buffer, token_buffer, tb_length);
+    tb_length = 0;
+}
+
+static void read_char_into_buffer(hScanner sc, char c) {
+    token_buffer[tb_length++] = c;
+    if (tb_length == TOKEN_BUFFER_SIZE) {
+        finalize_char_buffer(sc);
+    }
+}
+
+static void *save_buffer(hScanner sc) {
+    char *storage = sbArena_alloc(sc->arena, sc->dynamic_buffer.size);
+    sbstrncpy(storage, sc->dynamic_buffer.data, sc->dynamic_buffer.size);
+    return storage;
+}
+
+static usize read_identifier(hScanner sc) {
     usize token_size = 0;
     char ch = 0;
 
     do {
-        token_buffer[token_size] = NEXT;
+        read_char_into_buffer(sc, NEXT);
         token_size ++;
         ch = PEEK;
-    } while (is_mid_identifier(ch) && token_size < max_size - 1);
+    } while (is_mid_identifier(ch));
 
-    if (is_end_identifier(ch) && token_size < max_size - 1) {
-        token_buffer[token_size] = NEXT;
+    if (is_end_identifier(ch)) {
+        read_char_into_buffer(sc, NEXT);
         token_size ++;
     }
 
-    token_buffer[token_size] = '\0';
+    read_char_into_buffer(sc, '\0');
+    finalize_char_buffer(sc);
 
     return token_size;
 }
 
-sbLexToken compute_next_token(hScanner sc) {
+static usize read_symbol(hScanner sc) {
+    usize token_size = 0;
+    char ch = 0;
+
+    do {
+        read_char_into_buffer(sc, NEXT);
+        token_size ++;
+        ch = PEEK;
+    } while (is_mid_symbol(ch));
+
+    if (is_end_symbol(ch)) {
+        read_char_into_buffer(sc, NEXT);
+        token_size ++;
+    }
+
+    read_char_into_buffer(sc, '\0');
+    finalize_char_buffer(sc);
+
+    return token_size;
+}
+
+static sbLexToken compute_next_token(hScanner sc) {
     int next = PEEK;
     char ch = (char)next;
 
-    char token_buffer[TOKEN_BUFFER_SIZE];
-    usize token_size;
+    sbBuffer_reset(&sc->dynamic_buffer);
 
+    usize token_size = 0;
     sbLexToken new_token = {0};
 
     if (next == EOF) {
@@ -138,7 +195,12 @@ sbLexToken compute_next_token(hScanner sc) {
             NEXT;
             ch = PEEK;
         } while (ch != '\n');
-        NEXT; /* eat the newline */
+
+        /* eat newline, and skip all spaces after the newline */
+        do {
+            NEXT;
+        } while (is_space(PEEK));
+
         new_token.type = T_NEWLINE;
     } else if (ch == '(' || ch == ')'
             || ch == '[' || ch == ']'
@@ -149,6 +211,36 @@ sbLexToken compute_next_token(hScanner sc) {
         /* unambiguously single-character tokens */
         new_token.type = ch;
         NEXT;
+    } else if (ch == '!') {
+        NEXT;
+        ch = PEEK;
+        if (ch == '=') {
+            new_token.type = T_NOTEQUALS;
+        } else {
+            /* ! on its own is not an operator i guess. not sure how to handle this elegantly */
+            fprintf(stderr, "don't know how to handle character: '!'\n");
+            new_token.type = T_ERROR;
+        }
+    } else if (ch == '>') {
+        NEXT;
+        ch = PEEK;
+        if (ch == '>') {
+            new_token.type = T_DOUBLEGREATER;
+        } else if (ch == '=') {
+            new_token.type = T_GREATEREQUALS;
+        } else {
+            new_token.type = T_GREATER;
+        }
+    } else if (ch == '<') {
+        NEXT;
+        ch = PEEK;
+        if (ch == '<') {
+            new_token.type = T_DOUBLEGREATER;
+        } else if (ch == '=') {
+            new_token.type = T_LESSEQUALS;
+        } else {
+            new_token.type = T_LESS;
+        }
     } else if (ch == '%') {
         NEXT;
         ch = PEEK;
@@ -226,18 +318,17 @@ sbLexToken compute_next_token(hScanner sc) {
         if (ch == ':') {
             /* :: */
             new_token.type = T_PAAMAYIM_NEKUDOTAYIM;
+            NEXT;
         } else if (ch == '{') {
             /* :{ */
             new_token.type = T_COLONBRACE;
-        } else if (is_start_identifier(ch)) {
+            NEXT;
+        } else if (is_start_symbol(ch)) {
             /* :abc... */
             new_token.type = T_SYMBOL;
 
-            token_size = read_identifier(sc, token_buffer, TOKEN_BUFFER_SIZE);
-
-            char *storage = sbArena_alloc(sc->arena, token_size + 1);
-
-            sbstrncpy(storage, token_buffer, token_size + 1);
+            token_size = read_symbol(sc);
+            char *storage = save_buffer(sc);
 
             new_token.str = storage;
             new_token.size = token_size;
@@ -269,14 +360,48 @@ sbLexToken compute_next_token(hScanner sc) {
                 NEXT;
             } while (is_space(PEEK));
         }
+    } else if (ch == '`') {
+        /* Raw string */
+        new_token.type = T_STRING;
+        NEXT;
+
+        flag in_string = 1;
+
+        while (in_string) {
+            ch = PEEK;
+            while (ch != '`') {
+                NEXT;
+                read_char_into_buffer(sc, ch);
+                ch = PEEK;
+            }
+
+            /* ok, now we know ch is a backtick. discard it and look at what's next */
+            NEXT;
+            ch = PEEK;
+
+            if (ch == '`') {
+                /* it was a double backtick. so count this as one backtick (escaped) and
+                 * continue reading into the string */
+                NEXT;
+                read_char_into_buffer(sc, ch);
+            } else {
+                /* it is something else. end of string. exit loop. */
+                in_string = 0;
+            }
+        }
+
+        read_char_into_buffer(sc, '\0');
+
+        finalize_char_buffer(sc);
+        char *storage = save_buffer(sc);
+
+        new_token.str = storage;
+        new_token.size = sc->dynamic_buffer.size;
     } else if (is_start_identifier(ch)) {
         new_token.type = T_IDENTIFIER;
 
-        token_size = read_identifier(sc, token_buffer, TOKEN_BUFFER_SIZE);
-
-        char *storage = sbArena_alloc(sc->arena, token_size + 1);
-
-        sbstrncpy(storage, token_buffer, token_size + 1);
+        token_size = read_identifier(sc);
+        char *storage = save_buffer(sc);
 
         new_token.str = storage;
         new_token.size = token_size;
@@ -310,6 +435,11 @@ sbLexToken compute_next_token(hScanner sc) {
             intval *= base;
             intval += base_digit_value(ch);
             ch = PEEK;
+            while (ch == '_') {
+                /* skip over underscores in numeric literals */
+                NEXT;
+                ch = PEEK;
+            }
         } while (is_base_digit(ch, base));
 
         /* if we are now looking at still a character that's a letter or digit, throw error */
@@ -319,6 +449,7 @@ sbLexToken compute_next_token(hScanner sc) {
             } else {
                 fprintf(stderr, "unexpected character in base %d numeric literal: '%c'\n", base, ch);
             }
+
             new_token.type = T_ERROR;
             NEXT;
         } else {
@@ -335,13 +466,9 @@ sbLexToken compute_next_token(hScanner sc) {
     return new_token;
 }
 
-sbLexToken sbScanner_next(hScanner sc) {
+static void check_if_start(hScanner sc) {
     if (sc->next_token.type == T_NULL) {
         /* if we just started, queue up the first token */
         sc->next_token = compute_next_token(sc);
     }
-
-    sbLexToken to_return = sc->next_token;
-    sc->next_token = compute_next_token(sc);
-    return to_return;
 }

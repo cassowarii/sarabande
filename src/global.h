@@ -1,5 +1,27 @@
+#ifndef __SB_GLOBAL_H__
+#define __SB_GLOBAL_H__
+
 #ifdef DEBUG
-#define PANIC(msg) do { fprintf(stderr, "panic: " __FILE__ ":%d: " msg "\n", __LINE__); abort(); } while (0)
+#define PANIC(msg) do { fprintf(stderr, "PANIC: " msg " at " __FILE__ ":%d\n", __LINE__); abort(); } while (0)
 #else
-#define PANIC(x) 0
+#define PANIC(msg) do { fprintf(stderr, "PANIC: " msg "\n"); abort(); } while (0)
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <stdint.h>
+
+typedef uint64_t u64;
+typedef int64_t i64;
+typedef uint32_t u32;
+typedef int32_t i32;
+typedef uint16_t u16;
+typedef int16_t i16;
+typedef uint8_t u8;
+typedef int8_t i8;
+typedef uint8_t flag;
+typedef size_t usize;
+typedef ptrdiff_t isize;
+
 #endif

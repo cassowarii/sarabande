@@ -1,7 +1,7 @@
 #include "common.h"
 
 #include "parse/filereader.h"
-#include "parse/scanner.h"
+#include "parse/lexer.h"
 
 int main(int argc, char **argv) {
     if (argc == 2) {
@@ -12,34 +12,46 @@ int main(int argc, char **argv) {
             return -1;
         }
 
-        hScanner sc = sbScanner_create(fr);
+        sbLexer lx;
+        sbLexer_initialize(&lx, fr);
 
         sbLexToken t;
 
         do {
-            t = sbScanner_next(sc);
+            t = sbLexer_next(&lx);
 
             if (t.type == T_EOF) {
-                printf("(EOF)");
+                printf("<EOF>");
             } else if (t.type == T_SPACE) {
-                printf("( )");
+                printf("<SPACE>");
             } else if (t.type == T_NEWLINE) {
-                printf("(\\n)");
+                printf("\n");
             } else if (t.type == T_IDENTIFIER) {
-                printf("(ID %s)", t.str);
+                printf("%s", t.str);
             } else if (t.type == T_INTEGER) {
-                printf("(INT %d)", t.i);
+                printf("<INT %d>", t.i);
+            } else if (t.type == T_STRING) {
+                printf("<STRING '%s'>", t.str);
+            } else if (t.type == T_SYMBOL) {
+                printf("<SYMBOL :%s>", t.str);
+            } else if (t.type >= T_rAND && t.type <= T_rWHILE) {
+                printf("<%s>", t.str);
+            } else if (t.type == T_SEMICOLON) {
+                printf(";\n");
             } else {
                 switch (t.type) {
+                    case T_COLONBRACE:
+                        printf(":{"); break;
                     case T_DOUBLEEQUALS:
-                        printf("  ==  "); break;
+                        printf("=="); break;
                     default:
-                        printf("  %c  ", t.type);
+                        printf("%c", t.type);
                 }
             }
         } while (t.type != T_EOF);
+        printf("\n");
 
-        sbScanner_destroy(sc);
+        sbLexer_deinitialize(&lx);
 
         sbFileReader_close(fr);
     } else {
