@@ -3,6 +3,31 @@
 #include <string.h>
 #include "mem/mem.h"
 
+/* OK so this is a module that takes in a series of tokens output by the scanner and modifies
+ * the token stream before it gets passed to the parser. In particular, this replaces the
+ * spaces and newlines sent from the scanner with various configurations of parentheses and
+ * semicolons which are inferred from the structure of the code. Note there is no semantic
+ * or syntactic feedback hack here: parentheses and semicolons are inserted solely based on
+ * the local structure of the code (plus a small bit of lexer state), not whether things parse
+ * correctly (a la JS semicolons) or which functions are in scope (a la Ruby function calls.)
+ * It's a similar idea to how the automatic semicolon insertion works in Go. It also allows
+ * you to provide parentheses and semicolons manually as long as they are in the right place.
+ * (a (b).c gets parsed as a((b).c), but a(b).c gets parsed as written, like Ruby) */
+
+/* This module is also responsible for detecting whether identifiers returned by the scanner
+ * are reserved words or not, and if they are, it will convert them to the appropriate token
+ * type. */
+
+/* We have input and output queues to buffer input that we receive from the scanner (to allow
+ * us to look a few tokens ahead temporarily) and to allow us to output more than one token
+ * at a time per input token from the scanner (good as we're inserting a bunch of stuff into
+ * the token stream.) */
+
+/* I called this module 'lexer.c', but 'scanner.c' is maybe more traditionally what people think
+ * of as a lexer. This kind of mildly-context-sensitive-but-not-parsing thing that sits in between
+ * the lexer and the parser I don't know if it has a traditional name, but I think it's kind of a
+ * cool idea! A three-layer parser instead of a two-layer parser. */
+
 static void compute_next_token(hLexer lx);
 static sbLexToken advance_output_queue(hLexer lx);
 
