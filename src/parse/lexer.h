@@ -6,6 +6,7 @@
 
 #define LEXER_QUEUE_LENGTH 32
 
+/* TODO: input_queue and output_queue should be sbBuffer */
 typedef struct sbLexer {
     sbScanner scanner;
     sbLexToken input_queue[LEXER_QUEUE_LENGTH];

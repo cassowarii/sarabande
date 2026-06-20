@@ -46,7 +46,7 @@ struct ReservedWord {
     sbTokenType token_type;
 };
 
-struct ReservedWord reserved_words[] = {
+static struct ReservedWord reserved_words[] = {
     { "and", T_rAND },
     { "as", T_rAS },
     { "case", T_rCASE },
@@ -59,7 +59,7 @@ struct ReservedWord reserved_words[] = {
     { "not", T_rNOT },
     { "or", T_rOR },
     { "repeat", T_rREPEAT },
-    { "return", T_rREPEAT },
+    { "return", T_rRETURN },
     { "unless", T_rUNLESS },
     { "until", T_rUNTIL },
     { "when", T_rWHEN },
@@ -68,7 +68,7 @@ struct ReservedWord reserved_words[] = {
 
 #define N_RESERVED_WORDS ((sizeof(reserved_words))/(sizeof(reserved_words[0])))
 
-sbLexToken advance_token_queue(sbLexToken *q, int *length, char version) {
+static sbLexToken advance_token_queue(sbLexToken *q, int *length, char version) {
     if (*length == 0) {
         if (version == 'o') {
             PANIC("can't advance empty lexer output queue!");
@@ -93,7 +93,7 @@ sbLexToken advance_token_queue(sbLexToken *q, int *length, char version) {
     return result;
 }
 
-void enqueue_token(sbLexToken *q, int *length, sbLexToken token, char version) {
+static void enqueue_token(sbLexToken *q, int *length, sbLexToken token, char version) {
     if (*length == LEXER_QUEUE_LENGTH) {
         if (version == 'o') {
             PANIC("output token queue is full!");
@@ -112,7 +112,7 @@ static flag is_closing_bracket(sbTokenType type);
 static void unstack_visible_bracket(hLexer lx, sbLexToken closing_token);
 static void unstack_sticky_invisible_parentheses(hLexer lx);
 
-void enqueue_output_token(hLexer lx, sbLexToken token) {
+static void enqueue_output_token(hLexer lx, sbLexToken token) {
     /* if leaving brackets, close invisible parentheses and remove us from
      * brackets stack here */
     if (is_closing_bracket(token.type) && !token.invisible) {
@@ -131,25 +131,25 @@ void enqueue_output_token(hLexer lx, sbLexToken token) {
     }
 }
 
-void enqueue_input_token(hLexer lx, sbLexToken token) {
+static void enqueue_input_token(hLexer lx, sbLexToken token) {
     enqueue_token(lx->input_queue, &lx->input_queue_length, token, 'i');
 }
 
-sbLexToken advance_output_queue(hLexer lx) {
+static sbLexToken advance_output_queue(hLexer lx) {
     while (lx->output_queue_length == 0) {
         compute_next_token(lx);
     }
     return advance_token_queue(lx->output_queue, &lx->output_queue_length, 'o');
 }
 
-sbLexToken advance_input_queue(hLexer lx) {
+static sbLexToken advance_input_queue(hLexer lx) {
     if (lx->input_queue_length == 0) {
         enqueue_input_token(lx, sbScanner_next(&lx->scanner));
     }
     return advance_token_queue(lx->input_queue, &lx->input_queue_length, 'i');
 }
 
-sbLexToken input_peek_ahead(hLexer lx, int count) {
+static sbLexToken input_peek_ahead(hLexer lx, int count) {
     /* 0 = next token; 1 = token after that; etc.
      * so if count is 0, length must be at least 1 */
     while (lx->input_queue_length <= count) {
@@ -159,7 +159,7 @@ sbLexToken input_peek_ahead(hLexer lx, int count) {
     return lx->input_queue[count];
 }
 
-flag is_literal(sbTokenType type) {
+static flag is_literal(sbTokenType type) {
     return type == T_IDENTIFIER
         || type == T_STRING
         || type == T_INTEGER
@@ -167,7 +167,7 @@ flag is_literal(sbTokenType type) {
         || type == T_SYMBOL;
 }
 
-flag insert_semicolon_after(sbTokenType type) {
+static flag insert_semicolon_after(sbTokenType type) {
     return is_literal(type)
         || type == T_RPAREN
         || type == T_RBRACKET
@@ -176,13 +176,13 @@ flag insert_semicolon_after(sbTokenType type) {
         || type == T_DOUBLEMINUS;
 }
 
-flag cancel_semicolon_before(sbTokenType type) {
+static flag cancel_semicolon_before(sbTokenType type) {
     return type == T_DOT
         || type == T_PIPE;
 }
 
 /* identifier + space + one of these gets a ( inserted */
-flag can_only_start_expression(sbTokenType type, flag brace_terminated_state) {
+static flag can_only_start_expression(sbTokenType type, flag brace_terminated_state) {
     return is_literal(type)
         || type == T_LPAREN
         || type == T_LBRACKET
@@ -195,7 +195,7 @@ flag can_only_start_expression(sbTokenType type, flag brace_terminated_state) {
 
 /* identifier + space + one of these + NO SPACE gets a ( inserted but not if
  * surrounded by spaces or neither space */
-flag maybe_can_start_expression(sbTokenType type) {
+static flag maybe_can_start_expression(sbTokenType type) {
     return type == T_PLUS
         || type == T_MINUS;
 }
@@ -223,16 +223,20 @@ static flag begins_brace_terminated_state(sbTokenType type) {
         || type == T_rDO
         || type == T_rREPEAT
         || type == T_rCASE
-        || type == T_rWHEN;
+        || type == T_rWHEN
+        || type == T_FATARROW; /* fat arrow => a, b { ... } */
 }
 
 /* when in brace-terminated state, one of these must precede a { character
  * in order to exit brace-terminated state */
-flag can_end_expression(sbTokenType type) {
+static flag block_header_can_end_after(sbTokenType type) {
     return is_literal(type)
         || type == T_RPAREN
         || type == T_RBRACKET
-        || type == T_RBRACE;
+        || type == T_RBRACE
+        || type == T_FATARROW
+        || type == T_rCASE
+        || type == T_rDO;
 }
 
 /*static flag is_reserved_word(sbTokenType type) {
@@ -242,32 +246,51 @@ flag can_end_expression(sbTokenType type) {
     return 0;
 }*/
 
+static char brackets_stack_top(hLexer lx) {
+    if (lx->brackets_stack.size == 0) return 0;
+
+    return lx->brackets_stack.data[lx->brackets_stack.size - 1];
+}
+
+static char brackets_stack_pop(hLexer lx) {
+    if (lx->brackets_stack.size == 0) return 0;
+
+    char result = brackets_stack_top(lx);
+    lx->brackets_stack.data[lx->brackets_stack.size - 1] = 0;
+    lx->brackets_stack.size --;
+    return result;
+}
+
+static void brackets_stack_push(hLexer lx, char c) {
+    char *stack_top = sbBuffer_expand(&lx->brackets_stack, 1);
+    *stack_top = c;
+}
+
 static void stack_token(hLexer lx, sbLexToken token) {
     /* track which invisible and visible brackets we've seen, so we can close invisible brackets
      * at appropriate times */
-    char *stack_top = sbBuffer_expand(&lx->brackets_stack, 1);
     if (token.invisible == 1 && token.type == '(') {
-        *stack_top = 'G';
+        brackets_stack_push(lx, 'G');
     } else if (token.invisible == 2 && token.type == '(') {
         /* this is a special invisible () that gets wrapped around something like "map:{ ... }" */
-        *stack_top = 'H';
+        brackets_stack_push(lx, 'H');
     } else if (token.type == '(' || token.type == '[' || token.type == '{') {
-        *stack_top = token.type;
+        brackets_stack_push(lx, token.type);
     } else if (token.type == T_COLONBRACE) {
-        *stack_top = ':';
+        brackets_stack_push(lx, ':');
     } else {
-        *stack_top = token.type;
+        brackets_stack_push(lx, token.type);
     }
 }
 
 static void unstack_one_invisible_parenthesis(hLexer lx) {
     if (lx->brackets_stack.size == 0) return;
 
-    char *stack_top = &lx->brackets_stack.data[lx->brackets_stack.size - 1];
-    if (lx->brackets_stack.size > 0 && (*stack_top == 'G' || *stack_top == 'H')) {
+    char top = brackets_stack_top(lx);
+    if (top == 'G' || top == 'H') {
         sbLexToken invisible_rparen = { .type = T_RPAREN, .invisible = 1 };
         enqueue_output_token(lx, invisible_rparen);
-        lx->brackets_stack.size --;
+        brackets_stack_pop(lx);
     }
 }
 
@@ -275,12 +298,12 @@ static void unstack_invisible_parentheses_of_type(hLexer lx, char type) {
     /* this happens when a real bracket closes, and also at the end of a line */
     if (lx->brackets_stack.size == 0) return;
 
-    char *stack_top = &lx->brackets_stack.data[lx->brackets_stack.size - 1];
-    while (lx->brackets_stack.size > 0 && *stack_top == type) {
+    char top = brackets_stack_top(lx);
+    while (lx->brackets_stack.size > 0 && top == type) {
         sbLexToken invisible_rparen = { .type = T_RPAREN, .invisible = 1 };
         enqueue_output_token(lx, invisible_rparen);
-        lx->brackets_stack.size --;
-        stack_top = &lx->brackets_stack.data[lx->brackets_stack.size - 1];
+        brackets_stack_pop(lx);
+        top = brackets_stack_top(lx);
     }
 }
 
@@ -297,24 +320,41 @@ static void unstack_sticky_invisible_parentheses(hLexer lx) {
     unstack_invisible_parentheses_of_type(lx, 'H');
 }
 
+static flag is_in_brace_terminated_state(hLexer lx) {
+    /* ignoring invisible parentheses, is the top thing on the stack 'B'? */
+    /* this allows us to put braces freely inside, say, parentheses, even
+     * in the header of an if, but if we close the parentheses, then we are back
+     * in brace-terminated-state land. */
+    if (lx->brackets_stack.size == 0) return 0;
+
+    int index = lx->brackets_stack.size - 1;
+    char c = lx->brackets_stack.data[index];
+    while (index > 0 && (c == 'G' || c == 'H')) {
+        index --;
+        c = lx->brackets_stack.data[index];
+    }
+
+    return c == 'B';
+}
+
 static void unstack_visible_bracket(hLexer lx, sbLexToken closing_token) {
     unstack_all_invisible_parentheses(lx);
 
     if (lx->brackets_stack.size != 0) {
-        char *stack_top = &lx->brackets_stack.data[lx->brackets_stack.size - 1];
+        char top = brackets_stack_top(lx);
         if (closing_token.type == T_RBRACE) {
-            if (*stack_top == '{' || *stack_top == ':') {
-                lx->brackets_stack.size --;
+            if (top == '{' || top == ':') {
+                brackets_stack_pop(lx);
                 return;
             }
         } else if (closing_token.type == T_RBRACKET) {
-            if (*stack_top == '[') {
-                lx->brackets_stack.size --;
+            if (top == '[') {
+                brackets_stack_pop(lx);
                 return;
             }
         } else if (closing_token.type == T_RPAREN) {
-            if (*stack_top == '(') {
-                lx->brackets_stack.size --;
+            if (top == '(') {
+                brackets_stack_pop(lx);
                 return;
             }
         }
@@ -325,11 +365,13 @@ static void unstack_visible_bracket(hLexer lx, sbLexToken closing_token) {
     } else {
         fprintf(stderr, "syntax error: mismatched bracket\n");
     }
+
     enqueue_output_token(lx, (sbLexToken) { .type = T_ERROR });
 }
 
-void compute_next_token(hLexer lx) {
+static void compute_next_token(hLexer lx) {
     sbLexToken token = advance_input_queue(lx);
+    sbLexToken invisible_lparen = { .type = T_LPAREN, .invisible = 1 };
 
     /* if we receive an identifier, check if it is a reserved word or not */
     if (token.type == T_IDENTIFIER) {
@@ -341,28 +383,36 @@ void compute_next_token(hLexer lx) {
         }
     }
 
-    if (lx->brace_terminated_state && can_end_expression(lx->last_token_seen.type) && token.type == T_LBRACE) {
-        /* TODO: I think this will fail in some obscure case, like where you have a '=> a, b { ... }' inside
-         * of the top of an `if'. Annoying. We probably need to track brace_terminated_state for each level
-         * of the bracket-stack individually, so that when we exit from a { } inside a block header we know
-         * that we are still actually in brace_terminated_state. I think that should work. But I need to think
-         * about the specifics a little more. */
-        /* The condition for leaving brace-terminated state is correct (end-of-expression token followed
-         * by opening brace) but brace-terminated state can come back in some sneaky scenarios after
-         * a situation where we weren't in it before. */
+    if (token.type != T_SPACE && token.type != T_NEWLINE && token.type != T_LPAREN && lx->last_token_seen.type == T_FATARROW) {
+        /* => a ... or => { ... will always get an invisible lparen after the => .
+         * (not caring about whether or not there is a space in this case.)
+         * The brace-terminated state thing should handle closing this for us. */
+        enqueue_output_token(lx, invisible_lparen);
+    }
+
+    if (is_in_brace_terminated_state(lx) && block_header_can_end_after(lx->last_token_seen.type) && token.type == T_LBRACE) {
+        /* The condition for leaving brace-terminated state is end-of-expression token followed
+         * by opening brace. This allows us to still leave out parentheses in certain cases, like
+         * if a == { ... . I'd like to allow { directly after 'if' et al as well (TODO). */
+        /* For => { ...  syntax, this happens immediately after the above: => { gets converted
+         * to => () { . */
         unstack_all_invisible_parentheses(lx);
-        lx->brace_terminated_state = 0;
+        brackets_stack_pop(lx); /* remove 'B' state from bracket stack */
     }
 
     if (begins_brace_terminated_state(token.type)) {
-        lx->brace_terminated_state = 1;
+        brackets_stack_push(lx, 'B');
     }
 
+    //printf("\nstack: %s\n", lx->brackets_stack.data);
+
+    /* --- HERE IS WHERE THE TOKEN ACTUALLY GETS OUTPUT TO THE STREAM --- */
+    /* Everything before this gets put into the stream ahead of this token. */
+    /* Everything after this comes after the token. */
     if (token.type != T_SPACE && token.type != T_NEWLINE) {
         enqueue_output_token(lx, token);
     }
 
-    sbLexToken invisible_lparen = { .type = T_LPAREN, .invisible = 1 };
     if (token.type == T_IDENTIFIER && input_peek_ahead(lx, 0).type == T_COLONBRACE) {
         /* identifier followed by colon-brace with no space between gets this special invisible bracket */
         /* invisible = 2 makes it a sticky H bracket */
@@ -371,6 +421,10 @@ void compute_next_token(hLexer lx) {
     } else if (token.type == T_IDENTIFIER) {
         /* otherwise, if it's still an identifier and not a reserved word, we might need to insert a
          * magic ( into the output stream. so look ahead at what's coming up. */
+        /* (We don't do this in 'brace terminated states', e.g. between the keyword and brace of if ..... { ,
+         * we always assume the { is opening a block, not a function parameter to a hash. However, the
+         * brace terminated state logic means that we can wrap values that start with braces in parentheses
+         * if we really need them for some reason. */
         if (lx->last_token_seen.type == T_DOT) {
             /* an identifier after a dot always gets an invisible parentheses after it,
              * unless there is a visible parentheses immediately after it. */
@@ -393,7 +447,7 @@ void compute_next_token(hLexer lx) {
                     if (next_next_type == T_SPACE || space_offset == 0) {
                         unstack_one_invisible_parenthesis(lx);
                     }
-                } else if (!can_only_start_expression(next_type, lx->brace_terminated_state)) {
+                } else if (!can_only_start_expression(next_type, is_in_brace_terminated_state(lx))) {
                     /* ok, so this means that we just inserted a ( in some situation like
                      * 'a.b(.c' or 'a.b(, c' or 'a.b( % 3' -- in this situation, we need to also
                      * add a matching invisible right parenthesis immediately. */
@@ -404,7 +458,7 @@ void compute_next_token(hLexer lx) {
             }
         } else if (input_peek_ahead(lx, 0).type == T_SPACE) {
             /* suspicious... tell me more */
-            if (can_only_start_expression(input_peek_ahead(lx, 1).type, lx->brace_terminated_state)) {
+            if (can_only_start_expression(input_peek_ahead(lx, 1).type, is_in_brace_terminated_state(lx))) {
                 /* ah ! yes. insert a magic ( into the stream. */
                 enqueue_output_token(lx, invisible_lparen);
             } else if (maybe_can_start_expression(input_peek_ahead(lx, 1).type)) {
