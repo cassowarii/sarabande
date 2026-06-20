@@ -249,7 +249,7 @@ static flag begins_brace_terminated_state(sbTokenType type) {
         || type == T_rREPEAT
         || type == T_rCASE
         || type == T_rWHEN
-        || type == T_FATARROW; /* fat arrow => a, b { ... } */
+        || type == T_FATARROW; /* fat arrow => a, b { ... } introduces block header also */
 }
 
 /* when in brace-terminated state, one of these must precede a { character
@@ -418,7 +418,7 @@ static void compute_next_token(hLexer lx) {
     if (is_in_brace_terminated_state(lx) && block_header_can_end_after(lx->last_token_seen.type) && token.type == T_LBRACE) {
         /* The condition for leaving brace-terminated state is end-of-expression token followed
          * by opening brace. This allows us to still leave out parentheses in certain cases, like
-         * if a == { ... . I'd like to allow { directly after 'if' et al as well (TODO). */
+         * if a == { ... . */
         /* For => { ...  syntax, this happens immediately after the above: => { gets converted
          * to => () { . */
         unstack_all_invisible_parentheses(lx);
@@ -446,10 +446,15 @@ static void compute_next_token(hLexer lx) {
     } else if (token.type == T_IDENTIFIER) {
         /* otherwise, if it's still an identifier and not a reserved word, we might need to insert a
          * magic ( into the output stream. so look ahead at what's coming up. */
-        /* (We don't do this in 'brace terminated states', e.g. between the keyword and brace of if ..... { ,
-         * we always assume the { is opening a block, not a function parameter to a hash. However, the
-         * brace terminated state logic means that we can wrap values that start with braces in parentheses
-         * if we really need them for some reason. */
+
+        /* (We don't do this in 'brace terminated states', e.g. between the keyword and brace of if ... { .
+         * The reason is that something like "if x < a {" is ambiguous and ordinarily would parse with a as
+         * a function call taking a hash: "if x < a({ ...". However, this is obviously stupid when we're in
+         * the header of an if. So, if we're in "brace-terminated state" mode (basically, if we're inside a
+         * block header), we always assume { after an identifier opens a block, rather than parsing it as a
+         * function parameter that is a hash. However, the brace terminated state logic being stored in the
+         * bracket stack means that we can wrap values that start with braces in parentheses manually if we
+         * really need them for some reason. */
         if (lx->last_token_seen.type == T_DOT) {
             /* an identifier after a dot always gets an invisible parentheses after it,
              * unless there is a visible parentheses immediately after it. */
@@ -476,6 +481,9 @@ static void compute_next_token(hLexer lx) {
                     /* ok, so this means that we just inserted a ( in some situation like
                      * 'a.b(.c' or 'a.b(, c' or 'a.b( % 3' -- in this situation, we need to also
                      * add a matching invisible right parenthesis immediately. */
+                    /* In brace-terminated state, { doesn't count as can_only_start_expression.
+                     * So this applies before { as well: normally 'a.b {' --> 'a.b({', but
+                     * inside block headers 'a.b {' --> 'a.b() {' */
                     unstack_one_invisible_parenthesis(lx);
                 }
                 /* if can_only_start_expression(next_type), then we don't want to add an invisible
@@ -485,6 +493,9 @@ static void compute_next_token(hLexer lx) {
             /* suspicious... tell me more */
             if (can_only_start_expression(input_peek_ahead(lx, 1).type, is_in_brace_terminated_state(lx))) {
                 /* ah ! yes. insert a magic ( into the stream. */
+                /* as above, { isn't can_only_start_expression when in brace-terminated state.
+                 * In this case the implication is that normally 'a {' gets turned into 'a({',
+                 * but inside the top of an if or some such, it stays as 'a {'. */
                 enqueue_output_token(lx, invisible_lparen);
             } else if (maybe_can_start_expression(input_peek_ahead(lx, 1).type)) {
                 /* check if it also has a space after it. if it does NOT, then
