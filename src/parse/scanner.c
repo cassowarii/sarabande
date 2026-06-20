@@ -9,7 +9,7 @@
  * after this stage so we can differentiate between things like 'a.b (1)' and 'a.b(1)',
  * which have different semantics. */
 
-#define MEM_BLOCK_SIZE 65536
+#define MEM_BLOCK_SIZE 8
 #define TOKEN_BUFFER_SIZE 64
 
 static void check_if_start(hScanner sc);
@@ -216,9 +216,21 @@ static sbLexToken compute_next_token(hScanner sc) {
         ch = PEEK;
         if (ch == '=') {
             new_token.type = T_NOTEQUALS;
+            NEXT;
         } else {
             /* ! on its own is not an operator i guess. not sure how to handle this elegantly */
             fprintf(stderr, "don't know how to handle character: '!'\n");
+            new_token.type = T_ERROR;
+        }
+    } else if (ch == '~') {
+        NEXT;
+        ch = PEEK;
+        if (ch == '>') {
+            new_token.type = T_SQUIGARROW;
+            NEXT;
+        } else {
+            /* ~ on its own is not an operator */
+            fprintf(stderr, "don't know how to handle character: '~'\n");
             new_token.type = T_ERROR;
         }
     } else if (ch == '>') {
@@ -226,8 +238,10 @@ static sbLexToken compute_next_token(hScanner sc) {
         ch = PEEK;
         if (ch == '>') {
             new_token.type = T_DOUBLEGREATER;
+            NEXT;
         } else if (ch == '=') {
             new_token.type = T_GREATEREQUALS;
+            NEXT;
         } else {
             new_token.type = T_GREATER;
         }
@@ -236,8 +250,13 @@ static sbLexToken compute_next_token(hScanner sc) {
         ch = PEEK;
         if (ch == '<') {
             new_token.type = T_DOUBLEGREATER;
+            NEXT;
         } else if (ch == '=') {
             new_token.type = T_LESSEQUALS;
+            NEXT;
+        } else if (ch == '~') {
+            new_token.type = T_BACKSQUIGARROW;
+            NEXT;
         } else {
             new_token.type = T_LESS;
         }
@@ -246,6 +265,7 @@ static sbLexToken compute_next_token(hScanner sc) {
         ch = PEEK;
         if (ch == '=') {
             new_token.type = T_PERCENTEQUALS;
+            NEXT;
         } else {
             new_token.type = T_PERCENT;
         }
@@ -370,8 +390,8 @@ static sbLexToken compute_next_token(hScanner sc) {
         while (in_string) {
             ch = PEEK;
             while (ch != '`') {
-                NEXT;
                 read_char_into_buffer(sc, ch);
+                NEXT;
                 ch = PEEK;
             }
 

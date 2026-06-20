@@ -52,7 +52,8 @@ void *sbArena_alloc(hArena arena, usize size) {
 
     if (size > arena->current->capacity - arena->current->used) {
         /* if still doesn't fit, we must be at the end, need to allocate a new block */
-        usize new_capacity = arena->current->capacity;
+        /* we will allocate progressively bigger blocks as needed */
+        usize new_capacity = arena->current->capacity * 3 / 2;
         if (size > new_capacity) new_capacity = size;
         struct block *block = calloc(sizeof(struct block) + new_capacity, 1);
         block->capacity = new_capacity;

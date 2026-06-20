@@ -23,10 +23,10 @@
  * at a time per input token from the scanner (good as we're inserting a bunch of stuff into
  * the token stream.) */
 
-/* I called this module 'lexer.c', but 'scanner.c' is maybe more traditionally what people think
- * of as a lexer. This kind of mildly-context-sensitive-but-not-parsing thing that sits in between
- * the lexer and the parser I don't know if it has a traditional name, but I think it's kind of a
- * cool idea! A three-layer parser instead of a two-layer parser. */
+/* I called this module 'lexer.c', but 'scanner.c' is maybe more traditionally what people
+ * think of as a lexer. This kind of mildly-context-sensitive-but-not-parsing thing that sits
+ * in between the lexer and the parser I don't know if it has a traditional name, but I think
+ * it's kind of a cool idea! A three-layer parser instead of a two-layer parser. */
 
 static void compute_next_token(hLexer lx);
 static sbLexToken advance_output_queue(hLexer lx);
@@ -157,6 +157,18 @@ static void enqueue_output_token(hLexer lx, sbLexToken token) {
 }
 
 static void enqueue_input_token(hLexer lx, sbLexToken token) {
+    /* if we receive an identifier, check if it is a reserved word or not.
+     * (we need to do this as soon as tokens enter the input queue, because we
+     * may be peeking ahead to see whether something is an identifier or not.) */
+    if (token.type == T_IDENTIFIER) {
+        for (int i = 0; i < N_RESERVED_WORDS; i++) {
+            if (!sbstrncmp(reserved_words[i].name, token.str, token.size + 1)) {
+                token.type = reserved_words[i].token_type;
+                break;
+            }
+        }
+    }
+
     enqueue_token(lx->input_queue, &lx->input_queue_length, token, 'i');
 }
 
@@ -213,6 +225,7 @@ static flag can_only_start_expression(sbTokenType type, flag brace_terminated_st
         || type == T_LBRACKET
         || type == T_COLONBRACE
         || type == T_FATARROW
+        || type == T_SQUIGARROW
         || type == T_rNOT
         || type == T_rDO
         || (type == T_LBRACE && !brace_terminated_state); // danger will robinson!
@@ -223,6 +236,18 @@ static flag can_only_start_expression(sbTokenType type, flag brace_terminated_st
 static flag maybe_can_start_expression(sbTokenType type) {
     return type == T_PLUS
         || type == T_MINUS;
+}
+
+/* can come after something like a ) and still be the beginning of a function
+ * parameter (notably this isn't true of opening square bracket because it's
+ * the indexing operator; there's a difference between a(b) [c] and a(b)[c]
+ * lparen is also banned here because if an lparen is after some expression
+ * without a space, then it's a function call, not an expr-starting paren
+ * (e.g.: a(b)(c + 3) should stay a(b)(c + 3), not become a(b)((c + 3)) */
+static flag can_start_expression_without_space(sbTokenType type, flag brace_terminated_state) {
+    return can_only_start_expression(type, brace_terminated_state)
+        && type != T_LBRACKET
+        && type != T_LPAREN;
 }
 
 static flag is_stackable(sbTokenType type) {
@@ -249,17 +274,24 @@ static flag begins_brace_terminated_state(sbTokenType type) {
         || type == T_rREPEAT
         || type == T_rCASE
         || type == T_rWHEN
-        || type == T_FATARROW; /* fat arrow => a, b { ... } introduces block header also */
+        || type == T_FATARROW /* fat arrow => a, b { ... } introduces block header also */
+        || type == T_SQUIGARROW; /* squiggle arrow ~> a, b { ... } introduces block header also */
+}
+
+/* things we can potentially insert a ( after because they may be a call */
+static flag can_end_expression(sbTokenType type) {
+    return is_literal(type)
+        || type == T_RPAREN
+        || type == T_RBRACKET
+        || type == T_RBRACE;
 }
 
 /* when in brace-terminated state, one of these must precede a { character
  * in order to exit brace-terminated state */
 static flag block_header_can_end_after(sbTokenType type) {
-    return is_literal(type)
-        || type == T_RPAREN
-        || type == T_RBRACKET
-        || type == T_RBRACE
+    return can_end_expression(type)
         || type == T_FATARROW
+        || type == T_SQUIGARROW
         || type == T_rCASE
         || type == T_rDO;
 }
@@ -386,7 +418,8 @@ static void unstack_visible_bracket(hLexer lx, sbLexToken closing_token) {
     }
 
     if (lx->brackets_stack.size != 0) {
-        fprintf(stderr, "syntax error: mismatched bracket ('%c' for '%c')\n", lx->brackets_stack.data[lx->brackets_stack.size - 1], closing_token.type);
+        fprintf(stderr, "syntax error: mismatched bracket ('%c' for '%c')\n",
+                lx->brackets_stack.data[lx->brackets_stack.size - 1], closing_token.type);
     } else {
         fprintf(stderr, "syntax error: mismatched bracket\n");
     }
@@ -398,24 +431,19 @@ static void compute_next_token(hLexer lx) {
     sbLexToken token = advance_input_queue(lx);
     sbLexToken invisible_lparen = { .type = T_LPAREN, .invisible = 1 };
 
-    /* if we receive an identifier, check if it is a reserved word or not */
-    if (token.type == T_IDENTIFIER) {
-        for (int i = 0; i < N_RESERVED_WORDS; i++) {
-            if (!sbstrncmp(reserved_words[i].name, token.str, token.size + 1)) {
-                token.type = reserved_words[i].token_type;
-                break;
-            }
-        }
-    }
-
-    if (token.type != T_SPACE && token.type != T_NEWLINE && token.type != T_LPAREN && lx->last_token_seen.type == T_FATARROW) {
+    if (token.type != T_SPACE
+            && token.type != T_NEWLINE
+            && token.type != T_LPAREN
+            && (lx->last_token_seen.type == T_FATARROW || lx->last_token_seen.type == T_SQUIGARROW)) {
         /* => a ... or => { ... will always get an invisible lparen after the => .
          * (not caring about whether or not there is a space in this case.)
          * The brace-terminated state thing should handle closing this for us. */
         enqueue_output_token(lx, invisible_lparen);
     }
 
-    if (is_in_brace_terminated_state(lx) && block_header_can_end_after(lx->last_token_seen.type) && token.type == T_LBRACE) {
+    if (is_in_brace_terminated_state(lx)
+            && block_header_can_end_after(lx->last_token_seen.type)
+            && token.type == T_LBRACE) {
         /* The condition for leaving brace-terminated state is end-of-expression token followed
          * by opening brace. This allows us to still leave out parentheses in certain cases, like
          * if a == { ... . */
@@ -438,14 +466,22 @@ static void compute_next_token(hLexer lx) {
         enqueue_output_token(lx, token);
     }
 
-    if (token.type == T_IDENTIFIER && input_peek_ahead(lx, 0).type == T_COLONBRACE) {
-        /* identifier followed by colon-brace with no space between gets this special invisible bracket */
+    /* this means we can insert a function call paren even if there is no space next
+     * e.g. a(b){ c: d } can become a(b)({ c: d }). but a(b)[c] doesn't become a(b)([c]) */
+    flag insert_paren_no_space = token.type != T_IDENTIFIER && can_start_expression_without_space(
+        input_peek_ahead(lx, 0).type, is_in_brace_terminated_state(lx)
+    );
+
+    if (can_end_expression(token.type) && input_peek_ahead(lx, 0).type == T_COLONBRACE) {
+        /* end-of-expr followed by colon-brace with no space between gets this special
+         * invisible bracket */
         /* invisible = 2 makes it a sticky H bracket */
         invisible_lparen.invisible = 2;
         enqueue_output_token(lx, invisible_lparen);
-    } else if (token.type == T_IDENTIFIER) {
-        /* otherwise, if it's still an identifier and not a reserved word, we might need to insert a
-         * magic ( into the output stream. so look ahead at what's coming up. */
+    } else if (can_end_expression(token.type)) {
+        /* otherwise, if it can end an expression (in particular if it's still an identifier and not a
+         * reserved word), we might need to insert a magic ( into the output stream. so look ahead at
+         * what's coming up. */
 
         /* (We don't do this in 'brace terminated states', e.g. between the keyword and brace of if ... { .
          * The reason is that something like "if x < a {" is ambiguous and ordinarily would parse with a as
@@ -455,17 +491,17 @@ static void compute_next_token(hLexer lx) {
          * function parameter that is a hash. However, the brace terminated state logic being stored in the
          * bracket stack means that we can wrap values that start with braces in parentheses manually if we
          * really need them for some reason. */
-        if (lx->last_token_seen.type == T_DOT) {
+        int space_offset = 0;
+        if (input_peek_ahead(lx, 0).type == T_SPACE) {
+            /* sometimes, we don't care if we have a space after us. */
+            space_offset = 1;
+        }
+
+        if (lx->last_token_seen.type == T_DOT && token.type == T_IDENTIFIER) {
             /* an identifier after a dot always gets an invisible parentheses after it,
              * unless there is a visible parentheses immediately after it. */
             if (input_peek_ahead(lx, 0).type != T_LPAREN) {
                 enqueue_output_token(lx, invisible_lparen);
-
-                int space_offset = 0;
-                if (input_peek_ahead(lx, 0).type == T_SPACE) {
-                    /* in this case, we don't care if we have a space after us. */
-                    space_offset = 1;
-                }
 
                 sbTokenType next_type = input_peek_ahead(lx, space_offset).type;
                 sbTokenType next_next_type = input_peek_ahead(lx, space_offset + 1).type;
@@ -481,6 +517,7 @@ static void compute_next_token(hLexer lx) {
                     /* ok, so this means that we just inserted a ( in some situation like
                      * 'a.b(.c' or 'a.b(, c' or 'a.b( % 3' -- in this situation, we need to also
                      * add a matching invisible right parenthesis immediately. */
+
                     /* In brace-terminated state, { doesn't count as can_only_start_expression.
                      * So this applies before { as well: normally 'a.b {' --> 'a.b({', but
                      * inside block headers 'a.b {' --> 'a.b() {' */
@@ -489,18 +526,19 @@ static void compute_next_token(hLexer lx) {
                 /* if can_only_start_expression(next_type), then we don't want to add an invisible
                  * right parenthesis because it must be a parameter. */
             }
-        } else if (input_peek_ahead(lx, 0).type == T_SPACE) {
+        } else if (input_peek_ahead(lx, 0).type == T_SPACE || insert_paren_no_space) {
             /* suspicious... tell me more */
-            if (can_only_start_expression(input_peek_ahead(lx, 1).type, is_in_brace_terminated_state(lx))) {
+            if (can_only_start_expression(input_peek_ahead(lx, space_offset).type, is_in_brace_terminated_state(lx))) {
                 /* ah ! yes. insert a magic ( into the stream. */
+
                 /* as above, { isn't can_only_start_expression when in brace-terminated state.
                  * In this case the implication is that normally 'a {' gets turned into 'a({',
                  * but inside the top of an if or some such, it stays as 'a {'. */
                 enqueue_output_token(lx, invisible_lparen);
-            } else if (maybe_can_start_expression(input_peek_ahead(lx, 1).type)) {
+            } else if (maybe_can_start_expression(input_peek_ahead(lx, space_offset).type)) {
                 /* check if it also has a space after it. if it does NOT, then
                  * we're looking at something like "a +b", so put a ( in */
-                if (input_peek_ahead(lx, 2).type != T_SPACE) {
+                if (input_peek_ahead(lx, space_offset + 1).type != T_SPACE) {
                     enqueue_output_token(lx, invisible_lparen);
                 }
             }
@@ -514,6 +552,7 @@ static void compute_next_token(hLexer lx) {
     /* automatic semicolon insertion: insert semicolons at the end of lines if we last saw
      * an identifier, literal, ++ or --, ), ], or }) -- except if at the next line starts
      * with a dot or a pipe */
+
     /* also close invisible parentheses in this situation even if the next line starts with
      * a dot or a pipe */
     if (token.type == T_NEWLINE) {
