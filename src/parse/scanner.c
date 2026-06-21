@@ -131,16 +131,17 @@ static void *save_buffer(hScanner sc) {
 
 static usize read_identifier(hScanner sc) {
     usize token_size = 0;
-    char ch = 0;
+    char ch = PEEK;
 
     do {
-        read_char_into_buffer(sc, NEXT);
+        read_char_into_buffer(sc, ch);
         token_size ++;
-        ch = PEEK;
+        ch = NEXT;
     } while (is_mid_identifier(ch));
 
     if (is_end_identifier(ch)) {
-        read_char_into_buffer(sc, NEXT);
+        read_char_into_buffer(sc, ch);
+        NEXT;
         token_size ++;
     }
 
@@ -152,16 +153,17 @@ static usize read_identifier(hScanner sc) {
 
 static usize read_symbol(hScanner sc) {
     usize token_size = 0;
-    char ch = 0;
+    char ch = PEEK;
 
     do {
-        read_char_into_buffer(sc, NEXT);
+        read_char_into_buffer(sc, ch);
         token_size ++;
-        ch = PEEK;
+        ch = NEXT;
     } while (is_mid_symbol(ch));
 
     if (is_end_symbol(ch)) {
-        read_char_into_buffer(sc, NEXT);
+        read_char_into_buffer(sc, ch);
+        NEXT;
         token_size ++;
     }
 
@@ -172,15 +174,15 @@ static usize read_symbol(hScanner sc) {
 }
 
 static sbLexToken compute_next_token(hScanner sc) {
-    int next = PEEK;
-    char ch = (char)next;
+    int ch_int = PEEK;
+    unsigned char ch = (unsigned char)ch_int;
 
     sbBuffer_reset(&sc->dynamic_buffer);
 
     usize token_size = 0;
     sbLexToken new_token = {0};
 
-    if (next == EOF) {
+    if (ch_int == EOF) {
         new_token.type = T_EOF;
     } else if (ch == '\n') {
         new_token.type = T_NEWLINE;
@@ -192,8 +194,7 @@ static sbLexToken compute_next_token(hScanner sc) {
     } else if (ch == '#') {
         /* Comment. Ignore everything until the end of the line. */
         do {
-            NEXT;
-            ch = PEEK;
+            ch = NEXT;
         } while (ch != '\n');
 
         /* eat newline, and skip all spaces after the newline */
@@ -208,11 +209,10 @@ static sbLexToken compute_next_token(hScanner sc) {
             || ch == ';' || ch == '|'
             || ch == ',' || ch == '\\') {
         /* unambiguously single-character tokens */
-        NEXT;
         new_token.type = ch;
-    } else if (ch == '!') {
         NEXT;
-        ch = PEEK;
+    } else if (ch == '!') {
+        ch = NEXT;
         if (ch == '=') {
             new_token.type = T_NOTEQUALS;
             NEXT;
@@ -222,8 +222,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_ERROR;
         }
     } else if (ch == '~') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '>') {
             new_token.type = T_SQUIGARROW;
             NEXT;
@@ -233,8 +232,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_ERROR;
         }
     } else if (ch == '>') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '>') {
             new_token.type = T_DOUBLEGREATER;
             NEXT;
@@ -246,12 +244,11 @@ static sbLexToken compute_next_token(hScanner sc) {
         }
     } else if (ch == '.') {
         new_token.type = T_DOT;
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
+
         if (ch == '.') {
             new_token.type = T_TWODOT;
-            NEXT;
-            ch = PEEK;
+            ch = NEXT;
 
             if (ch == '.') {
                 new_token.type = T_ELLIPSIS;
@@ -259,8 +256,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             }
         }
     } else if (ch == '<') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '<') {
             new_token.type = T_DOUBLEGREATER;
             NEXT;
@@ -274,8 +270,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_LESS;
         }
     } else if (ch == '%') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '=') {
             new_token.type = T_PERCENTEQUALS;
             NEXT;
@@ -283,8 +278,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_PERCENT;
         }
     } else if (ch == '/') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '/') {
             new_token.type = T_DOUBLESLASH;
             NEXT;
@@ -295,8 +289,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_SLASH;
         }
     } else if (ch == '*') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '*') {
             new_token.type = T_DOUBLEASTERISK;
             NEXT;
@@ -307,8 +300,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_ASTERISK;
         }
     } else if (ch == '=') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '=') {
             new_token.type = T_DOUBLEEQUALS;
             NEXT;
@@ -319,8 +311,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_EQUALS;
         }
     } else if (ch == '+') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '+') {
             new_token.type = T_DOUBLEPLUS;
             NEXT;
@@ -331,8 +322,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_PLUS;
         }
     } else if (ch == '-') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == '-') {
             new_token.type = T_DOUBLEMINUS;
             NEXT;
@@ -346,8 +336,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_MINUS;
         }
     } else if (ch == ':') {
-        NEXT;
-        ch = PEEK;
+        ch = NEXT;
         if (ch == ':') {
             /* :: */
             new_token.type = T_PAAMAYIM_NEKUDOTAYIM;
@@ -374,49 +363,46 @@ static sbLexToken compute_next_token(hScanner sc) {
 
         /* skip all subsequent spaces */
         do {
-            NEXT;
-        } while (is_space(PEEK));
+            ch = NEXT;
+        } while (is_space(ch));
 
         /* if we run into a comment, skip to the end of the line */
         if (ch == '#') {
             do {
-                NEXT;
-            } while (PEEK != '\n');
+                ch = NEXT;
+            } while (ch != '\n');
         }
 
         /* if we run into a newline, forget about the spaces */
-        if (PEEK == '\n') {
+        if (ch == '\n') {
             new_token.type = T_NEWLINE;
 
             /* and skip all spaces after the newline */
             do {
-                NEXT;
-            } while (is_space(PEEK));
+                ch = NEXT;
+            } while (is_space(ch));
         }
     } else if (ch == '`') {
         /* Raw string */
         new_token.type = T_STRING;
-        NEXT;
+        ch = NEXT;
 
         flag in_string = 1;
 
         while (in_string) {
-            ch = PEEK;
             while (ch != '`') {
                 read_char_into_buffer(sc, ch);
-                NEXT;
-                ch = PEEK;
+                ch = NEXT;
             }
 
             /* ok, now we know ch is a backtick. discard it and look at what's next */
-            NEXT;
-            ch = PEEK;
+            ch = NEXT;
 
             if (ch == '`') {
                 /* it was a double backtick. so count this as one backtick (escaped) and
                  * continue reading into the string */
-                NEXT;
                 read_char_into_buffer(sc, ch);
+                ch = NEXT;
             } else {
                 /* it is something else. end of string. exit loop. */
                 in_string = 0;
@@ -445,34 +431,28 @@ static sbLexToken compute_next_token(hScanner sc) {
         int base = 10;
 
         if (ch == '0') {
-            NEXT;
-            ch = PEEK;
+            /* skip a leading zero, and see if it has some base indicator */
+            ch = NEXT;
             if (ch == 'b') {
-                NEXT;
-                ch = PEEK;
+                ch = NEXT;
                 base = 2;
             } else if (ch == 'o') {
-                NEXT;
-                ch = PEEK;
+                ch = NEXT;
                 base = 8;
             } else if (ch == 'x') {
-                NEXT;
-                ch = PEEK;
+                ch = NEXT;
                 base = 16;
             }
         }
 
         do {
             /* TODO: promote to bigint, don't allow overflow */
-            NEXT;
             intval *= base;
             intval += base_digit_value(ch);
-            ch = PEEK;
-            while (ch == '_') {
+            do {
                 /* skip over underscores in numeric literals */
-                NEXT;
-                ch = PEEK;
-            }
+                ch = NEXT;
+            } while (ch == '_');
         } while (is_base_digit(ch, base));
 
         /* if we are now looking at still a character that's a letter or digit, throw error */

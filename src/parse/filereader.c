@@ -27,20 +27,20 @@ flag sbFileReader_ok(hFileReader r) {
     return r->valid;
 }
 
-int sbFileReader_next(hFileReader r) {
+int sbFileReader_peek(hFileReader r) {
     if (r->valid) {
         char c = fgetc(r->file);
+        ungetc(c, r->file);
         return c;
     } else {
         return EOF;
     }
 }
 
-int sbFileReader_peek(hFileReader r) {
+int sbFileReader_next(hFileReader r) {
     if (r->valid) {
-        char c = fgetc(r->file);
-        ungetc(c, r->file);
-        return c;
+        fgetc(r->file);
+        return sbFileReader_peek(r);
     } else {
         return EOF;
     }
