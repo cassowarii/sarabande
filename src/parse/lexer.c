@@ -34,25 +34,21 @@ static sbLexToken advance_output_queue(hLexer lx);
 void sbLexer_initialize(hLexer lx, hFileReader fr) {
     sbBuffer_initialize(&lx->brackets_stack, 64);
     sbScanner_initialize(&lx->scanner, fr);
-    memset(lx->input_queue, 0, LEXER_QUEUE_LENGTH * sizeof(sbLexToken));
-    memset(lx->output_queue, 0, LEXER_QUEUE_LENGTH * sizeof(sbLexToken));
-    lx->input_queue_length = 0;
-    lx->output_queue_length = 0;
+    sbTokenQueue_initialize(&lx->input_queue, 8);
+    sbTokenQueue_initialize(&lx->output_queue, 8);
     lx->last_token_seen = (sbLexToken) {0};
-    lx->n_brackets = 0;
-    lx->brace_terminated_state = 0;
 }
 
 sbLexToken sbLexer_peek(hLexer lx) {
-    if (lx->output_queue_length == 0) {
+    if (sbTokenQueue_size(&lx->output_queue) == 0) {
         compute_next_token(lx);
     }
 
-    return lx->output_queue[0];
+    return sbTokenQueue_at(&lx->output_queue, 0);
 }
 
 sbLexToken sbLexer_next(hLexer lx) {
-    if (lx->output_queue_length == 0) {
+    if (sbTokenQueue_size(&lx->output_queue) == 0) {
         compute_next_token(lx);
     }
 
@@ -62,8 +58,8 @@ sbLexToken sbLexer_next(hLexer lx) {
 void sbLexer_deinitialize(hLexer lx) {
     sbScanner_deinitialize(&lx->scanner);
     sbBuffer_deinitialize(&lx->brackets_stack);
-    lx->input_queue_length = 0;
-    lx->output_queue_length = 0;
+    sbTokenQueue_deinitialize(&lx->input_queue);
+    sbTokenQueue_deinitialize(&lx->output_queue);
 }
 
 struct ReservedWord {
@@ -78,13 +74,16 @@ static struct ReservedWord reserved_words[] = {
     { "def", T_rDEF },
     { "do", T_rDO },
     { "else", T_rELSE },
+    { "false", T_rFALSE },
     { "if", T_rIF },
     { "let", T_rLET },
     { "in", T_rIN },
+    { "match", T_rMATCH },
     { "not", T_rNOT },
     { "or", T_rOR },
     { "repeat", T_rREPEAT },
     { "return", T_rRETURN },
+    { "true", T_rTRUE},
     { "unless", T_rUNLESS },
     { "until", T_rUNTIL },
     { "when", T_rWHEN },
@@ -92,44 +91,6 @@ static struct ReservedWord reserved_words[] = {
 };
 
 #define N_RESERVED_WORDS ((sizeof(reserved_words))/(sizeof(reserved_words[0])))
-
-static sbLexToken advance_token_queue(sbLexToken *q, int *length, char version) {
-    if (*length == 0) {
-        if (version == 'o') {
-            PANIC("can't advance empty lexer output queue!");
-        } else {
-            PANIC("can't advance empty lexer input queue!");
-        }
-    }
-
-    sbLexToken result = q[0];
-
-    (*length)--;
-    for (int i = 0; i < *length; i++) {
-        if (i < LEXER_QUEUE_LENGTH - 1) {
-            q[i] = q[i + 1];
-        } else {
-            q[i] = (sbLexToken) {0};
-        }
-    }
-
-    q[*length] = (sbLexToken) {0};
-
-    return result;
-}
-
-static void enqueue_token(sbLexToken *q, int *length, sbLexToken token, char version) {
-    if (*length == LEXER_QUEUE_LENGTH) {
-        if (version == 'o') {
-            PANIC("output token queue is full!");
-        } else {
-            PANIC("input token queue is full!");
-        }
-    }
-
-    q[*length] = token;
-    (*length)++;
-}
 
 static flag is_stackable(sbTokenType type);
 static void stack_token(hLexer lx, sbLexToken token);
@@ -144,7 +105,7 @@ static void enqueue_output_token(hLexer lx, sbLexToken token) {
         unstack_visible_bracket(lx, token);
     }
 
-    enqueue_token(lx->output_queue, &lx->output_queue_length, token, 'o');
+    sbTokenQueue_enqueue(&lx->output_queue, token);
 
     if (is_closing_bracket(token.type) && !token.invisible) {
         unstack_sticky_invisible_parentheses(lx);
@@ -169,31 +130,33 @@ static void enqueue_input_token(hLexer lx, sbLexToken token) {
         }
     }
 
-    enqueue_token(lx->input_queue, &lx->input_queue_length, token, 'i');
+    sbTokenQueue_enqueue(&lx->input_queue, token);
 }
 
 static sbLexToken advance_output_queue(hLexer lx) {
-    while (lx->output_queue_length == 0) {
+    while (sbTokenQueue_size(&lx->output_queue) == 0) {
         compute_next_token(lx);
     }
-    return advance_token_queue(lx->output_queue, &lx->output_queue_length, 'o');
+
+    return sbTokenQueue_shift(&lx->output_queue);
 }
 
 static sbLexToken advance_input_queue(hLexer lx) {
-    if (lx->input_queue_length == 0) {
+    if (sbTokenQueue_size(&lx->input_queue) == 0) {
         enqueue_input_token(lx, sbScanner_next(&lx->scanner));
     }
-    return advance_token_queue(lx->input_queue, &lx->input_queue_length, 'i');
+
+    return sbTokenQueue_shift(&lx->input_queue);
 }
 
 static sbLexToken input_peek_ahead(hLexer lx, int count) {
     /* 0 = next token; 1 = token after that; etc.
      * so if count is 0, length must be at least 1 */
-    while (lx->input_queue_length <= count) {
+    while (sbTokenQueue_size(&lx->input_queue) <= count) {
         enqueue_input_token(lx, sbScanner_next(&lx->scanner));
     }
 
-    return lx->input_queue[count];
+    return sbTokenQueue_at(&lx->input_queue, count);
 }
 
 static flag is_literal(sbTokenType type) {
@@ -201,7 +164,9 @@ static flag is_literal(sbTokenType type) {
         || type == T_STRING
         || type == T_INTEGER
         || type == T_FLOAT
-        || type == T_SYMBOL;
+        || type == T_SYMBOL
+        || type == T_rTRUE
+        || type == T_rFALSE;
 }
 
 static flag insert_semicolon_after(sbTokenType type) {
@@ -312,10 +277,9 @@ static char brackets_stack_top(hLexer lx) {
 static char brackets_stack_pop(hLexer lx) {
     if (lx->brackets_stack.size == 0) return 0;
 
-    char result = brackets_stack_top(lx);
-    lx->brackets_stack.data[lx->brackets_stack.size - 1] = 0;
-    lx->brackets_stack.size --;
-    return result;
+    char *result = sbBuffer_shrink(&lx->brackets_stack, 1);
+
+    return *result;
 }
 
 static void brackets_stack_push(hLexer lx, char c) {

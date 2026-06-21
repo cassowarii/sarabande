@@ -48,6 +48,22 @@ void *sbBuffer_expand(hBuffer buf, usize expand_size) {
     return result;
 }
 
+void *sbBuffer_shrink(hBuffer buf, usize shrink_size) {
+    if (shrink_size > buf->size) {
+        fprintf(stderr, "internal warning: can't shrink buffer past zero");
+        shrink_size = buf->size;
+    }
+
+    buf->size -= shrink_size;
+
+    /* ok to return this even though it's "outside" the buffer,
+     * because we never shrink the actual allocation of the buffer.
+     * however, bear in mind not to keep this pointer around very
+     * long, because if we append to the buffer it could change
+     * again. */
+    return &buf->data[buf->size];
+}
+
 void sbBuffer_append(hBuffer buf, const char *data, usize data_length) {
     if (data_length == 0) return;
 

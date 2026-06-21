@@ -9,7 +9,7 @@
  * after this stage so we can differentiate between things like 'a.b (1)' and 'a.b(1)',
  * which have different semantics. */
 
-#define MEM_BLOCK_SIZE 8
+#define MEM_BLOCK_SIZE 65536
 #define TOKEN_BUFFER_SIZE 64
 
 static void check_if_start(hScanner sc);
@@ -206,11 +206,10 @@ static sbLexToken compute_next_token(hScanner sc) {
             || ch == '[' || ch == ']'
             || ch == '{' || ch == '}'
             || ch == ';' || ch == '|'
-            || ch == '.' || ch == ','
-            || ch == '\\') {
+            || ch == ',' || ch == '\\') {
         /* unambiguously single-character tokens */
-        new_token.type = ch;
         NEXT;
+        new_token.type = ch;
     } else if (ch == '!') {
         NEXT;
         ch = PEEK;
@@ -244,6 +243,20 @@ static sbLexToken compute_next_token(hScanner sc) {
             NEXT;
         } else {
             new_token.type = T_GREATER;
+        }
+    } else if (ch == '.') {
+        new_token.type = T_DOT;
+        NEXT;
+        ch = PEEK;
+        if (ch == '.') {
+            new_token.type = T_TWODOT;
+            NEXT;
+            ch = PEEK;
+
+            if (ch == '.') {
+                new_token.type = T_ELLIPSIS;
+                NEXT;
+            }
         }
     } else if (ch == '<') {
         NEXT;

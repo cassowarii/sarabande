@@ -4,19 +4,12 @@
 #include "token.h"
 #include "scanner.h"
 
-#define LEXER_QUEUE_LENGTH 32
-
-/* TODO: input_queue and output_queue should be sbBuffer */
 typedef struct sbLexer {
     sbScanner scanner;
-    sbLexToken input_queue[LEXER_QUEUE_LENGTH];
-    sbLexToken output_queue[LEXER_QUEUE_LENGTH];
-    int input_queue_length;
-    int output_queue_length;
-    sbLexToken last_token_seen;
-    flag brace_terminated_state;
+    sbTokenQueue input_queue;
+    sbTokenQueue output_queue;
     sbBuffer brackets_stack;
-    int n_brackets;
+    sbLexToken last_token_seen;
 } sbLexer;
 
 typedef struct sbLexer *hLexer;
