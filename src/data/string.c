@@ -6,6 +6,15 @@
 #define INLINE_BUFFER_SIZE 256
 #define STRINGS_PER_BLOCK 256
 
+/* highest bit set on handle value means it is a tinystr */
+#define FLAG_TINY (1L << 63)
+
+/* if string length < REQ_ALLOC_LENGTH, we can just put the
+ * string in the handle itself. this should be 64 / 8 = 8,
+ * we need to allocate for an 8 char string because tinystr
+ * uses one byte to store the string length as well. */
+#define REQ_ALLOC_LENGTH (sizeof(hString)/sizeof(char))
+
 /* TODO: Move these globals into some kind of "execution context" struct
  * that we can pass around to be reentrant */
 /* also TODO a better (slightly more annoying to code) way to structure
@@ -18,9 +27,11 @@
 sbBuffer g_string_blocks;
 usize g_free_block_index;
 
+typedef u64 hString_mutable;
+
 typedef struct strentry {
   usize length;
-  u64 handle;
+  hString_mutable handle;
   flag is_external;
   flag allocated;
   union {
@@ -41,6 +52,7 @@ static strblk *get_strblk(usize index);
 static strentry *get_entry(strblk *blk, usize index);
 static strentry *new_entry(usize length);
 static void place_str_at_offset(strentry *e, usize offset, const char *str, usize length);
+static flag is_tinystr(hString handle);
 
 void sbString_sys_init() {
   g_free_block_index = 0;
@@ -51,20 +63,65 @@ void sbString_sys_deinit() {
   sbBuffer_deinitialize(&g_string_blocks);
 }
 
-hString sbString_alloc(const char *value, usize length) {
-  strentry *e = new_entry(length);
-  place_str_at_offset(e, 0, value, length);
-  return (hString)e->handle;
+hString sbString_new(const char *value, usize length) {
+  if (length >= REQ_ALLOC_LENGTH) {
+    strentry *e = new_entry(length);
+    place_str_at_offset(e, 0, value, length);
+    return e->handle;
+  } else {
+    /* tinystr */
+    hString_mutable new_handle = 0;
+    for (int i = 0; i < length; i++) {
+      new_handle <<= 8;
+      new_handle |= value[i];
+    }
+    /* set length in high bit */
+    new_handle |= ((length << (8 * 7)) | FLAG_TINY);
+    return new_handle;
+  }
 }
 
-const char *sbString_get_ptr(hString handle, usize *length_out) {
-  strblk *blk = get_strblk(handle / STRINGS_PER_BLOCK);
-  strentry *entry = get_entry(blk, handle % STRINGS_PER_BLOCK);
-  if (length_out) *length_out = entry->length;
-  return get_ptr_of_entry(entry);
+const char *sbString_get_value(hString handle, char *buffer_i_might_use, usize *length_out) {
+  if (is_tinystr(handle)) {
+    /* string is stored backwards because it's easiest to just get the low byte */
+    usize tinylength = ((handle >> (8 * 7)) & 0x8F);
+    if (length_out) *length_out = tinylength;
+    if (buffer_i_might_use) {
+      usize index = 0;
+      hString_mutable handle_to_eat = handle;
+      while (index < tinylength) {
+        buffer_i_might_use[index] = (handle_to_eat & 0xFF); /* get lowest byte and move down */
+        handle_to_eat >>= 8;
+        index ++;
+      }
+      buffer_i_might_use[index] = '\0'; /* don't forget NUL! */
+    }
+    return buffer_i_might_use;
+  } else {
+    strblk *blk = get_strblk(handle / STRINGS_PER_BLOCK);
+    strentry *entry = get_entry(blk, handle % STRINGS_PER_BLOCK);
+    if (length_out) *length_out = entry->length;
+    return get_ptr_of_entry(entry);
+  }
+}
+
+usize sbString_get_length(hString handle) {
+  if (handle & FLAG_TINY) {
+    /* length is top byte except high bit */
+    return (handle >> (8 * 7)) & 0x8F;
+  } else {
+    /* length is just in the entry */
+    strblk *blk = get_strblk(handle / STRINGS_PER_BLOCK);
+    strentry *entry = get_entry(blk, handle % STRINGS_PER_BLOCK);
+    return entry->length;
+  }
 }
 
 /* --- */
+
+static flag is_tinystr(hString handle) {
+  return handle & FLAG_TINY;
+}
 
 static const char *get_ptr_of_entry(strentry *e) {
   if (e->is_external) {
