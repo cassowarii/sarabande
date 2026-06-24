@@ -12,6 +12,36 @@
 #define MEM_BLOCK_SIZE 65536
 #define TOKEN_BUFFER_SIZE 64
 
+struct ReservedWord {
+    const char *name;
+    sbTokenType token_type;
+};
+
+static struct ReservedWord reserved_words[] = {
+    { "and", T_rAND },
+    { "as", T_rAS },
+    { "case", T_rCASE },
+    { "def", T_rDEF },
+    { "do", T_rDO },
+    { "else", T_rELSE },
+    { "false", T_rFALSE },
+    { "if", T_rIF },
+    { "let", T_rLET },
+    { "in", T_rIN },
+    { "match", T_rMATCH },
+    { "not", T_rNOT },
+    { "or", T_rOR },
+    { "repeat", T_rREPEAT },
+    { "return", T_rRETURN },
+    { "true", T_rTRUE},
+    { "unless", T_rUNLESS },
+    { "until", T_rUNTIL },
+    { "when", T_rWHEN },
+    { "while", T_rWHILE },
+};
+
+#define N_RESERVED_WORDS ((sizeof(reserved_words))/(sizeof(reserved_words[0])))
+
 static void check_if_start(hScanner sc);
 static sbLexToken compute_next_token(hScanner sc);
 
@@ -352,7 +382,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             token_size = read_symbol(sc);
             char *storage = save_buffer(sc);
 
-            new_token.str = storage;
+            new_token.cstr = storage;
             new_token.size = token_size;
         } else {
             /* : */
@@ -412,9 +442,9 @@ static sbLexToken compute_next_token(hScanner sc) {
         read_char_into_buffer(sc, '\0');
 
         finalize_char_buffer(sc);
-        char *storage = save_buffer(sc);
+        hString hstr = sbString_new(sc->dynamic_buffer.data, sc->dynamic_buffer.size);
 
-        new_token.str = storage;
+        new_token.hstr = hstr;
         new_token.size = sc->dynamic_buffer.size;
     } else if (is_start_identifier(ch)) {
         new_token.type = T_IDENTIFIER;
@@ -422,7 +452,7 @@ static sbLexToken compute_next_token(hScanner sc) {
         token_size = read_identifier(sc);
         char *storage = save_buffer(sc);
 
-        new_token.str = storage;
+        new_token.cstr = storage;
         new_token.size = token_size;
     } else if (is_digit(ch)) {
         new_token.type = T_INTEGER;
@@ -475,6 +505,17 @@ static sbLexToken compute_next_token(hScanner sc) {
 
         NEXT;
     }
+
+    /* if we receive an identifier, check if it is a reserved word or not. */
+    if (new_token.type == T_IDENTIFIER) {
+        for (int i = 0; i < N_RESERVED_WORDS; i++) {
+            if (!sbstrncmp(reserved_words[i].name, new_token.cstr, new_token.size + 1)) {
+                new_token.type = reserved_words[i].token_type;
+                break;
+            }
+        }
+    }
+
 
     return new_token;
 }

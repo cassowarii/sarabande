@@ -7,7 +7,7 @@
 #define STRINGS_PER_BLOCK 256
 
 /* highest bit set on handle value means it is a tinystr */
-#define FLAG_TINY (1L << 63)
+#define FLAG_TINY (1ULL << 63)
 
 /* if string length < REQ_ALLOC_LENGTH, we can just put the
  * string in the handle itself. this should be 64 / 8 = 8,
@@ -18,20 +18,18 @@
 /* TODO: Move these globals into some kind of "execution context" struct
  * that we can pass around to be reentrant */
 /* also TODO a better (slightly more annoying to code) way to structure
- * this would be SoA style: instead of storing free_count and allocated
+ * this would be SoA style: instead of storing used_count and allocated
  * inside the block and entry respectively, store them in a separate
  * array next to the pointers that we can scan quickly. less important
- * for allocated since it's already in the strblk anyway, but for free_count
+ * for allocated since it's already in the strblk anyway, but for used_count
  * this could be important because the counts will otherwise be scattered
  * to the four winds */
 sbBuffer g_string_blocks;
 usize g_free_block_index;
 
-typedef u64 hString_mutable;
-
 typedef struct strentry {
   usize length;
-  hString_mutable handle;
+  hString handle;
   flag is_external;
   flag allocated;
   union {
@@ -42,7 +40,7 @@ typedef struct strentry {
 
 typedef struct strblk {
   usize id;
-  usize free_count;
+  usize used_count;
   usize next_free_index;
   strentry entries[STRINGS_PER_BLOCK];
 } strblk;
@@ -53,14 +51,21 @@ static strentry *get_entry(strblk *blk, usize index);
 static strentry *new_entry(usize length);
 static void place_str_at_offset(strentry *e, usize offset, const char *str, usize length);
 static flag is_tinystr(hString handle);
+static strblk *new_strblk();
 
 void sbString_sys_init() {
   g_free_block_index = 0;
   sbBuffer_initialize(&g_string_blocks, sizeof(strblk*) * 8);
+
+  /* we need to have at least one strblk to start */
+  new_strblk();
 }
 
 void sbString_sys_deinit() {
-  sbBuffer_deinitialize(&g_string_blocks);
+  /* TODO free these i guess, or don't deinitialize this buffer, right now this
+   * would just drop the pointers to no benefit. look, i'm going to write a
+   * garbage collector, ok? give me a second */
+  //sbBuffer_deinitialize(&g_string_blocks);
 }
 
 hString sbString_new(const char *value, usize length) {
@@ -70,7 +75,7 @@ hString sbString_new(const char *value, usize length) {
     return e->handle;
   } else {
     /* tinystr */
-    hString_mutable new_handle = 0;
+    hString new_handle = 0;
     for (int i = 0; i < length; i++) {
       new_handle <<= 8;
       new_handle |= value[i];
@@ -88,7 +93,7 @@ const char *sbString_get_value(hString handle, char *buffer_i_might_use, usize *
     if (length_out) *length_out = tinylength;
     if (buffer_i_might_use) {
       usize index = 0;
-      hString_mutable handle_to_eat = handle;
+      hString handle_to_eat = handle;
       while (index < tinylength) {
         buffer_i_might_use[index] = (handle_to_eat & 0xFF); /* get lowest byte and move down */
         handle_to_eat >>= 8;
@@ -143,13 +148,13 @@ static char *get_mutable_ptr_of_entry(strentry *e) {
 
 static strblk *get_strblk(usize index) {
   usize nblocks = g_string_blocks.size / sizeof(strblk*);
-  if (index >= nblocks) PANIC("attempt to get a string from a block (block #%zu) that does not exist!", index);
+  if (index >= nblocks) PANIC("attempt to get a string from a block (#%zu) that does not exist!", index);
 
   return ((strblk**)g_string_blocks.data)[index];
 }
 
 static strentry *get_entry(strblk *blk, usize index) {
-  if (index >= STRINGS_PER_BLOCK) PANIC("attempt to get a string (string #%zu) that does not exist in block at %zu!", index, blk->id);
+  if (index >= STRINGS_PER_BLOCK) PANIC("attempt to get a string (#%zu) that does not exist in block (#%zu)!", index, blk->id);
 
   return &blk->entries[index];
 }
@@ -164,13 +169,13 @@ static strblk *new_strblk() {
 }
 
 static strentry *alloc_entry(strblk *blk) {
-  if (blk->free_count == 0) PANIC("attempt to allocate from a full strblk (%zu)!", blk->id);
+  if (blk->used_count == STRINGS_PER_BLOCK) PANIC("attempt to allocate from a full strblk (#%zu)!", blk->id);
 
-  blk->free_count --;
+  blk->used_count ++;
 
   usize free_index = blk->next_free_index;
 
-  if (blk->free_count > 0) {
+  if (blk->used_count < STRINGS_PER_BLOCK) {
     usize next_free_index = blk->next_free_index;
     do {
       next_free_index ++;
@@ -178,7 +183,7 @@ static strentry *alloc_entry(strblk *blk) {
     } while (blk->entries[free_index].allocated && next_free_index != blk->next_free_index);
 
     if (next_free_index == blk->next_free_index) {
-      PANIC("free count lied! for strblk #%zu", blk->id);
+      PANIC("free count lied! for strblk (#%zu)", blk->id);
     }
 
     blk->next_free_index = next_free_index;
@@ -192,7 +197,7 @@ static strentry *alloc_entry(strblk *blk) {
 static strblk *find_free_block() {
   strblk *block_with_free = get_strblk(g_free_block_index);
 
-  if (block_with_free->free_count == 0) {
+  if (block_with_free->used_count == STRINGS_PER_BLOCK) {
     usize nblocks = g_string_blocks.size / sizeof(strblk*);
     usize start_index = g_free_block_index;
 
@@ -200,7 +205,7 @@ static strblk *find_free_block() {
       g_free_block_index ++;
       g_free_block_index %= nblocks;
       block_with_free = get_strblk(g_free_block_index);
-    } while (g_free_block_index != start_index && block_with_free->free_count == 0);
+    } while (g_free_block_index != start_index && block_with_free->used_count == STRINGS_PER_BLOCK);
 
     if (g_free_block_index == start_index) {
       /* Where did that bring you? Back to me. */
@@ -216,6 +221,7 @@ static void set_entry_size(strentry *e, usize length) {
   if (e->is_external) {
     sbBuffer_set_size(&e->somewhere_else_value, length + 1);
     /* if we shortened string, need to replace NUL at end */
+    e->length = length;
     e->somewhere_else_value.data[length] = '\0';
   } else {
     if (length > INLINE_BUFFER_SIZE - 1) {
@@ -227,11 +233,13 @@ static void set_entry_size(strentry *e, usize length) {
       if (e->length > 0) {
         sbBuffer_append(&new_buf, e->inline_value, e->length + 1);
       }
+      e->length = length;
       e->is_external = TRUE;
       e->somewhere_else_value = new_buf;
       e->somewhere_else_value.data[length] = '\0';
     } else {
       /* we can remain inline, but need to set NUL in the right place */
+      e->length = length;
       e->inline_value[length] = '\0';
     }
   }

@@ -3,6 +3,8 @@
 
 #include "common.h"
 
+#include "data/string.h"
+
 typedef enum sbTokenType {
     T_NULL                  = 0,
     T_ERROR                 = 1,
@@ -88,7 +90,8 @@ typedef struct sbLexToken {
     usize size;
     flag invisible;
     union {
-        char *str;
+        char *cstr;
+        hString hstr;
         float fl;
         int i;
     };

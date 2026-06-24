@@ -62,36 +62,6 @@ void sbLexer_deinitialize(hLexer lx) {
     sbTokenQueue_deinitialize(&lx->output_queue);
 }
 
-struct ReservedWord {
-    const char *name;
-    sbTokenType token_type;
-};
-
-static struct ReservedWord reserved_words[] = {
-    { "and", T_rAND },
-    { "as", T_rAS },
-    { "case", T_rCASE },
-    { "def", T_rDEF },
-    { "do", T_rDO },
-    { "else", T_rELSE },
-    { "false", T_rFALSE },
-    { "if", T_rIF },
-    { "let", T_rLET },
-    { "in", T_rIN },
-    { "match", T_rMATCH },
-    { "not", T_rNOT },
-    { "or", T_rOR },
-    { "repeat", T_rREPEAT },
-    { "return", T_rRETURN },
-    { "true", T_rTRUE},
-    { "unless", T_rUNLESS },
-    { "until", T_rUNTIL },
-    { "when", T_rWHEN },
-    { "while", T_rWHILE },
-};
-
-#define N_RESERVED_WORDS ((sizeof(reserved_words))/(sizeof(reserved_words[0])))
-
 static flag is_stackable(sbTokenType type);
 static void stack_token(hLexer lx, sbLexToken token);
 static flag is_closing_bracket(sbTokenType type);
@@ -118,18 +88,6 @@ static void enqueue_output_token(hLexer lx, sbLexToken token) {
 }
 
 static void enqueue_input_token(hLexer lx, sbLexToken token) {
-    /* if we receive an identifier, check if it is a reserved word or not.
-     * (we need to do this as soon as tokens enter the input queue, because we
-     * may be peeking ahead to see whether something is an identifier or not.) */
-    if (token.type == T_IDENTIFIER) {
-        for (int i = 0; i < N_RESERVED_WORDS; i++) {
-            if (!sbstrncmp(reserved_words[i].name, token.str, token.size + 1)) {
-                token.type = reserved_words[i].token_type;
-                break;
-            }
-        }
-    }
-
     sbTokenQueue_enqueue(&lx->input_queue, token);
 }
 

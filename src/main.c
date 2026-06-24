@@ -2,6 +2,7 @@
 
 #include "parse/filereader.h"
 #include "parse/lexer.h"
+#include "data/string.h"
 
 int main(int argc, char **argv) {
     if (argc == 2) {
@@ -15,7 +16,10 @@ int main(int argc, char **argv) {
         sbLexer lx;
         sbLexer_initialize(&lx, fr);
 
+        sbString_sys_init();
+
         sbLexToken t;
+        char scratch[8];
 
         do {
             t = sbLexer_next(&lx);
@@ -27,15 +31,15 @@ int main(int argc, char **argv) {
             } else if (t.type == T_NEWLINE) {
                 printf("\n");
             } else if (t.type == T_IDENTIFIER) {
-                printf("%s", t.str);
+                printf("%s", t.cstr);
             } else if (t.type == T_INTEGER) {
                 printf("<INT %d>", t.i);
             } else if (t.type == T_STRING) {
-                printf("<STRING '%s'>", t.str);
+                printf("<STRING '%s'>", sbString_get_value(t.hstr, scratch, NULL));
             } else if (t.type == T_SYMBOL) {
-                printf("<SYMBOL :%s>", t.str);
+                printf("<SYMBOL :%s>", t.cstr);
             } else if (t.type >= T_rAND && t.type <= T_rWHILE) {
-                printf("<%s>", t.str);
+                printf("<%s>", t.cstr);
             } else if (t.type == T_SEMICOLON) {
                 printf(";\n");
             } else {
@@ -54,6 +58,8 @@ int main(int argc, char **argv) {
         sbLexer_deinitialize(&lx);
 
         sbFileReader_close(fr);
+
+        sbString_sys_deinit();
     } else {
         fprintf(stderr, "please provide a file as input\n");
     }

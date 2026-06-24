@@ -1,6 +1,6 @@
 #include "common.h"
 
-typedef const u64 hString;
+typedef u64 hString;
 
 hString sbString_new(const char *value, usize length);
 

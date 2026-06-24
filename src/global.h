@@ -2,7 +2,7 @@
 #define __SB_GLOBAL_H__
 
 #ifdef DEBUG
-#define PANIC(...) do { fprintf(stderr, "PANIC: " __VA_ARGS__); fprintf(stderr, "\n at " __FILE__ ":%d\n", __LINE__); abort(); } while (0)
+#define PANIC(...) do { fprintf(stderr, "PANIC: " __VA_ARGS__); fprintf(stderr, "\n       at " __FILE__ ":%d\n", __LINE__); abort(); } while (0)
 #else
 #define PANIC(...) do { fprintf(stderr, "PANIC: " __VA_ARGS__); fprintf(stderr, "\n"); abort(); } while (0)
 #endif
