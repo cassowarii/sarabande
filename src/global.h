@@ -2,9 +2,9 @@
 #define __SB_GLOBAL_H__
 
 #ifdef DEBUG
-#define PANIC(msg) do { fprintf(stderr, "PANIC: " msg " at " __FILE__ ":%d\n", __LINE__); abort(); } while (0)
+#define PANIC(...) do { fprintf(stderr, "PANIC: " __VA_ARGS__); fprintf(stderr, "\n at " __FILE__ ":%d\n", __LINE__); abort(); } while (0)
 #else
-#define PANIC(msg) do { fprintf(stderr, "PANIC: " msg "\n"); abort(); } while (0)
+#define PANIC(...) do { fprintf(stderr, "PANIC: " __VA_ARGS__); fprintf(stderr, "\n"); abort(); } while (0)
 #endif
 
 #include <stdio.h>
@@ -23,5 +23,8 @@ typedef int8_t i8;
 typedef uint8_t flag;
 typedef size_t usize;
 typedef ptrdiff_t isize;
+
+#define TRUE ((flag)1)
+#define FALSE ((flag)0)
 
 #endif

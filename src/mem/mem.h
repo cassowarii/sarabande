@@ -4,6 +4,6 @@
 #include "global.h"
 #include "arena.h"
 #include "buffer.h"
-#include "sbstring.h"
+#include "cstrutil.h"
 
 #endif

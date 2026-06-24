@@ -64,6 +64,14 @@ void *sbBuffer_shrink(hBuffer buf, usize shrink_size) {
     return &buf->data[buf->size];
 }
 
+void sbBuffer_set_size(hBuffer buf, usize new_size) {
+  if (new_size > buf->size) {
+    sbBuffer_expand(buf, new_size - buf->size);
+  } else if (new_size < buf->size) {
+    sbBuffer_shrink(buf, buf->size - new_size);
+  }
+}
+
 void sbBuffer_append(hBuffer buf, const char *data, usize data_length) {
     if (data_length == 0) return;
 
