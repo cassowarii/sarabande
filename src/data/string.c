@@ -181,7 +181,7 @@ static strentry *alloc_entry(strblk *blk) {
     do {
       next_free_index ++;
       next_free_index %= STRINGS_PER_BLOCK;
-    } while (blk->entries[free_index].allocated && next_free_index != blk->next_free_index);
+    } while (blk->entries[next_free_index].allocated && next_free_index != blk->next_free_index);
 
     if (next_free_index == blk->next_free_index) {
       PANIC("free count lied! for strblk (#%zu)", blk->id);
@@ -259,7 +259,7 @@ static void place_str_at_offset(strentry *e, usize offset, const char *str, usiz
 static strentry *new_entry(usize length) {
   strblk *new_block = find_free_block();
   strentry *new_entry = alloc_entry(new_block);
-  new_entry->handle = new_block->id * STRINGS_PER_BLOCK + (new_entry - new_block->entries) / sizeof(strentry);
+  new_entry->handle = new_block->id * STRINGS_PER_BLOCK + (new_entry - new_block->entries);
   set_entry_size(new_entry, length);
   return new_entry;
 }
