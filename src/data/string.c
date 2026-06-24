@@ -76,12 +76,13 @@ hString sbString_new(const char *value, usize length) {
   } else {
     /* tinystr */
     hString new_handle = 0;
+    /* we encode the string backwards so it's easier to decode */
     for (int i = 0; i < length; i++) {
       new_handle <<= 8;
-      new_handle |= value[i];
+      new_handle |= value[length - i - 1];
     }
     /* set length in high bit */
-    new_handle |= ((length << (8 * 7)) | FLAG_TINY);
+    new_handle |= (((u64)length << (8 * 7)) | FLAG_TINY);
     return new_handle;
   }
 }
@@ -89,7 +90,7 @@ hString sbString_new(const char *value, usize length) {
 const char *sbString_get_value(hString handle, char *buffer_i_might_use, usize *length_out) {
   if (is_tinystr(handle)) {
     /* string is stored backwards because it's easiest to just get the low byte */
-    usize tinylength = ((handle >> (8 * 7)) & 0x8F);
+    usize tinylength = ((handle >> (8 * 7)) & 0x7F);
     if (length_out) *length_out = tinylength;
     if (buffer_i_might_use) {
       usize index = 0;
@@ -113,7 +114,7 @@ const char *sbString_get_value(hString handle, char *buffer_i_might_use, usize *
 usize sbString_get_length(hString handle) {
   if (handle & FLAG_TINY) {
     /* length is top byte except high bit */
-    return (handle >> (8 * 7)) & 0x8F;
+    return (handle >> (8 * 7)) & 0x7F;
   } else {
     /* length is just in the entry */
     strblk *blk = get_strblk(handle / STRINGS_PER_BLOCK);
@@ -125,7 +126,7 @@ usize sbString_get_length(hString handle) {
 /* --- */
 
 static flag is_tinystr(hString handle) {
-  return handle & FLAG_TINY;
+  return ((handle & FLAG_TINY) != 0);
 }
 
 static const char *get_ptr_of_entry(strentry *e) {

@@ -442,7 +442,7 @@ static sbLexToken compute_next_token(hScanner sc) {
         read_char_into_buffer(sc, '\0');
 
         finalize_char_buffer(sc);
-        hString hstr = sbString_new(sc->dynamic_buffer.data, sc->dynamic_buffer.size);
+        hString hstr = sbString_new(sc->dynamic_buffer.data, sc->dynamic_buffer.size - 1);
 
         new_token.hstr = hstr;
         new_token.size = sc->dynamic_buffer.size;
