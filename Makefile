@@ -7,7 +7,7 @@ SRC := src
 OBJ := obj
 BUILDDIR := build
 
-SOURCES := $(shell find $(SRC) -type f -name '*.c' -not -path '$(SRC)/$(RES)/*')
+SOURCES := $(shell find $(SRC) -type f -name '*.c')
 OBJECTS := $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SOURCES))
 
 build/a.out: $(OBJECTS)
