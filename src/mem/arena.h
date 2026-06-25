@@ -7,9 +7,15 @@
  * For a flexible-length contiguous buffer that may need to grow in length, use sbBuffer instead.
  * (however, sbBuffer doesn't have the 'pointer validity' guarantee.) */
 
+typedef struct sbArena {
+    struct block *first;
+    struct block *current;
+    struct block *last;
+} sbArena;
+
 typedef struct sbArena *hArena;
 
-hArena sbArena_create(usize initial_size);
+void sbArena_initialize(hArena arena, usize initial_size);
 
 void *sbArena_alloc(hArena arena, usize size);
 

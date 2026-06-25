@@ -3,7 +3,7 @@
 
 #include "common.h"
 
-#include "data/string.h"
+#include "data/handle.h"
 
 typedef enum sbTokenType {
     T_NULL                  = 0,
@@ -92,6 +92,7 @@ typedef struct sbLexToken {
     union {
         char *cstr;
         hString hstr;
+        hSymbol symb;
         float fl;
         int i;
     };

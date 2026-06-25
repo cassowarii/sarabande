@@ -11,15 +11,7 @@ struct block {
     char data[];
 };
 
-struct sbArena {
-    struct block *first;
-    struct block *current;
-    struct block *last;
-};
-
-hArena sbArena_create(usize initial_size) {
-    hArena arena = malloc(sizeof(struct sbArena));
-
+void sbArena_initialize(hArena arena, usize initial_size) {
     while (initial_size % ALIGN != 0) initial_size++;
 
     struct block *block = calloc(sizeof(struct block) + initial_size, 1);
@@ -30,8 +22,6 @@ hArena sbArena_create(usize initial_size) {
     arena->first = block;
     arena->current = block;
     arena->last = block;
-
-    return arena;
 }
 
 void *sbArena_alloc(hArena arena, usize size) {
@@ -88,5 +78,5 @@ void sbArena_destroy(hArena arena) {
         blk = blk_next;
     } while (blk);
 
-    free(arena);
+    *arena = (sbArena) {0};
 }

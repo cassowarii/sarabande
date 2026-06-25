@@ -2,7 +2,7 @@
 
 #define OBJSL(value) (sbString_new(value, sizeof(value) - 1))
 
-typedef u64 hString;
+#include "data/handle.h"
 
 /* create hString:
  *

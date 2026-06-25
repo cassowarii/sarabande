@@ -1,0 +1,44 @@
+#ifndef __SARABANDE_HANDLE_H__
+#define __SARABANDE_HANDLE_H__
+
+#include "common.h"
+
+typedef u64 hHash;
+typedef u64 hString;
+typedef u64 hSymbol;
+
+typedef enum intrinsic_type {
+  IT_NOTHING,     // sentinel for "no value here"
+  IT_NIL,         // nil ("there is a value here, but it's nil")
+  IT_BOOLEAN,     // true / false
+  IT_STRING,      // `abcdefg`
+  IT_SYMBOL,      // :hello
+  IT_INTEGER,     // 324892
+  IT_FLOAT,       // 0.0345
+  IT_DATETIME,    // unix timestamp
+  IT_REF,         // pointer \abc
+  IT_LIST,        // list [1, 3, 5, 7]
+  IT_HASH,        // hash {a: 1, b: 2}
+  IT_FUNCTION,    // function => a, b { a + b }
+  N_INTRINSIC_TYPES,
+  ITX_TOMBSTONE,  // <hashtable_tombstone>
+} intrinsic_type;
+
+typedef struct hV {
+  u64 type;
+  union {
+    hString string;
+    hSymbol symbol;
+    hHash hash;
+  };
+} hV;
+
+hV sbV_nil();
+hV sbV_string(hString str);
+
+flag sbV_eq(hV *a, hV *b);
+
+void sbV_retain(hV *a);
+void sbV_release(hV *a);
+
+#endif

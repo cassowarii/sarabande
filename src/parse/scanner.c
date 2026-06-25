@@ -1,5 +1,8 @@
 #include "scanner.h"
 
+#include "data/string.h"
+#include "data/symbol.h"
+
 /* This is like, the pre lexing stage. I mean, this does a lot of the tokenizing,
  * but it includes stuff like spaces and newlines, too. Think of this as 'normalizing'
  * the input. The lexer in the second stage will use some additional context and state
@@ -46,7 +49,7 @@ static void check_if_start(hScanner sc);
 static sbLexToken compute_next_token(hScanner sc);
 
 void sbScanner_initialize(hScanner sc, hFileReader fr) {
-    sc->arena = sbArena_create(MEM_BLOCK_SIZE);
+    sbArena_initialize(&sc->arena, MEM_BLOCK_SIZE);
     sc->file_reader = fr;
     sc->next_token = (sbLexToken) {0};
 
@@ -66,7 +69,7 @@ sbLexToken sbScanner_next(hScanner sc) {
 }
 
 void sbScanner_deinitialize(hScanner sc) {
-    sbArena_destroy(sc->arena);
+    sbArena_destroy(&sc->arena);
     sbBuffer_deinitialize(&sc->dynamic_buffer);
 }
 
@@ -151,12 +154,6 @@ static void read_char_into_buffer(hScanner sc, char c) {
     if (tb_length == TOKEN_BUFFER_SIZE) {
         finalize_char_buffer(sc);
     }
-}
-
-static void *save_buffer(hScanner sc) {
-    char *storage = sbArena_alloc(sc->arena, sc->dynamic_buffer.size);
-    sbstrncpy(storage, sc->dynamic_buffer.data, sc->dynamic_buffer.size);
-    return storage;
 }
 
 static usize read_identifier(hScanner sc) {
@@ -380,9 +377,8 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_SYMBOL;
 
             token_size = read_symbol(sc);
-            char *storage = save_buffer(sc);
-
-            new_token.cstr = storage;
+            new_token.symb = sbSymbol_from_bytes(sc->dynamic_buffer.data, sc->dynamic_buffer.size - 1);
+            printf("%s -> %p\n", (char*)new_token.symb, (void*)new_token.symb);
             new_token.size = token_size;
         } else {
             /* : */
@@ -450,9 +446,8 @@ static sbLexToken compute_next_token(hScanner sc) {
         new_token.type = T_IDENTIFIER;
 
         token_size = read_identifier(sc);
-        char *storage = save_buffer(sc);
-
-        new_token.cstr = storage;
+        new_token.symb = sbSymbol_from_bytes(sc->dynamic_buffer.data, sc->dynamic_buffer.size - 1);
+        printf("%s -> %p\n", (char*)new_token.symb, (void*)new_token.symb);
         new_token.size = token_size;
     } else if (is_digit(ch)) {
         new_token.type = T_INTEGER;

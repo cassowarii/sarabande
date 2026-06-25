@@ -72,7 +72,7 @@ void sbBuffer_set_size(hBuffer buf, usize new_size) {
   }
 }
 
-void sbBuffer_append(hBuffer buf, const char *data, usize data_length) {
+void sbBuffer_append(hBuffer buf, const void *data, usize data_length) {
     if (data_length == 0) return;
 
     char *put = sbBuffer_expand(buf, data_length);
