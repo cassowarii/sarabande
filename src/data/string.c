@@ -1,19 +1,29 @@
 #include "data/string.h"
 
 #include "mem/mem.h"
+#include "gc/gcinfo.h"
+#include "gc/rc.h"
 #include <string.h>
 
 #define INLINE_BUFFER_SIZE 256
 #define STRINGS_PER_BLOCK 256
 
-/* highest bit set on handle value means it is a tinystr */
-#define FLAG_TINY (1ULL << 63)
+/* highest bit unset on handle value means it is a tinystr. this is
+ * so that 0x0000_0000_0000_0000 represents an empty string */
+#define FLAG_NONTINY (1ULL << 63)
 
 /* if string length < REQ_ALLOC_LENGTH, we can just put the
  * string in the handle itself. this should be 64 / 8 = 8,
  * we need to allocate for an 8 char string because tinystr
  * uses one byte to store the string length as well. */
 #define REQ_ALLOC_LENGTH (sizeof(hString)/sizeof(char))
+
+/* note: policy here is that, for consistency, all length values *don't*
+ * account for the null terminator, so all buffers' allocations should
+ * be one byte longer than their length and hold a NUL there.
+ * e.g. tinystr can hold max of 7 characters + a length, but the scratch
+ * buffers taken by certain functions should be 8 bytes, because we need
+ * to put a NUL at the end */
 
 /* TODO: Move these globals into some kind of "execution context" struct
  * that we can pass around to be reentrant */
@@ -28,6 +38,7 @@ sbBuffer g_string_blocks;
 usize g_free_block_index;
 
 typedef struct strentry {
+  GCINFO gc;
   usize length;
   hString handle;
   flag is_external;
@@ -46,12 +57,18 @@ typedef struct strblk {
 } strblk;
 
 static const char *get_ptr_of_entry(strentry *e);
+static char *get_mutable_ptr_of_entry(strentry *e, usize length, hString *handle);
+static strentry *find_entry_for_handle(hString handle);
 static strblk *get_strblk(usize index);
 static strentry *get_entry(strblk *blk, usize index);
 static strentry *new_entry(usize length);
 static void place_str_at_offset(strentry *e, usize offset, const char *str, usize length);
 static flag is_tinystr(hString handle);
+static usize tinystr_length(hString handle);
+static void tinystr_into_buffer(char *buffer, hString handle, usize max_length);
+static hString tinystr_from_buffer(const char *buffer, usize length);
 static strblk *new_strblk();
+static void set_entry_size(strentry *e, usize length);
 
 void sbString_sys_init() {
   g_free_block_index = 0;
@@ -72,61 +89,166 @@ hString sbString_new(const char *value, usize length) {
   if (length >= REQ_ALLOC_LENGTH) {
     strentry *e = new_entry(length);
     place_str_at_offset(e, 0, value, length);
+    RC_retain(e);
     return e->handle;
   } else {
     /* tinystr */
-    hString new_handle = 0;
-    /* we encode the string backwards so it's easier to decode */
-    for (int i = 0; i < length; i++) {
-      new_handle <<= 8;
-      new_handle |= value[length - i - 1];
-    }
-    /* set length in high bit */
-    new_handle |= (((u64)length << (8 * 7)) | FLAG_TINY);
-    return new_handle;
+    return tinystr_from_buffer(value, length);
   }
 }
 
 const char *sbString_get_value(hString handle, char *buffer_i_might_use, usize *length_out) {
   if (is_tinystr(handle)) {
-    /* string is stored backwards because it's easiest to just get the low byte */
-    usize tinylength = ((handle >> (8 * 7)) & 0x7F);
+    usize tinylength = tinystr_length(handle);
     if (length_out) *length_out = tinylength;
     if (buffer_i_might_use) {
-      usize index = 0;
-      hString handle_to_eat = handle;
-      while (index < tinylength) {
-        buffer_i_might_use[index] = (handle_to_eat & 0xFF); /* get lowest byte and move down */
-        handle_to_eat >>= 8;
-        index ++;
-      }
-      buffer_i_might_use[index] = '\0'; /* don't forget NUL! */
+      tinystr_into_buffer(buffer_i_might_use, handle, tinylength);
+      /* pointer aliasing ! fun ! we love ! */
+      return buffer_i_might_use;
     }
-    return buffer_i_might_use;
   } else {
-    strblk *blk = get_strblk(handle / STRINGS_PER_BLOCK);
-    strentry *entry = get_entry(blk, handle % STRINGS_PER_BLOCK);
-    if (length_out) *length_out = entry->length;
-    return get_ptr_of_entry(entry);
+    strentry *e = find_entry_for_handle(handle);
+    if (length_out) *length_out = e->length;
+    if (buffer_i_might_use) return get_ptr_of_entry(e);
+  }
+  return NULL;
+}
+
+hString sbString_clone(hString handle) {
+  if (is_tinystr(handle)) {
+    /* tinystr's already have value semantics */
+    return handle;
+  } else {
+    /* copying is lazy: we actually just additionally 'retain'
+     * the same entry multiple times. if we try to mutate an
+     * entry that's referenced in multiple places, then the
+     * system will lazily 'copy' the one that is being modified
+     * at that point. "COW semantics" */
+    strentry *e = find_entry_for_handle(handle);
+    RC_retain(e);
+    return e->handle;
+  }
+}
+
+void sbString_release(hString handle) {
+  if (is_tinystr(handle)) {
+    /* do nothing! */
+  } else {
+    /* decrement refcount */
+    strentry *e = find_entry_for_handle(handle);
+    RC_release(e);
+  }
+}
+
+hString sbString_joined(hString a, hString b) {
+  usize a_length, b_length, final_length;
+  char a_scratch[8], b_scratch[8];
+  const char *a_str, *b_str;
+
+  a_str = sbString_get_value(a, a_scratch, &a_length);
+  b_str = sbString_get_value(b, b_scratch, &b_length);
+  final_length = a_length + b_length;
+
+  if (final_length < REQ_ALLOC_LENGTH) {
+    /* tinystr */
+    char scratch[16];
+    memcpy(scratch, a_str, a_length);
+    memcpy(scratch + a_length, b_str, b_length);
+    return tinystr_from_buffer(scratch, final_length);
+  } else {
+    strentry *result;
+    if (!is_tinystr(a) && find_entry_for_handle(a)->gc.refcount == 0) {
+      result = find_entry_for_handle(a);
+      set_entry_size(result, final_length);
+    } else {
+      result = new_entry(final_length);
+      place_str_at_offset(result, 0, a_str, a_length);
+    }
+
+    place_str_at_offset(result, a_length, b_str, b_length);
+    RC_retain(result);
+
+    return result->handle;
+  }
+}
+
+char *sbString_get_mutable_buffer(hString *handle, usize length_req, char *buffer_i_might_use, usize *length_out) {
+  if (!buffer_i_might_use) return NULL;
+
+  flag use_orig_length = (length_req == 0 && length_out != NULL);
+
+  if (is_tinystr(*handle)) {
+    usize length = use_orig_length ? tinystr_length(*handle) : length_req;
+
+    if (length < REQ_ALLOC_LENGTH) {
+      /* lucky! we can just use the stack buffer! */
+      tinystr_into_buffer(buffer_i_might_use, *handle, length);
+      if (length_out) *length_out = length;
+      return buffer_i_might_use;
+    } else {
+      /* upgrading a tinystr to a real strentry. need to replace the handle
+       * with one that refers to the new allocated version instead */
+      strentry *e = new_entry(length);
+      char *buffer = get_mutable_ptr_of_entry(e, length, handle);
+      tinystr_into_buffer(buffer, *handle, length);
+      if (length_out) *length_out = length;
+      return buffer;
+    }
+  } else {
+    strentry *e = find_entry_for_handle(*handle);
+    usize length = use_orig_length ? e->length : length_req;
+
+    if (length_out) *length_out = length;
+    return get_mutable_ptr_of_entry(e, length, handle);
+  }
+}
+
+/* call after get_mutable_buffer to put the data back in the string if needed
+ * (it usually does nothing, but for tinystr it is needed if it remains tiny) */
+void sbString_fix_new_value(hString *handle, const char *new_value, usize length) {
+  if (length < REQ_ALLOC_LENGTH) {
+    /* now tinystr (regardless of what happened before).
+     * leave the old string for the garbage collector */
+    *handle = tinystr_from_buffer(new_value, length);
+  } else {
+    strentry *existing_entry = find_entry_for_handle(*handle); /* null if tinystr */
+    if (existing_entry) return; /* we already set it */
+
+    PANIC("inconsistent string lengths between sbString_get_mutable_buffer"
+          " and sbString_fix_new_value!");
   }
 }
 
 usize sbString_get_length(hString handle) {
-  if (handle & FLAG_TINY) {
+  if (handle & FLAG_NONTINY) {
+    /* length is just in the entry */
+    return find_entry_for_handle(handle)->length;
+  } else {
     /* length is top byte except high bit */
     return (handle >> (8 * 7)) & 0x7F;
-  } else {
-    /* length is just in the entry */
-    strblk *blk = get_strblk(handle / STRINGS_PER_BLOCK);
-    strentry *entry = get_entry(blk, handle % STRINGS_PER_BLOCK);
-    return entry->length;
   }
 }
 
 /* --- */
 
 static flag is_tinystr(hString handle) {
-  return ((handle & FLAG_TINY) != 0);
+  return ((handle & FLAG_NONTINY) == 0);
+}
+
+static usize tinystr_length(hString handle) {
+  return ((handle >> (8 * 7)) & 0x7F);
+}
+
+static strentry *find_entry_for_handle(hString handle) {
+  if (is_tinystr(handle)) return NULL;
+  strblk *blk = get_strblk((handle & ~FLAG_NONTINY) / STRINGS_PER_BLOCK);
+  return get_entry(blk, (handle & ~FLAG_NONTINY) % STRINGS_PER_BLOCK);
+}
+
+static strentry *duplicate_strentry(strentry *e, usize length) {
+  strentry *e_copy = new_entry(length);
+  place_str_at_offset(e_copy, 0, get_ptr_of_entry(e), length);
+  return e_copy;
 }
 
 static const char *get_ptr_of_entry(strentry *e) {
@@ -137,14 +259,71 @@ static const char *get_ptr_of_entry(strentry *e) {
   }
 }
 
-static char *get_mutable_ptr_of_entry(strentry *e) {
-  /* TODO: When we have static strings, panic here if we try to get
-   * a mutable ptr to one of them. (Should copy instead first.) */
-  if (e->is_external) {
-    return e->somewhere_else_value.data;
+static char *get_mutable_ptr_of_entry(strentry *e, usize length, hString *handle) {
+  /* TODO: When we have static strings, we should copy them to a new
+   * entry in order to get a mutable pointer to them. */
+  if (e->gc.refcount < 2) {
+    /* 0 or 1 refs: can mutate string in place */
+    set_entry_size(e, length);
+
+    if (handle) *handle = e->handle;
+    if (e->is_external) {
+      return e->somewhere_else_value.data;
+    } else {
+      return e->inline_value;
+    }
   } else {
-    return e->inline_value;
+    /* 2+ refs: need to make a copy of the string to mutate so we don't
+     * affect the other versions */
+    strentry *e_copy = duplicate_strentry(e, length);
+
+    /* transfer one refcount to new string */
+    RC_retain(e_copy);
+    RC_release(e);
+
+    if (handle) *handle = e_copy->handle;
+    if (e->is_external) {
+      return e->somewhere_else_value.data;
+    } else {
+      return e->inline_value;
+    }
   }
+}
+
+static void tinystr_into_buffer(char *buffer, hString handle, usize max_length) {
+  /* we have max_length because we may need to cut off early in some corner cases,
+   * like getting a mutable ptr of length 3 for a tinystr of length 6 */
+  if (!is_tinystr(handle)) PANIC("%llx is not a tinystr! can't parse!", handle);
+
+  usize index = 0;
+  usize tinylength = tinystr_length(handle);
+  hString handle_to_eat = handle;
+
+  if (tinylength >= REQ_ALLOC_LENGTH) PANIC("%llx has improper tinylength %zu", handle, tinylength);
+
+  /* string is stored backwards because it's easiest to just get the low byte */
+  while (index < tinylength && index < max_length) {
+    buffer[index] = (handle_to_eat & 0xFF); /* get lowest byte and move down */
+    handle_to_eat >>= 8;
+    index ++;
+  }
+  buffer[index] = '\0'; /* don't forget NUL! */
+}
+
+static hString tinystr_from_buffer(const char *buffer, usize length) {
+  if (length >= REQ_ALLOC_LENGTH) PANIC("cannot create tinystr of length %zu", length);
+
+  hString new_handle = 0;
+  /* we encode the string backwards so it's easier to decode */
+  for (int i = 0; i < length; i++) {
+    new_handle <<= 8;
+    new_handle |= buffer[length - i - 1];
+  }
+
+  /* set length in high byte */
+  new_handle |= ((u64)length << (8 * 7));
+
+  return new_handle;
 }
 
 static strblk *get_strblk(usize index) {
@@ -234,9 +413,9 @@ static void set_entry_size(strentry *e, usize length) {
       if (e->length > 0) {
         sbBuffer_append(&new_buf, e->inline_value, e->length + 1);
       }
-      e->length = length;
       e->is_external = TRUE;
       e->somewhere_else_value = new_buf;
+      e->length = length;
       e->somewhere_else_value.data[length] = '\0';
     } else {
       /* we can remain inline, but need to set NUL in the right place */
@@ -252,14 +431,20 @@ static void place_str_at_offset(strentry *e, usize offset, const char *str, usiz
   usize max_bytes_to_write = e->length - offset;
   if (length < max_bytes_to_write) max_bytes_to_write = length;
 
-  char *where_to_put = get_mutable_ptr_of_entry(e) + offset;
+  char *where_to_put;
+  if (e->is_external) {
+    where_to_put = &e->somewhere_else_value.data[offset];
+  } else {
+    where_to_put = &e->inline_value[offset];
+  }
+
   memcpy(where_to_put, str, max_bytes_to_write);
 }
 
 static strentry *new_entry(usize length) {
   strblk *new_block = find_free_block();
   strentry *new_entry = alloc_entry(new_block);
-  new_entry->handle = new_block->id * STRINGS_PER_BLOCK + (new_entry - new_block->entries);
+  new_entry->handle = ((new_block->id * STRINGS_PER_BLOCK + (new_entry - new_block->entries)) | FLAG_NONTINY);
   set_entry_size(new_entry, length);
   return new_entry;
 }

@@ -21,6 +21,18 @@ int main(int argc, char **argv) {
         sbLexToken t;
         char scratch[8];
 
+        printf("ok here i go\n");
+        hString hello_str = OBJSL("hello! ");
+        hString long_str = OBJSL("");
+        for (int i = 0; i < 200; i++) {
+          printf("NEW LOOP\n");
+          sbString_release(long_str);
+          long_str = sbString_joined(long_str, hello_str);
+          printf("END_OF_LOOP\n");
+          printf("result: '%s'\n", sbString_get_value(long_str, scratch, NULL));
+        }
+        printf("%s\n", sbString_get_value(long_str, scratch, NULL));
+
         do {
             t = sbLexer_next(&lx);
 
