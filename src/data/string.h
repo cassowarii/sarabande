@@ -69,7 +69,9 @@ void sbString_fix_new_value(hString *handle, const char *new_value, usize length
 hString sbString_clone(hString handle);
 void sbString_release(hString handle);
 
-hString sbString_joined(hString a, hString b);
+int sbString_eq(hString a, hString b);
+int sbString_cmp(hString a, hString b);
+hString sbString_concat(hString a, hString b);
 
 void sbString_sys_init();
 void sbString_sys_deinit();

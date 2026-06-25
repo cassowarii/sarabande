@@ -63,6 +63,8 @@ static strblk *get_strblk(usize index);
 static strentry *get_entry(strblk *blk, usize index);
 static strentry *new_entry(usize length);
 static void place_str_at_offset(strentry *e, usize offset, const char *str, usize length);
+static int buffers_eq(const char *a_ptr, usize a_length, const char *b_ptr, usize b_length);
+static int buffers_cmp(const char *a_ptr, usize a_length, const char *b_ptr, usize b_length);
 static flag is_tinystr(hString handle);
 static usize tinystr_length(hString handle);
 static void tinystr_into_buffer(char *buffer, hString handle, usize max_length);
@@ -140,7 +142,31 @@ void sbString_release(hString handle) {
   }
 }
 
-hString sbString_joined(hString a, hString b) {
+int sbString_eq(hString a, hString b) {
+  char scratch[8];
+  usize a_length, b_length;
+  const char *a_buf, *b_buf;
+  if (is_tinystr(a) && is_tinystr(b)) {
+    return a == b;
+  } else {
+    /* we can use just one scratch because we know they aren't
+     * both tinystr */
+    a_buf = sbString_get_value(a, scratch, &a_length);
+    b_buf = sbString_get_value(b, scratch, &b_length);
+    return buffers_eq(a_buf, a_length, b_buf, b_length);
+  }
+}
+
+int sbString_cmp(hString a, hString b) {
+  char a_scratch[8], b_scratch[8];
+  usize a_length, b_length;
+  const char *a_buf, *b_buf;
+  a_buf = sbString_get_value(a, a_scratch, &a_length);
+  b_buf = sbString_get_value(b, b_scratch, &b_length);
+  return buffers_cmp(a_buf, a_length, b_buf, b_length);
+}
+
+hString sbString_concat(hString a, hString b) {
   usize a_length, b_length, final_length;
   char a_scratch[8], b_scratch[8];
   const char *a_str, *b_str;
@@ -151,7 +177,7 @@ hString sbString_joined(hString a, hString b) {
 
   if (final_length < REQ_ALLOC_LENGTH) {
     /* tinystr */
-    char scratch[16];
+    char scratch[REQ_ALLOC_LENGTH * 2 - 1];
     memcpy(scratch, a_str, a_length);
     memcpy(scratch + a_length, b_str, b_length);
     return tinystr_from_buffer(scratch, final_length);
@@ -212,9 +238,9 @@ void sbString_fix_new_value(hString *handle, const char *new_value, usize length
     *handle = tinystr_from_buffer(new_value, length);
   } else {
     strentry *existing_entry = find_entry_for_handle(*handle); /* null if tinystr */
-    if (existing_entry) return; /* we already set it */
+    if (existing_entry && existing_entry->allocated) return; /* we already set it */
 
-    PANIC("inconsistent string lengths between sbString_get_mutable_buffer"
+    PANIC("invalid handle, or inconsistent string lengths between sbString_get_mutable_buffer"
           " and sbString_fix_new_value!");
   }
 }
@@ -249,6 +275,37 @@ static strentry *duplicate_strentry(strentry *e, usize length) {
   strentry *e_copy = new_entry(length);
   place_str_at_offset(e_copy, 0, get_ptr_of_entry(e), length);
   return e_copy;
+}
+
+static int buffers_eq(const char *a_ptr, usize a_length, const char *b_ptr, usize b_length) {
+  if (a_length != b_length) return 0;
+  for (int i = 0; i < a_length; i++) {
+    if (a_ptr[i] != b_ptr[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int buffers_cmp(const char *a_ptr, usize a_length, const char *b_ptr, usize b_length) {
+  usize shorter_length = a_length;
+  if (b_length < shorter_length) shorter_length = b_length;
+  for (int i = 0; i < shorter_length; i++) {
+    if (a_ptr[i] < b_ptr[i]) {
+      return 1;
+    }
+    if (a_ptr[i] > b_ptr[i]) {
+      return -1;
+    }
+  }
+  /* equal up to shorter length */
+  if (a_length < b_length) {
+    return 1;
+  } else if (b_length > a_length) {
+    return -1;
+  }
+
+  return 0;
 }
 
 static const char *get_ptr_of_entry(strentry *e) {
@@ -406,17 +463,18 @@ static void set_entry_size(strentry *e, usize length) {
   } else {
     if (length > INLINE_BUFFER_SIZE - 1) {
       /* new length is too big for inline, so we need to copy to the heap */
-      sbBuffer new_buf;
+      sbBuffer new_buf = {0};
       /* length + 1 for NUL terminator. even though we track the length, it's
        * easier to just preserve NUL terminator for talking to C lib functions */
       sbBuffer_initialize(&new_buf, length + 1);
+      sbBuffer_set_size(&new_buf, length + 1);
       if (e->length > 0) {
-        sbBuffer_append(&new_buf, e->inline_value, e->length + 1);
+        memcpy(new_buf.data, e->inline_value, e->length + 1);
       }
       e->is_external = TRUE;
       e->somewhere_else_value = new_buf;
       e->length = length;
-      e->somewhere_else_value.data[length] = '\0';
+      e->somewhere_else_value.data[e->length] = '\0';
     } else {
       /* we can remain inline, but need to set NUL in the right place */
       e->length = length;
@@ -439,6 +497,7 @@ static void place_str_at_offset(strentry *e, usize offset, const char *str, usiz
   }
 
   memcpy(where_to_put, str, max_bytes_to_write);
+  where_to_put[max_bytes_to_write] = '\0';
 }
 
 static strentry *new_entry(usize length) {
