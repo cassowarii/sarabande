@@ -1,6 +1,6 @@
 #include "common.h"
 
-#include "data/handle.h"
+#include "data/value.h"
 
 /* Open-hashing hash table of object handle keys -> object handle values. */
 

@@ -6,8 +6,9 @@
 typedef u64 hHash;
 typedef u64 hString;
 typedef u64 hSymbol;
+typedef i64 hInteger;
 
-typedef enum intrinsic_type {
+enum intrinsic_type {
   IT_NOTHING,     // sentinel for "no value here"
   IT_NIL,         // nil ("there is a value here, but it's nil")
   IT_BOOLEAN,     // true / false
@@ -20,9 +21,8 @@ typedef enum intrinsic_type {
   IT_LIST,        // list [1, 3, 5, 7]
   IT_HASH,        // hash {a: 1, b: 2}
   IT_FUNCTION,    // function => a, b { a + b }
-  N_INTRINSIC_TYPES,
   ITX_TOMBSTONE,  // <hashtable_tombstone>
-} intrinsic_type;
+};
 
 typedef struct hV {
   u64 type;
@@ -30,11 +30,18 @@ typedef struct hV {
     hString string;
     hSymbol symbol;
     hHash hash;
+    hInteger integer;
+    u64 boolean;
+    double float_val;
   };
 } hV;
 
 hV sbV_nil();
 hV sbV_string(hString str);
+hV sbV_symbol(hSymbol sym);
+hV sbV_float(double fl);
+hV sbV_hash(hHash hash);
+hV sbV_int(hInteger i);
 
 flag sbV_eq(hV *a, hV *b);
 

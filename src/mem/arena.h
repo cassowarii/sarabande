@@ -21,4 +21,4 @@ void *sbArena_alloc(hArena arena, usize size);
 
 void sbArena_reset(hArena arena);
 
-void sbArena_destroy(hArena arena);
+void sbArena_deinitialize(hArena arena);

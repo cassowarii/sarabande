@@ -69,7 +69,7 @@ void sbArena_reset(hArena arena) {
     arena->current = arena->first;
 }
 
-void sbArena_destroy(hArena arena) {
+void sbArena_deinitialize(hArena arena) {
     struct block *blk = arena->first;
     struct block *blk_next = arena->first->next;
     do {

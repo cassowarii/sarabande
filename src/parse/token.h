@@ -3,7 +3,7 @@
 
 #include "common.h"
 
-#include "data/handle.h"
+#include "data/value.h"
 
 typedef enum sbTokenType {
     T_NULL                  = 0,
