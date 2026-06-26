@@ -3,6 +3,7 @@
 #include "data/value.h"
 
 void sbSymbol_sys_init();
+void sbSymbol_sys_deinit();
 
 hSymbol sbSymbol_from_string(hString str);
 

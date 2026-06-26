@@ -53,6 +53,10 @@ void sbSymbol_sys_init() {
   sbSymbol_from_bytes("", 0);
 }
 
+void sbSymbol_sys_deinit() {
+  // nothing
+}
+
 char *sbSymbol_name(hSymbol sym) {
   return (char*)sym;
 }

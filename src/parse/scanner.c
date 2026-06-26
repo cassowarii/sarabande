@@ -69,7 +69,7 @@ sbLexToken sbScanner_next(hScanner sc) {
 }
 
 void sbScanner_deinitialize(hScanner sc) {
-    sbArena_destroy(&sc->arena);
+    sbArena_deinitialize(&sc->arena);
     sbBuffer_deinitialize(&sc->dynamic_buffer);
 }
 

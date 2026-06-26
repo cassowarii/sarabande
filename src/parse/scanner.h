@@ -1,3 +1,6 @@
+#ifndef __SARABANDE_SCANNER_H__
+#define __SARABANDE_SCANNER_H__
+
 #include "common.h"
 
 #include "filereader.h"
@@ -20,3 +23,5 @@ sbLexToken sbScanner_next(hScanner sc);
 sbLexToken sbScanner_peek(hScanner sc);
 
 void sbScanner_deinitialize(hScanner sc);
+
+#endif
