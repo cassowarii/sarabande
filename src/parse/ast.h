@@ -33,20 +33,29 @@ typedef enum sbAstType {
 
 typedef enum sbAstOp {
   AST_OP_NULL,
-  AST_OP_PLUS = '+',
-  AST_OP_MINUS = '-',
-  AST_OP_TIMES = '*',
+  AST_OP_ADD = '+',
+  AST_OP_SUB = '-',
+  AST_OP_MUL = '*',
   AST_OP_DIV = '/',
   AST_OP_MOD = '%',
   AST_OP_EQ = '=',
   AST_OP_LT = '<',
   AST_OP_GT = '>',
+  AST_OP_PIPE = '|',
   AST_OP_LE = 128,
   AST_OP_GE,
   AST_OP_NE,
   AST_OP_FLDIV,
+  AST_OP_POW,
+  AST_OP_RANGE,
   AST_OP_DIVBY,
-  AST_OP_PN,
+  AST_OP_INDEX,
+  AST_OP_SCOPE,
+  AST_OP_UNPLUS,
+  AST_OP_UNMINUS,
+  AST_OP_OR,
+  AST_OP_AND,
+  AST_OP_NOT,
 } sbAstOp;
 
 typedef struct sbAstNode {
@@ -57,11 +66,11 @@ typedef struct sbAstNode {
     hInteger i;
     double fl;
     struct {
-      const struct sbAstNode *this;
-      const struct sbAstNode *next;
+      const struct sbAstNode *left;
+      const struct sbAstNode *right;
     } seq;
     struct {
-      sbTokenType type;
+      sbAstOp type;
       const struct sbAstNode *left;
       const struct sbAstNode *right;
     } op;

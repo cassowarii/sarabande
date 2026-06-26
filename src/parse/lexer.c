@@ -219,6 +219,20 @@ static flag block_header_can_end_after(sbTokenType type) {
         || type == T_rDO;
 }
 
+/* these are operators that look weird if they get captured inside
+ * of parentheses. */
+static flag close_invisible_parens_before(sbTokenType type) {
+    return type == T_rAND
+        || type == T_rOR
+        || type == T_DOUBLEEQUALS
+        || type == T_NOTEQUALS
+        || type == T_LESS
+        || type == T_GREATER
+        || type == T_LESSEQUALS
+        || type == T_GREATEREQUALS
+        || type == T_PIPE;
+}
+
 /*static flag is_reserved_word(sbTokenType type) {
     for (int i = 0; i < N_RESERVED_WORDS; i++) {
         if (type == reserved_words[i].token_type) return 1;
@@ -377,6 +391,10 @@ static void compute_next_token(hLexer lx) {
 
     if (begins_brace_terminated_state(token.type)) {
         brackets_stack_push(lx, 'B');
+    }
+
+    if (close_invisible_parens_before(token.type)) {
+        unstack_all_invisible_parentheses(lx);
     }
 
     //printf("\nstack: %s\n", lx->brackets_stack.data);
