@@ -204,6 +204,8 @@ static usize read_symbol(hScanner sc) {
 static sbLexToken compute_next_token(hScanner sc) {
     int ch_int = PEEK;
     unsigned char ch = (unsigned char)ch_int;
+    u32 token_line = sbFileReader_get_line(sc->file_reader);
+    u32 token_start_col = sbFileReader_get_col(sc->file_reader);
 
     sbBuffer_reset(&sc->dynamic_buffer);
 
@@ -245,8 +247,7 @@ static sbLexToken compute_next_token(hScanner sc) {
             new_token.type = T_NOTEQUALS;
             NEXT;
         } else {
-            /* ! on its own is not an operator i guess. not sure how to handle this elegantly */
-            fprintf(stderr, "don't know how to handle character: '!'\n");
+            /* ! on its own is not an operator */
             new_token.type = T_ERROR;
         }
     } else if (ch == '~') {
@@ -256,7 +257,6 @@ static sbLexToken compute_next_token(hScanner sc) {
             NEXT;
         } else {
             /* ~ on its own is not an operator */
-            fprintf(stderr, "don't know how to handle character: '~'\n");
             new_token.type = T_ERROR;
         }
     } else if (ch == '>') {
@@ -379,7 +379,6 @@ static sbLexToken compute_next_token(hScanner sc) {
 
             token_size = read_symbol(sc);
             new_token.symb = sbSymbol_from_bytes(sc->dynamic_buffer.data, sc->dynamic_buffer.size - 1);
-            printf("%s -> %p\n", (char*)new_token.symb, (void*)new_token.symb);
             new_token.size = token_size;
         } else {
             /* : */
@@ -448,13 +447,13 @@ static sbLexToken compute_next_token(hScanner sc) {
 
         token_size = read_identifier(sc);
         new_token.symb = sbSymbol_from_bytes(sc->dynamic_buffer.data, sc->dynamic_buffer.size - 1);
-        printf("%s -> %p\n", (char*)new_token.symb, (void*)new_token.symb);
         new_token.size = token_size;
     } else if (is_digit(ch)) {
         new_token.type = T_INTEGER;
 
         i64 intval = 0;
         int base = 10;
+        int num_done = FALSE;
 
         if (ch == '0') {
             /* skip a leading zero, and see if it has some base indicator */
@@ -468,37 +467,36 @@ static sbLexToken compute_next_token(hScanner sc) {
             } else if (ch == 'x') {
                 ch = NEXT;
                 base = 16;
+            } else if (is_space(ch) || ch == '\n') {
+                /* it was literally just the number 0 (probably) */
+                num_done = TRUE;
+            } else {
+                new_token.type = T_BADNUMBER;
+                num_done = TRUE;
             }
         }
 
-        do {
-            /* TODO: promote to bigint, don't allow overflow */
-            intval *= base;
-            intval += base_digit_value(ch);
+        if (!num_done) {
             do {
-                /* skip over underscores in numeric literals */
-                ch = NEXT;
-            } while (ch == '_');
-        } while (is_base_digit(ch, base));
+                /* TODO: promote to bigint, don't allow overflow */
+                intval *= base;
+                intval += base_digit_value(ch);
+                do {
+                    /* skip over underscores in numeric literals */
+                    ch = NEXT;
+                } while (ch == '_');
+            } while (is_base_digit(ch, base));
 
-        /* if we are now looking at still a character that's a letter or digit, throw error */
-        if (is_digit(ch) || is_alpha(ch)) {
-            if (base == 10) {
-                fprintf(stderr, "unexpected character in numeric literal: '%c'\n", ch);
+            /* if we are now looking at still a character that's a letter or digit, throw error */
+            if (is_digit(ch) || is_alpha(ch)) {
+                new_token.type = T_BADNUMBER;
+                NEXT;
             } else {
-                fprintf(stderr, "unexpected character in base %d numeric literal: '%c'\n", base, ch);
+                new_token.i = intval;
             }
-
-            new_token.type = T_ERROR;
-            NEXT;
-        } else {
-            new_token.i = intval;
         }
     } else {
         new_token.type = T_ERROR;
-
-        fprintf(stderr, "don't know how to process character: '%c'\n", ch);
-
         NEXT;
     }
 
@@ -512,6 +510,11 @@ static sbLexToken compute_next_token(hScanner sc) {
         }
     }
 
+    u32 token_end_col = sbFileReader_get_col(sc->file_reader) - 1;
+
+    new_token.line = token_line;
+    new_token.start_col = token_start_col;
+    new_token.end_col = token_end_col;
 
     return new_token;
 }

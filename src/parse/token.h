@@ -8,6 +8,8 @@
 typedef enum sbTokenType {
     T_NULL                  = 0,
     T_ERROR                 = 1,
+    T_WRONGBRACKET          = 2,
+    T_BADNUMBER             = 3,
     T_LPAREN                = '(', // op::call
     T_RPAREN                = ')',
     T_LBRACKET              = '[', // op::index
@@ -90,6 +92,9 @@ typedef struct sbLexToken {
     sbTokenType type;
     usize size;
     flag invisible;
+    i32 line;
+    i32 start_col;
+    i32 end_col;
     union {
         char *cstr;
         hString hstr;

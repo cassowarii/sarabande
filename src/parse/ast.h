@@ -5,6 +5,7 @@
 
 typedef enum sbAstType {
   AST_NULL,
+  AST_ERROR,
   AST_VAL_NIL,
   AST_VAL_INT,
   AST_VAL_STRING,

@@ -75,6 +75,14 @@ static void enqueue_output_token(hLexer lx, sbLexToken token) {
         unstack_visible_bracket(lx, token);
     }
 
+    if (token.line == 0) {
+      /* fake tokens that are inserted get their location set as just after the
+       * last token seen */
+      token.line = lx->last_token_seen.line;
+      token.start_col = lx->last_token_seen.end_col;
+      token.end_col = lx->last_token_seen.end_col + 1;
+    }
+
     sbTokenQueue_enqueue(&lx->output_queue, token);
 
     if (is_closing_bracket(token.type) && !token.invisible) {
@@ -203,7 +211,7 @@ static flag begins_brace_terminated_state(sbTokenType type) {
 
 /* things we can potentially insert a ( after because they may be a call */
 static flag can_end_expression(sbTokenType type) {
-    return is_literal(type)
+    return type == T_IDENTIFIER
         || type == T_RPAREN
         || type == T_RBRACKET
         || type == T_RBRACE;
@@ -213,6 +221,7 @@ static flag can_end_expression(sbTokenType type) {
  * in order to exit brace-terminated state */
 static flag block_header_can_end_after(sbTokenType type) {
     return can_end_expression(type)
+        || is_literal(type)
         || type == T_FATARROW
         || type == T_SQUIGARROW
         || type == T_rCASE
@@ -353,14 +362,7 @@ static void unstack_visible_bracket(hLexer lx, sbLexToken closing_token) {
         }
     }
 
-    if (lx->brackets_stack.size != 0) {
-        fprintf(stderr, "syntax error: mismatched bracket ('%c' for '%c')\n",
-                lx->brackets_stack.data[lx->brackets_stack.size - 1], closing_token.type);
-    } else {
-        fprintf(stderr, "syntax error: mismatched bracket\n");
-    }
-
-    enqueue_output_token(lx, (sbLexToken) { .type = T_ERROR });
+    enqueue_output_token(lx, (sbLexToken) { .type = T_WRONGBRACKET });
 }
 
 static void compute_next_token(hLexer lx) {
@@ -396,8 +398,6 @@ static void compute_next_token(hLexer lx) {
     if (close_invisible_parens_before(token.type)) {
         unstack_all_invisible_parentheses(lx);
     }
-
-    //printf("\nstack: %s\n", lx->brackets_stack.data);
 
     /* --- HERE IS WHERE THE TOKEN ACTUALLY GETS OUTPUT TO THE STREAM --- */
     /* Everything before this gets put into the stream ahead of this token. */
@@ -485,6 +485,12 @@ static void compute_next_token(hLexer lx) {
         }
     }
 
+    if (token.line == 0) {
+        token.line = lx->last_token_seen.line;
+        token.start_col = lx->last_token_seen.start_col;
+        token.end_col = lx->last_token_seen.end_col;
+    }
+
     if (token.type != T_SPACE && token.type != T_NEWLINE) {
         lx->last_token_seen = token;
     }
@@ -501,7 +507,13 @@ static void compute_next_token(hLexer lx) {
             sbLexToken after_newline = input_peek_ahead(lx, 0);
 
             if (!cancel_semicolon_before(after_newline.type)) {
-                sbLexToken invisible_semicolon = { .type = T_SEMICOLON, .invisible = 1 };
+                sbLexToken invisible_semicolon = {
+                  .type = T_SEMICOLON,
+                  .invisible = 1,
+                  .line = lx->last_token_seen.line,
+                  .start_col = lx->last_token_seen.start_col,
+                  .end_col = lx->last_token_seen.end_col,
+                };
                 enqueue_output_token(lx, invisible_semicolon);
                 lx->last_token_seen = invisible_semicolon;
             }
