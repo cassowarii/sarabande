@@ -11,23 +11,29 @@ typedef enum sbAstType {
   AST_VAL_FLOAT,
   AST_VAL_SYMBOL,
   AST_VAL_BOOLEAN,
+  AST_VAL_FUNC,
+  AST_VAL_OBJ,
   AST_NODE_NAME,
   AST_NODE_SEQ,
   AST_NODE_OP,
   AST_NODE_DEF,
   AST_NODE_LET,
+  AST_NODE_ASSIGN,
   AST_NODE_IF,
   AST_NODE_THENELSE,
   AST_NODE_WHILE,
+  AST_NODE_REPEAT,
+  AST_NODE_CASE,
+  AST_NODE_MATCH,
   AST_NODE_LIST,
   AST_NODE_HASH,
   AST_NODE_HASHENTRY,
   AST_NODE_NEXT,
-  AST_NODE_GROUPING,
   AST_NODE_MULTIVAL,
   AST_NODE_FUNCCALL,
   AST_NODE_METHODCALL,
   AST_NODE_SEND,
+  AST_NODE_RETURN,
   AST_NODE_ELLIPSIS,
 } sbAstType;
 
@@ -56,6 +62,8 @@ typedef enum sbAstOp {
   AST_OP_OR,
   AST_OP_AND,
   AST_OP_NOT,
+  AST_OP_IN,
+  AST_OP_SPLAT,
 } sbAstOp;
 
 typedef struct sbAstNode {
@@ -66,15 +74,20 @@ typedef struct sbAstNode {
     hInteger i;
     double fl;
     struct {
-      const struct sbAstNode *left;
-      const struct sbAstNode *right;
+      struct sbAstNode *left;
+      struct sbAstNode *right;
     } seq;
     struct {
       sbAstOp type;
-      const struct sbAstNode *left;
-      const struct sbAstNode *right;
+      struct sbAstNode *left;
+      struct sbAstNode *right;
     } op;
+    struct {
+      struct sbAstNode *left;
+      struct sbAstNode *center;
+      struct sbAstNode *right;
+    } tri;
   };
 } sbAstNode;
 
-typedef const sbAstNode *sbAst;
+typedef sbAstNode *sbAst;

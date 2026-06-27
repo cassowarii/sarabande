@@ -33,6 +33,7 @@ static struct ReservedWord reserved_words[] = {
     { "in", T_rIN },
     { "match", T_rMATCH },
     { "not", T_rNOT },
+    { "nil", T_rNIL },
     { "or", T_rOR },
     { "repeat", T_rREPEAT },
     { "return", T_rRETURN },

@@ -72,6 +72,7 @@ typedef enum sbTokenType {
     T_rIN,                  // in
     T_rLET,                 // let
     T_rMATCH,               // match
+    T_rNIL,                 // nil
     T_rNOT,                 // not
     T_rOR,                  // or
     T_rREPEAT,              // repeat

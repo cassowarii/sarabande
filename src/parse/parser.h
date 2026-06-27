@@ -11,7 +11,7 @@ typedef struct sbParser {
 
 typedef sbParser *hParser;
 
-const sbAstNode *sbParser_parse_file(hParser pr, const char *filename);
+sbAstNode *sbParser_parse_file(hParser pr, const char *filename);
 
 void sbParser_initialize(hParser pr);
 
