@@ -447,8 +447,11 @@ static void compute_next_token(hLexer lx) {
         }
 
         if (token.type == T_BACKSQUIGARROW) {
-            /* <~ always gets a ( after it to include its parameters. we don't care about a space here. */
-            if (input_peek_ahead(lx, space_offset).type != T_LPAREN) {
+            /* <~ always gets a ( after it to include its parameters, unless there's a ( immediately
+             * after it with no space. (*with* a space, we accept stuff like a <~ (b), c, d which
+             * seems likely to be more common than things like a <~(b, c, d) which is kinda wonky
+             * to begin with (probably people should just write (a <~ b, c, d) but idk) */
+            if (input_peek_ahead(lx, 0).type != T_LPAREN) {
               enqueue_output_token(lx, invisible_lparen);
             }
         } else if (lx->last_token_seen.type == T_DOT && token.type == T_IDENTIFIER) {
