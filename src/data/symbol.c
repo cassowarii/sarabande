@@ -2,8 +2,6 @@
 
 #include "data/string.h"
 #include "data/hashtable.h"
-#include <string.h>
-#include "mem/mem.h"
 
 #define NAME_BLOCK_SIZE 4096
 

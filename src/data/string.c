@@ -1,9 +1,7 @@
 #include "data/string.h"
 
-#include "mem/mem.h"
 #include "gc/gcinfo.h"
 #include "gc/rc.h"
-#include <string.h>
 
 #define INLINE_BUFFER_SIZE 256
 #define STRINGS_PER_BLOCK 256

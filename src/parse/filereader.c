@@ -1,7 +1,5 @@
 #include "filereader.h"
 
-#include "mem/mem.h"
-
 #define N_READBACK_LINES 3
 
 /* reads in files a line at a time and provides the file data one character

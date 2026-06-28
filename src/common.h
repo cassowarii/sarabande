@@ -3,5 +3,7 @@
 
 #include "global.h"
 #include "mem/mem.h"
+#include "data/value.h"
+#include <string.h> // for memcpy/memset
 
 #endif

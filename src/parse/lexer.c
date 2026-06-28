@@ -1,8 +1,5 @@
 #include "lexer.h"
 
-#include <string.h>
-#include "mem/mem.h"
-
 /* OK so this is a module that takes in a series of tokens output by the scanner and modifies
  * the token stream before it gets passed to the parser. In particular, this replaces the
  * spaces and newlines sent from the scanner with various configurations of parentheses and

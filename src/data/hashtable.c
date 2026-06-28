@@ -1,7 +1,6 @@
 #include "data/hashtable.h"
 
 #include "data/string.h"
-#include "data/value.h"
 
 #define HASHES_PER_BLOCK 256
 #define INLINE_TABLE_LENGTH 64
