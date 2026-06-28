@@ -14,7 +14,15 @@ int main(int argc, char **argv) {
         sbParser pr;
         sbParser_initialize(&pr);
 
-        sbParser_parse_file(&pr, argv[1]);
+        sbAst parse_result = sbParser_parse_file(&pr, argv[1]);
+
+        if (parse_result == NULL) {
+          fprintf(stderr, "fatal error: Could not open script '%s'\n", argv[1]);
+        } else if (parse_result->type == AST_ERROR) {
+          fprintf(stderr, "fatal error: Could not run '%s' due to syntax errors.\n", argv[1]);
+        } else {
+          printf("wow! the syntax is good!\n");
+        }
 
         sbParser_deinitialize(&pr);
 

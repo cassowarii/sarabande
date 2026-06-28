@@ -8,6 +8,7 @@ typedef struct sbParser {
   sbTokenQueue input_queue;
   sbArena node_arena;
   flag error_state;
+  flag any_error;
 } sbParser;
 
 typedef sbParser *hParser;

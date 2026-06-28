@@ -166,7 +166,10 @@ static flag can_only_start_expression(sbTokenType type, flag brace_terminated_st
  * surrounded by spaces or neither space */
 static flag maybe_can_start_expression(sbTokenType type) {
     return type == T_PLUS
-        || type == T_MINUS;
+        || type == T_MINUS
+        || type == T_ASTERISK
+        || type == T_AMPERSAND
+        || type == T_ELLIPSIS;
 }
 
 /* can come after something like a ) and still be the beginning of a function
@@ -204,6 +207,7 @@ static flag begins_brace_terminated_state(sbTokenType type) {
         || type == T_rDO
         || type == T_rREPEAT
         || type == T_rCASE
+        || type == T_rMATCH
         || type == T_rWHEN
         || type == T_FATARROW /* fat arrow => a, b { ... } introduces block header also */
         || type == T_SQUIGARROW; /* squiggle arrow ~> a, b { ... } introduces block header also */
@@ -213,8 +217,7 @@ static flag begins_brace_terminated_state(sbTokenType type) {
 static flag can_end_expression(sbTokenType type) {
     return type == T_IDENTIFIER
         || type == T_RPAREN
-        || type == T_RBRACKET
-        || type == T_RBRACE;
+        || type == T_RBRACKET;
 }
 
 /* when in brace-terminated state, one of these must precede a { character
@@ -225,6 +228,7 @@ static flag block_header_can_end_after(sbTokenType type) {
         || type == T_FATARROW
         || type == T_SQUIGARROW
         || type == T_rCASE
+        || type == T_ELLIPSIS
         || type == T_rDO;
 }
 

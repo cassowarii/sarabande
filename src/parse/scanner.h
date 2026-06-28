@@ -10,7 +10,6 @@
 typedef struct sbScanner {
     sbLexToken next_token;
     hFileReader file_reader;
-    sbArena arena;
     sbBuffer dynamic_buffer;
 } sbScanner;
 

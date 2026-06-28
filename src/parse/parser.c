@@ -21,13 +21,17 @@ sbAst sbParser_parse_file(hParser pr, const char *filename) {
   hFileReader fr = sbFileReader_open(filename);
 
   if (!sbFileReader_ok(fr)) {
-    fprintf(stderr, "Error getting input stream.\n");
     return NULL;
   }
+
+  pr->error_state = FALSE;
+  pr->any_error = FALSE;
 
   sbLexer_initialize(&pr->lexer, fr);
 
   sbAst result = do_parse(pr);
+
+  sbLexer_deinitialize(&pr->lexer);
 
   sbFileReader_close(fr);
 
@@ -61,6 +65,7 @@ static sbAst ERROR_NODE = &ERROR_SENTINEL_VALUE;
 
 static tokenspelling token_spellings[] = {
   { T_NEWLINE, "newline" },
+  { T_SPACE, "space" },
   { T_EOF, "end-of-file" },
   { T_IDENTIFIER, "identifier" },
   { T_SYMBOL, "symbol" },
@@ -107,8 +112,9 @@ static tokenspelling token_spellings[] = {
   { T_GREATER, "'>'" },
   { T_COLON, "':'" },
   { T_SEMICOLON, "';'" },
+  { T_AMPERSAND, "'&'" },
+  { T_AT, "'@'" },
   { T_BACKSLASH, "'\\'" },
-  { T_SPACE, "' '" },
   { T_ARROW, "'->'" },
   { T_FATARROW, "'=>'" },
   { T_SQUIGARROW, "'~>'" },
@@ -135,11 +141,12 @@ static tokenspelling token_spellings[] = {
   { T_ELLIPSIS, "'...'" },
 };
 
-const char *const TOKEN_SPELLING_UNKNOWN = "<unknown-token>";
+static const char *const TOKEN_SPELLING_UNKNOWN = "<unknown-token>";
 
 static binop binops[] = {
   { T_PIPE, 6, 7, AST_OP_PIPE },
-  { T_rOR, 10, 11, AST_OP_OR },
+  { T_BACKSQUIGARROW, 8, 9, AST_OP_SEND },
+  { T_rOR, 15, 16, AST_OP_OR },
   { T_rAND, 20, 21, AST_OP_AND },
   { T_rIN, 25, 26, AST_OP_IN },
   { T_DOUBLEEQUALS, 30, 31, AST_OP_EQ },
@@ -158,6 +165,7 @@ static binop binops[] = {
   { T_DOUBLEASTERISK, 71, 70, AST_OP_POW },
   { T_TWODOT, 80, 81, AST_OP_RANGE },
   { T_DOT, 90, 91, AST_OP_NULL },
+  { T_ARROW, 90, 91, AST_OP_NULL },
   { T_LPAREN, 90, 91, AST_OP_NULL },
   { T_LBRACKET, 90, 91, AST_OP_INDEX },
   { T_PAAMAYIM_NEKUDOTAYIM, 90, 91, AST_OP_SCOPE },
@@ -167,11 +175,13 @@ static unop unops[] = {
   { T_rNOT, 25, AST_OP_NOT },
   { T_PLUS, 85, AST_OP_UNPLUS },
   { T_MINUS, 85, AST_OP_UNMINUS },
+  { T_AMPERSAND, 85, AST_OP_REF },
+  { T_ASTERISK, 85, AST_OP_DEREF },
 };
 
-const usize NUM_BINOPS = sizeof(binops) / sizeof(binops[0]);
-const usize NUM_UNOPS = sizeof(unops) / sizeof(unops[0]);
-const usize NUM_TOKEN_SPELLINGS = sizeof(token_spellings) / sizeof(token_spellings[0]);
+static const usize NUM_BINOPS = sizeof(binops) / sizeof(binops[0]);
+static const usize NUM_UNOPS = sizeof(unops) / sizeof(unops[0]);
+static const usize NUM_TOKEN_SPELLINGS = sizeof(token_spellings) / sizeof(token_spellings[0]);
 
 static sbLexToken peek_ahead(hParser pr, usize count) {
   while (sbTokenQueue_size(&pr->input_queue) < count + 1) {
@@ -187,22 +197,14 @@ static sbLexToken next_token(hParser pr) {
     sbTokenQueue_shift(&pr->input_queue);
   }
 
-  pr->error_state = 0;
+  pr->error_state = FALSE;
 
   sbLexToken t = peek_ahead(pr, 0);
 
   return t;
 }
 
-flag is_literal_token(sbTokenType type) {
-  return type == T_IDENTIFIER
-      || type == T_SYMBOL
-      || type == T_INTEGER
-      || type == T_FLOAT
-      || type == T_STRING;
-}
-
-const char *token_spelling(sbTokenType type) {
+static const char *token_spelling(sbTokenType type) {
   for (usize i = 0; i < NUM_TOKEN_SPELLINGS; i++) {
     if (token_spellings[i].type == type) {
       return token_spellings[i].name;
@@ -247,7 +249,7 @@ static sbAst syntax_error(hParser pr) {
   if (unexpected_token.type == T_ERROR) {
     fprintf(stderr, "syntax error: invalid character");
   } else if (unexpected_token.type == T_WRONGBRACKET) {
-    fprintf(stderr, "syntax error: mismatched bracket");
+    fprintf(stderr, "syntax error: mismatched or missing bracket");
   } else if (unexpected_token.type == T_BADNUMBER) {
     fprintf(stderr, "syntax error: invalid number");
   } else if (unexpected_token.type == T_SEMICOLON && unexpected_token.invisible) {
@@ -271,6 +273,7 @@ static sbAst syntax_error(hParser pr) {
   /* set error flag until we move to the next token so that syntax error
    * isn't printed multiple times */
   pr->error_state = TRUE;
+  pr->any_error = TRUE;
   return ERROR_NODE;
 }
 
@@ -385,9 +388,44 @@ static sbAst parse_comma_exprs(hParser pr, sbAst after) {
 
     *put_here = seq_node(pr, AST_NODE_MULTIVAL, expr, NO_NODE);
     put_here = &(*put_here)->seq.right;
+
+    /* these | and <~ operators can break a comma list */
+    if (expect(pr, T_PIPE)) break;
+    if (expect(pr, T_BACKSQUIGARROW)) break;
   } while (expect(pr, T_COMMA));
 
   return result;
+}
+
+static sbAst parse_literal(hParser pr) {
+  sbLexToken t = peek_ahead(pr, 0);
+  if (t.type == T_rNIL) {
+    next_token(pr);
+    sbAstNode n = { .type = AST_VAL_NIL };
+    return new_node(pr, &n);
+  } else if (t.type == T_rTRUE || t.type == T_rFALSE) {
+    next_token(pr);
+    sbAstNode n = { .type = AST_VAL_BOOLEAN, .i = (t.type == T_rTRUE) };
+    return new_node(pr, &n);
+  } else if (t.type == T_INTEGER) {
+    next_token(pr);
+    sbAstNode n = { .type = AST_VAL_INT, .i = t.i };
+    return new_node(pr, &n);
+  } else if (t.type == T_FLOAT) {
+    next_token(pr);
+    sbAstNode n = { .type = AST_VAL_FLOAT, .fl = t.fl };
+    return new_node(pr, &n);
+  } else if (t.type == T_SYMBOL) {
+    next_token(pr);
+    sbAstNode n = { .type = AST_VAL_SYMBOL, .symb = t.symb };
+    return new_node(pr, &n);
+  } else if (t.type == T_STRING) {
+    next_token(pr);
+    sbAstNode n = { .type = AST_VAL_STRING, .str = t.hstr };
+    return new_node(pr, &n);
+  }
+
+  return NO_NODE;
 }
 
 static sbAst parse_name(hParser pr) {
@@ -399,36 +437,53 @@ static sbAst parse_name(hParser pr) {
   return NO_NODE;
 }
 
+static sbAst parse_hash_key(hParser pr) {
+  sbLexToken t = peek_ahead(pr, 0);
+  if (t.type == T_IDENTIFIER) {
+    return parse_name(pr);
+  }
+
+  sbAst literal = parse_literal(pr);
+  if (literal != NO_NODE) {
+    return literal;
+  } else if (expect(pr, '[')) {
+    sbAst key = parse_expr(pr, 0);
+    if (!expect(pr, ']')) return syntax_error(pr);
+    return key;
+  } else {
+    return NO_NODE;
+  }
+}
+
+static sbAst parse_inside_hash(hParser pr) {
+  sbAst result = NO_NODE;
+  sbAst *put_here = &result;
+
+  do {
+    sbAst key = parse_hash_key(pr);
+    if (key == NO_NODE) break;
+    if (!expect(pr, ':')) return syntax_error(pr);
+    sbAst value = parse_expr(pr, 0);
+
+    *put_here = seq_node(pr, AST_NODE_NEXT, seq_node(pr, AST_NODE_HASHENTRY, key, value), NO_NODE);
+    put_here = &(*put_here)->seq.right;
+  } while (expect(pr, ','));
+
+  return result;
+}
+
+static sbAst parse_stmt(hParser pr);
+static sbAst parse_stmtseq(hParser pr);
 static sbAst parse_block(hParser pr);
 
 /* https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html */
 static sbAst parse_expr(hParser pr, u8 min_precedence) {
   sbLexToken t = peek_ahead(pr, 0);
   sbAst lhs = NO_NODE;
-  if (t.type == T_rNIL) {
-    next_token(pr);
-    sbAstNode n = { .type = AST_VAL_NIL };
-    lhs = new_node(pr, &n);
-  } else if (t.type == T_rTRUE || t.type == T_rFALSE) {
-    next_token(pr);
-    sbAstNode n = { .type = AST_VAL_BOOLEAN, .i = (t.type == T_rTRUE) };
-    lhs = new_node(pr, &n);
-  } else if (t.type == T_INTEGER) {
-    next_token(pr);
-    sbAstNode n = { .type = AST_VAL_INT, .i = t.i };
-    lhs = new_node(pr, &n);
-  } else if (t.type == T_FLOAT) {
-    next_token(pr);
-    sbAstNode n = { .type = AST_VAL_FLOAT, .fl = t.fl };
-    lhs = new_node(pr, &n);
-  } else if (t.type == T_SYMBOL) {
-    next_token(pr);
-    sbAstNode n = { .type = AST_VAL_SYMBOL, .symb = t.symb };
-    lhs = new_node(pr, &n);
-  } else if (t.type == T_STRING) {
-    next_token(pr);
-    sbAstNode n = { .type = AST_VAL_STRING, .str = t.hstr };
-    lhs = new_node(pr, &n);
+
+  sbAst literal = parse_literal(pr);
+  if (literal != NO_NODE) {
+    lhs = literal;
   } else if (t.type == T_IDENTIFIER) {
     lhs = parse_name(pr);
   } else if (t.type == T_FATARROW) {
@@ -437,14 +492,29 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
     sbAst params = parse_comma_exprs(pr, NULL);
     if (!expect(pr, T_RPAREN)) return syntax_error(pr);
     sbAst body = parse_block(pr);
-    return seq_node(pr, AST_VAL_FUNC, params, body);
+    lhs = seq_node(pr, AST_VAL_FUNC, params, body);
   } else if (t.type == T_SQUIGARROW) {
     next_token(pr);
     if (!expect(pr, T_LPAREN)) return syntax_error(pr);
     sbAst params = parse_comma_exprs(pr, NULL);
     if (!expect(pr, T_RPAREN)) return syntax_error(pr);
     sbAst body = parse_block(pr);
-    return seq_node(pr, AST_VAL_OBJ, params, body);
+    lhs = seq_node(pr, AST_VAL_OBJ, params, body);
+  } else if (t.type == T_COLONBRACE) {
+    next_token(pr);
+    sbAst body = parse_stmtseq(pr);
+    if (!expect(pr, T_RBRACE)) return syntax_error(pr);
+    lhs = wrap_node(pr, AST_VAL_IMFUNC, body);
+  } else if (t.type == T_LBRACKET) {
+    next_token(pr);
+    sbAst content = parse_comma_exprs(pr, NULL);
+    if (!expect(pr, T_RBRACKET)) return syntax_error(pr);
+    lhs = wrap_node(pr, AST_VAL_LIST, content);
+  } else if (t.type == T_LBRACE) {
+    next_token(pr);
+    sbAst content = parse_inside_hash(pr);
+    if (!expect(pr, T_RBRACE)) return syntax_error(pr);
+    lhs = wrap_node(pr, AST_VAL_HASH, content);
   } else if (t.type == T_LPAREN) {
     next_token(pr);
     lhs = parse_expr(pr, 0);
@@ -504,13 +574,20 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
       /* indexing */
       rhs = parse_expr(pr, 0);
       if (!expect(pr, T_RBRACKET)) return syntax_error(pr);
-    } else if (op.type == T_DOT) {
+    } else if (op.type == T_DOT || op.type == T_ARROW) {
       sbAst method_name = parse_name(pr);
       if (!expect(pr, T_LPAREN)) return syntax_error(pr);
       sbAst params = parse_comma_exprs(pr, NULL);
       if (!expect(pr, T_RPAREN)) return syntax_error(pr);
       ast_type = AST_NODE_METHODCALL;
+      if (op.type == T_ARROW) {
+        /* (whatever)->x is rewritten as (*whatever).x */
+        lhs = unop_node(pr, AST_OP_DEREF, lhs);
+      }
       rhs = seq_node(pr, AST_NODE_NEXT, method_name, params);
+    } else if (op.type == T_BACKSQUIGARROW) {
+      /* a <~ b, c, d can have multiple comma things on the right side */
+      rhs = parse_comma_exprs(pr, NULL);
     } else {
       rhs = parse_expr(pr, infix->right_precedence);
     }
@@ -524,9 +601,6 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
 
   return lhs;
 }
-
-static sbAst parse_stmt(hParser pr);
-static sbAst parse_stmtseq(hParser pr);
 
 static sbAst parse_block(hParser pr) {
   if (!expect(pr, '{')) return syntax_error(pr);
@@ -620,7 +694,8 @@ static sbAst parse_stmt(hParser pr) {
       sbAst condition = parse_expr(pr, 0);
       return seq_node(pr, AST_NODE_REPEAT, body, condition);
     } else {
-      return syntax_error(pr);
+      /* repeat { ... } # infinite loop */
+      return seq_node(pr, AST_NODE_REPEAT, body, NO_NODE);
     }
   } else if (t.type == T_rCASE) {
     /* case x, y { ... } */
@@ -669,25 +744,32 @@ static sbAst parse_stmt(hParser pr) {
     return_node = with_trailing_conditional(pr, return_node);
     return return_node;
   } else {
-    /* (statement that is just an expression) */
+    /* (statement that is just an expression maybe followed by other stuff) */
     sbAst expr = parse_expr(pr, 0);
     if (expr == NO_NODE) return NO_NODE;
 
-    if (peek_ahead(pr, 0).type == ',') {
-      /* (implicit return) a, b, c */
-      next_token(pr);
-      expr = parse_comma_exprs(pr, expr);
-    }
+    if (expect(pr, T_DOUBLEPLUS)) {
+      expr = wrap_node(pr, AST_NODE_INCR, expr);
+    } else if (expect(pr, T_DOUBLEMINUS)) {
+      expr = wrap_node(pr, AST_NODE_DECR, expr);
+    } else {
+      if (expect(pr, ',')) {
+        /* (implicit return) a, b, c */
+        expr = parse_comma_exprs(pr, expr);
+      }
 
-    if (peek_ahead(pr, 0).type == '=') {
-      /* a, b, c = 1, 2, 3 */
-      next_token(pr);
-      sbAst assigned_values = parse_comma_exprs(pr, 0);
-      expr = seq_node(pr, AST_NODE_ASSIGN, expr, assigned_values);
+      if (peek_ahead(pr, 0).type == '=') {
+        /* a, b, c = 1, 2, 3 */
+        next_token(pr);
+        sbAst assigned_values = parse_comma_exprs(pr, 0);
+        expr = seq_node(pr, AST_NODE_ASSIGN, expr, assigned_values);
+      }
     }
 
     if (expr != NO_NODE) {
-      /* a, b, c = 1, 2, 3 (or other expr) if condition */
+      /* a, b, c = 1, 2, 3 if condition */
+      /* x++ unless condition */
+      /* f() if condition */
       expr = with_trailing_conditional(pr, expr);
     }
 
@@ -695,7 +777,18 @@ static sbAst parse_stmt(hParser pr) {
   }
 }
 
-static sbAst do_parse(hParser pr) {
+static sbAst parse_program(hParser pr) {
   sbAst program = parse_stmtseq(pr);
+  if (!expect(pr, T_EOF)) return syntax_error(pr);
+
   return program;
+}
+
+static sbAst do_parse(hParser pr) {
+  sbAst program = parse_program(pr);
+  if (pr->any_error) {
+    return ERROR_NODE;
+  } else {
+    return program;
+  }
 }

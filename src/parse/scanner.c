@@ -50,7 +50,6 @@ static void check_if_start(hScanner sc);
 static sbLexToken compute_next_token(hScanner sc);
 
 void sbScanner_initialize(hScanner sc, hFileReader fr) {
-    sbArena_initialize(&sc->arena, MEM_BLOCK_SIZE);
     sc->file_reader = fr;
     sc->next_token = (sbLexToken) {0};
 
@@ -70,7 +69,6 @@ sbLexToken sbScanner_next(hScanner sc) {
 }
 
 void sbScanner_deinitialize(hScanner sc) {
-    sbArena_deinitialize(&sc->arena);
     sbBuffer_deinitialize(&sc->dynamic_buffer);
 }
 
@@ -237,7 +235,8 @@ static sbLexToken compute_next_token(hScanner sc) {
             || ch == '[' || ch == ']'
             || ch == '{' || ch == '}'
             || ch == ';' || ch == '|'
-            || ch == ',' || ch == '\\') {
+            || ch == '&' || ch == ','
+            || ch == '@' || ch == '\\') {
         /* unambiguously single-character tokens */
         new_token.type = ch;
         NEXT;

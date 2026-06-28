@@ -4,10 +4,10 @@
 
 #define N_READBACK_LINES 3
 
-/* this seems pointless right now as a wrapper for FILE* but later, we can make
- * this work to read from stdin in interactive mode as well, which will be easier
- * if we just have these few functions separate from the actual lexer code.
- * we may also want to have multiple files open for imports and stuff... */
+/* reads in files a line at a time and provides the file data one character
+ * at a time. also keeps track of the current line and column number (counting
+ * tabs as 4 characters), and can print the previous few lines for error-
+ * reporting purposes. (highlighting syntax errors on a certain line) */
 
 struct sbFileReader {
     flag valid;
@@ -122,7 +122,7 @@ void sbFileReader_close(hFileReader r) {
 static void read_in_new_line(hFileReader r) {
     if (!r->valid) return;
 
-    /* recycle line buffers */
+    /* rotate line buffers */
     sbBuffer oldest_line_buffer = r->readback_lines[0];
     for (int i = 0; i < N_READBACK_LINES - 1; i++) {
       r->readback_lines[i] = r->readback_lines[i + 1];

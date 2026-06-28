@@ -30,6 +30,8 @@ typedef enum sbTokenType {
     T_COLON                 = ':',
     T_SEMICOLON             = ';',
     T_BACKSLASH             = '\\',
+    T_AMPERSAND             = '&',
+    T_AT                    = '@',
     T_NEWLINE               = '\n',
     T_SPACE                 = ' ',
     T_IDENTIFIER            = 128, // abc

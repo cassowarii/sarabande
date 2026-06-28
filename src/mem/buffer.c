@@ -35,6 +35,7 @@ void *sbBuffer_expand(hBuffer buf, usize expand_size) {
 
         char *new_data = realloc(buf->data, new_capacity);
         if (new_data) {
+            buf->capacity = new_capacity;
             buf->data = new_data;
         } else {
             fprintf(stderr, "failed to expand buffer!");
