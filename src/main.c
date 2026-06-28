@@ -42,19 +42,46 @@ int main(int argc, char **argv) {
 
     sbVmPartialBlock pb = sbVmBlock_create(4096, 4096);
 
-    u8 code[] = {
-      BC_LD_CONST, 0x00,
-      BC_LD_CONST, 0x01,
-      BC_OP_ADD,
+    u8 code1[] = {
+      BC_ALLOC_VARS, 0x02,           /* 0 1 */
+      BC_LD_IMM, 0x00,    /* var1 = 0   2 3 */
+      BC_ST_VAR, 0x01,    /* ...        4 5 */
+      BC_LD_CONST, 0x01,  /* var0 = 9   6 7 */
+      BC_ST_VAR, 0x00,    /* ...        8 9 */
+      BC_LD_CONST, 0x00,  /* (LABEL) var1 += 5 ; 10 11 */
+      BC_LD_VAR, 0x01,    /* ... */
+      BC_OP_ADD,          /* ... */
+      BC_ST_VAR, 0x01,    /* ... */
+      BC_LD_VAR, 0x00,    /* var0 = var0 - 1 */
+      BC_OP_DECR,         /* ... */
+      BC_ST_VAR, 0x00,    /* ... */
+      BC_LD_VAR, 0x00,    /* if var0 != 0 */
+      BC_LD_IMM, 0x00,    /* ... */
+      BC_OP_EQ,           /* ... */
+      BC_JF, 0x0A,        /* ...then goto LABEL */
+      BC_LD_VAR, 0x01,    /* return var1 */
+      BC_LD_IMM, 0x01,    /* ... */
       BC_HALT,
     };
 
-    sbVmBlock_write_code(&pb, code, sizeof(code));
-
     sbVmBlock_add_constant(&pb, &HVINT(5));
-    sbVmBlock_add_constant(&pb, &HVINT(11));
+    sbVmBlock_add_constant(&pb, &HVINT(9));
 
+    sbVmBlock_write_code(&pb, code1, sizeof(code1));
     sbVmProgram_add_block(&pm, &pb);
+    sbVmBlock_reset(&pb);
+
+    u8 code2[] = {
+      BC_LD_CONST, 0x00,
+      BC_OP_ADD,
+      BC_RET,
+    };
+
+    sbVmBlock_add_constant(&pb, &HVINT(7));
+
+    sbVmBlock_write_code(&pb, code2, sizeof(code2));
+    sbVmProgram_add_block(&pm, &pb);
+    sbVmBlock_reset(&pb);
 
     sbVm_execute(&vm, &pm);
 

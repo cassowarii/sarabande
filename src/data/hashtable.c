@@ -207,7 +207,7 @@ static hashentry *find_entry_in_array(hashentry *entries, usize length, hV *key)
     move ++;
   }
   usize index = start % length;
-  while (!sbV_eq(&entries[index].key, key) && entries[index].key.type != IT_NOTHING) {
+  while (!sbV_c_eq(&entries[index].key, key) && entries[index].key.type != IT_NOTHING) {
     index += move;
     index %= length;
   }

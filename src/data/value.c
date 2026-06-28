@@ -51,7 +51,7 @@ hV sbV_int(hInteger i) {
   };
 }
 
-flag sbV_eq(const hV *a, const hV *b) {
+flag sbV_c_eq(const hV *a, const hV *b) {
   if (a->type != b->type) return FALSE;
   if (a->type == ITX_TOMBSTONE || b->type == ITX_TOMBSTONE) return FALSE;
   if (a->type == IT_NOTHING || b->type == IT_NOTHING) return FALSE;
@@ -72,6 +72,9 @@ flag sbV_eq(const hV *a, const hV *b) {
     case IT_STRING:
       /* strings can be compared for equality character by character */
       return sbString_eq(a->string, b->string);
+    case IT_INTEGER:
+      /* TODO: we need to handle bigints properly. for now, just check int values normally */
+      return a->integer == b->integer;
     case IT_HASH:
       /* hashes should (but currently don't) check that they are the same by value.
        * right now, we'll just see if they point to the same hash ("is"). */
@@ -79,6 +82,13 @@ flag sbV_eq(const hV *a, const hV *b) {
     default:
       return a == b;
   }
+}
+
+flag sbV_c_falsy(const hV *a) {
+  /* only nil and boolean false are false */
+  if (a->type == IT_NIL) return TRUE;
+  if (a->type == IT_BOOLEAN && !a->boolean) return TRUE;
+  return FALSE;
 }
 
 void sbV_retain(const hV *a) {

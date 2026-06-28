@@ -5,6 +5,7 @@
 
 #define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = OBJSL(s) })
+#define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
 
 typedef u64 hHash;
 typedef u64 hString;
@@ -45,8 +46,10 @@ hV sbV_symbol(hSymbol sym);
 hV sbV_float(double fl);
 hV sbV_hash(hHash hash);
 hV sbV_int(hInteger i);
+hV sbV_boolean(flag b);
 
-flag sbV_eq(const hV *a, const hV *b);
+flag sbV_c_eq(const hV *a, const hV *b);
+flag sbV_c_falsy(const hV *a);
 
 void sbV_retain(const hV *a);
 void sbV_release(const hV *a);
