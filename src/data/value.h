@@ -3,6 +3,9 @@
 
 #include "common.h"
 
+#define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
+#define HVSTR(s) ((hV) { .type = IT_STRING, .string = OBJSL(s) })
+
 typedef u64 hHash;
 typedef u64 hString;
 typedef u64 hSymbol;
@@ -43,9 +46,9 @@ hV sbV_float(double fl);
 hV sbV_hash(hHash hash);
 hV sbV_int(hInteger i);
 
-flag sbV_eq(hV *a, hV *b);
+flag sbV_eq(const hV *a, const hV *b);
 
-void sbV_retain(hV *a);
-void sbV_release(hV *a);
+void sbV_retain(const hV *a);
+void sbV_release(const hV *a);
 
 #endif

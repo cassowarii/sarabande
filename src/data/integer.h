@@ -7,7 +7,7 @@
 
 void sbInteger_sys_init();
 
-hInteger sbInteger_new(u64 value);
+hInteger sbInteger_new(i64 value);
 
 hInteger sbInteger_sum(hInteger a, hInteger b);
 

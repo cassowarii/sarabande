@@ -1,1 +1,75 @@
 #include "common.h"
+
+#include "vm/block.h"
+
+/* OK so, we have two stacks (because iirc, you kind of need two stacks
+ * to make a stack machine work.) It's a little bit like FORTH, in that
+ * we have one "normal" stack which is used by most instructions (we
+ * can push values onto the stack, branch based on these values, etc.)
+ * and then one extra stack which tracks the function call structure and
+ * can be manipulated using special instructions. */
+
+/* We also have the "rstack". When we call a function, a stack frame is
+ * pushed onto the rstack, which saves the return address, the last
+ * value of fp and rp, and a pointer to the current code block (so we can
+ * find things like constants.) then, *above* this on the stack, we can
+ * use the space to store local variables, using instructions to move
+ * those slots to/from the main stack by index. when we return, we reset
+ * the fp and rp to point to the calling function's stack frame instead. */
+
+/* (we need to track fp so we can remember where the return address is,
+ * and we need to track rp so we know where to put the *next* frame.
+ * this then lets us leave function arguments and function return values
+ * on the normal stack, without worrying about needing to shuffle
+ * things around.) */
+
+/* I guess really the rstack is kind of like the "normal" C call stack,
+ * in that it's where we put "stack-allocated" local variables and save
+ * the stack frame, and the "normal" stack here does things that would
+ * normally be accomplished using registers in a non-stack-machine
+ * system... but, ah well. */
+
+/* Calling convention for function arguments + return values is to put
+ * a number at the top of the stack representing the number of arguments
+ * or values returned, followed by the values in order from top to
+ * bottom. */
+
+/* Also these stacks grow upwards in memory, from low to high addresses. */
+
+typedef enum sbVmStatus {
+  VM_STAT_UNKNOWN,
+  VM_STAT_SUCCESS,
+  VM_STAT_FAILURE,
+} sbVmStatus;
+
+typedef struct sbVmStackFrame {
+  const u8 *return_addr;
+  struct sbVmStackFrame *last_fp;
+  u8 *last_rp;
+  const sbVmBlock *block;
+  hV locals[];
+} sbVmStackFrame;
+
+typedef struct sbVm {
+  u8 *stack;        /* for calculations */
+  u8 *rstack;       /* for locals and return addresses, like FORTH */
+
+  const u8 *ip;     /* instruction pointer */
+  sbVmStackFrame *fp; /* frame pointer */
+  u8 *sp;           /* stack pointer */
+  u8 *rp;           /* rstack pointer */
+
+  usize stacksize;    /* to detect overflow, save these */
+  usize rstacksize;   /* ^^ */
+
+  sbVmProgram *program;
+  flag running;
+} sbVm;
+
+typedef sbVm *hVm;
+
+void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize);
+
+void sbVm_deinitialize(hVm vm);
+
+sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm);

@@ -51,7 +51,7 @@ hV sbV_int(hInteger i) {
   };
 }
 
-flag sbV_eq(hV *a, hV *b) {
+flag sbV_eq(const hV *a, const hV *b) {
   if (a->type != b->type) return FALSE;
   if (a->type == ITX_TOMBSTONE || b->type == ITX_TOMBSTONE) return FALSE;
   if (a->type == IT_NOTHING || b->type == IT_NOTHING) return FALSE;
@@ -81,7 +81,7 @@ flag sbV_eq(hV *a, hV *b) {
   }
 }
 
-void sbV_retain(hV *a) {
+void sbV_retain(const hV *a) {
   /* for some classes (e.g. nil, float), we don't need to retain them at all
    * because they are trivially copiable. some classes (integer, string) need
    * to sometimes be retained but sometimes not, so we delegate to them to
@@ -91,7 +91,7 @@ void sbV_retain(hV *a) {
   }
 }
 
-void sbV_release(hV *a) {
+void sbV_release(const hV *a) {
   if (a->type == IT_STRING) {
     sbString_release(a->string);
   }

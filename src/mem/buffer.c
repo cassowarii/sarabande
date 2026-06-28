@@ -20,8 +20,7 @@ void *sbBuffer_expand(hBuffer buf, usize expand_size) {
     if (expand_size == 0) return NULL;
 
     if (buf->capacity == 0 || buf->data == NULL) {
-        fprintf(stderr, "cannot expand invalid buffer!\n");
-        return NULL;
+        PANIC("cannot expand invalid buffer!");
     }
 
     char *result;
@@ -38,8 +37,7 @@ void *sbBuffer_expand(hBuffer buf, usize expand_size) {
             buf->capacity = new_capacity;
             buf->data = new_data;
         } else {
-            fprintf(stderr, "failed to expand buffer!");
-            return NULL;
+            PANIC("failed to expand buffer!");
         }
     }
 
@@ -73,11 +71,13 @@ void sbBuffer_set_size(hBuffer buf, usize new_size) {
   }
 }
 
-void sbBuffer_append(hBuffer buf, const void *data, usize data_length) {
-    if (data_length == 0) return;
+void *sbBuffer_append(hBuffer buf, const void *data, usize data_length) {
+    if (data_length == 0) return NULL;
 
     char *put = sbBuffer_expand(buf, data_length);
     memcpy(put, data, data_length);
+
+    return put;
 }
 
 void sbBuffer_reset(hBuffer buf) {

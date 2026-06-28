@@ -2,11 +2,6 @@
 
 #define INITIAL_PROGRAM_BLOCK_SIZE 32
 
-void sbVmProgram_init(sbVmProgram *pm, usize initial_arena_size) {
-  *pm = (sbVmProgram) {0};
-  sbArena_initialize(&pm->arena, initial_arena_size);
-}
-
 sbVmPartialBlock sbVmBlock_create(usize initial_bytecode_size, usize initial_constant_size) {
   sbVmPartialBlock pb = {0};
   sbBuffer_initialize(&pb.bytecode, initial_bytecode_size);
@@ -24,24 +19,43 @@ void sbVmBlock_deinitialize(sbVmPartialBlock *pb) {
   sbBuffer_deinitialize(&pb->constants);
 }
 
-void sbVmProgram_initialize(sbVmProgram *pm) {
-  pm->block_count = 0;
+void sbVmBlock_write_code(sbVmPartialBlock *pb, const u8 *data, usize length) {
+  sbBuffer_append(&pb->bytecode, data, length);
+}
+
+void sbVmBlock_add_constant(sbVmPartialBlock *pb, hV *constant) {
+  sbV_retain(constant);
+
+  sbBuffer_append(&pb->constants, constant, sizeof(hV));
+}
+
+void sbVmProgram_initialize(sbVmProgram *pm, usize initial_arena_size) {
+  *pm = (sbVmProgram) {0};
+  sbArena_initialize(&pm->arena, initial_arena_size);
   pm->block_capacity = INITIAL_PROGRAM_BLOCK_SIZE;
   pm->blocks = malloc(pm->block_capacity * sizeof(sbVmBlock));
 }
 
 void sbVmProgram_deinitialize(sbVmProgram *pm) {
   free(pm->blocks);
+  sbArena_deinitialize(&pm->arena);
   *pm = (sbVmProgram) {0};
 }
 
+/* finalize a partial-block and add it to the program.
+ * copies the data, so the same partial-block object can be reset
+ * and reused after calling this function. */
 sbBlockId sbVmProgram_add_block(sbVmProgram *pm, sbVmPartialBlock *pb) {
-  const usize bytecode_length = pb->bytecode.size;
-  char *bytecode = sbArena_alloc(&pm->arena, bytecode_length);
+  usize bytecode_length = pb->bytecode.size;
+  usize constants_length = pb->constants.size;
+  while (bytecode_length % 8 != 0) bytecode_length ++;
+
+  u8 *block_data = sbArena_alloc(&pm->arena, bytecode_length + constants_length);
+
+  u8 *bytecode = &block_data[0];
   memcpy(bytecode, pb->bytecode.data, bytecode_length);
 
-  const usize constants_length = pb->constants.size;
-  char *constants = sbArena_alloc(&pm->arena, constants_length);
+  u8 *constants = &block_data[bytecode_length];
   memcpy(constants, pb->constants.data, constants_length);
 
   sbVmBlock bk = {

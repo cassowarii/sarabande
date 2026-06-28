@@ -36,7 +36,7 @@ void sbInteger_sys_init() {
   sbBuffer_initialize(&g_bigint_blocks, sizeof(intblk*));
 }
 
-hInteger sbInteger_new(u64 value) {
+hInteger sbInteger_new(i64 value) {
   if (value >= SARABANDE_INT_MIN && value <= SARABANDE_INT_MAX) {
     return value;
   } else {

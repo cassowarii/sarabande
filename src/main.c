@@ -4,6 +4,7 @@
 #include "data/string.h"
 #include "data/hashtable.h"
 #include "data/symbol.h"
+#include "vm/exec.h"
 
 int main(int argc, char **argv) {
     if (argc == 2) {
@@ -32,4 +33,36 @@ int main(int argc, char **argv) {
     } else {
         fprintf(stderr, "please provide a file as input\n");
     }
+
+    sbVm vm = {0};
+    sbVm_initialize(&vm, 1048576, 1048576);
+
+    sbVmProgram pm;
+    sbVmProgram_initialize(&pm, 65536);
+
+    sbVmPartialBlock pb = sbVmBlock_create(4096, 4096);
+
+    u8 code[] = {
+      BC_LD_CONST, 0x00,
+      BC_LD_CONST, 0x01,
+      BC_OP_ADD,
+      BC_HALT,
+    };
+
+    sbVmBlock_write_code(&pb, code, sizeof(code));
+
+    sbVmBlock_add_constant(&pb, &HVINT(5));
+    sbVmBlock_add_constant(&pb, &HVINT(11));
+
+    sbVmProgram_add_block(&pm, &pb);
+
+    sbVm_execute(&vm, &pm);
+
+    printf("Stack result: ");
+    for (u8 *p = vm.stack; p < vm.sp; p++) {
+      printf("%02X ", *p);
+    }
+    printf("\n");
+
+    sbVmBlock_deinitialize(&pb);
 }

@@ -23,7 +23,7 @@ void *sbBuffer_shrink(hBuffer buf, usize shrink_size);
 
 void sbBuffer_set_size(hBuffer buf, usize new_size);
 
-void sbBuffer_append(hBuffer buf, const void *data, usize data_length);
+void *sbBuffer_append(hBuffer buf, const void *data, usize data_length);
 
 void sbBuffer_reset(hBuffer buf);
 
