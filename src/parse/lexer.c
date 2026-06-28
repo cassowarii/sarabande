@@ -214,8 +214,9 @@ static flag begins_brace_terminated_state(sbTokenType type) {
 }
 
 /* things we can potentially insert a ( after because they may be a call */
-static flag can_end_expression(sbTokenType type) {
+static flag can_open_paren_after(sbTokenType type) {
     return type == T_IDENTIFIER
+        || type == T_BACKSQUIGARROW
         || type == T_RPAREN
         || type == T_RBRACKET;
 }
@@ -223,7 +224,7 @@ static flag can_end_expression(sbTokenType type) {
 /* when in brace-terminated state, one of these must precede a { character
  * in order to exit brace-terminated state */
 static flag block_header_can_end_after(sbTokenType type) {
-    return can_end_expression(type)
+    return can_open_paren_after(type)
         || is_literal(type)
         || type == T_FATARROW
         || type == T_SQUIGARROW
@@ -366,7 +367,11 @@ static void unstack_visible_bracket(hLexer lx, sbLexToken closing_token) {
         }
     }
 
-    enqueue_output_token(lx, (sbLexToken) { .type = T_WRONGBRACKET });
+    sbLexToken error_token = {
+      .type = T_WRONGBRACKET,
+    };
+
+    enqueue_output_token(lx, error_token);
 }
 
 static void compute_next_token(hLexer lx) {
@@ -416,13 +421,13 @@ static void compute_next_token(hLexer lx) {
         input_peek_ahead(lx, 0).type, is_in_brace_terminated_state(lx)
     );
 
-    if (can_end_expression(token.type) && input_peek_ahead(lx, 0).type == T_COLONBRACE) {
+    if (can_open_paren_after(token.type) && input_peek_ahead(lx, 0).type == T_COLONBRACE) {
         /* end-of-expr followed by colon-brace with no space between gets this special
          * invisible bracket */
         /* invisible = 2 makes it a sticky H bracket */
         invisible_lparen.invisible = 2;
         enqueue_output_token(lx, invisible_lparen);
-    } else if (can_end_expression(token.type)) {
+    } else if (can_open_paren_after(token.type)) {
         /* otherwise, if it can end an expression (in particular if it's still an identifier and not a
          * reserved word), we might need to insert a magic ( into the output stream. so look ahead at
          * what's coming up. */
@@ -441,7 +446,12 @@ static void compute_next_token(hLexer lx) {
             space_offset = 1;
         }
 
-        if (lx->last_token_seen.type == T_DOT && token.type == T_IDENTIFIER) {
+        if (token.type == T_BACKSQUIGARROW) {
+            /* <~ always gets a ( after it to include its parameters. we don't care about a space here. */
+            if (input_peek_ahead(lx, space_offset).type != T_LPAREN) {
+              enqueue_output_token(lx, invisible_lparen);
+            }
+        } else if (lx->last_token_seen.type == T_DOT && token.type == T_IDENTIFIER) {
             /* an identifier after a dot always gets an invisible parentheses after it,
              * unless there is a visible parentheses immediately after it. */
             if (input_peek_ahead(lx, 0).type != T_LPAREN) {

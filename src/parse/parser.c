@@ -400,10 +400,6 @@ static sbAst parse_comma_exprs(hParser pr, sbAst after) {
 
     *put_here = seq_node(pr, AST_NODE_MULTIVAL, expr, NO_NODE);
     put_here = &(*put_here)->seq.right;
-
-    /* these | and <~ operators can break a comma list */
-    if (expect(pr, T_PIPE)) break;
-    if (expect(pr, T_BACKSQUIGARROW)) break;
   } while (expect(pr, T_COMMA));
 
   return result;
@@ -618,7 +614,9 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
       rhs = seq_node(pr, AST_NODE_NEXT, method_name, params);
     } else if (op.type == T_BACKSQUIGARROW) {
       /* a <~ b, c, d can have multiple comma things on the right side */
+      if (!expect(pr, T_LPAREN)) return syntax_error(pr);
       rhs = parse_comma_exprs(pr, NULL);
+      if (!expect(pr, T_RPAREN)) return syntax_error(pr);
     } else if (op.type == T_PAAMAYIM_NEKUDOTAYIM) {
       /* :: is similar to . and -> above, will parse the thing to the right
        * as a symbol unless using the syntax a::[expr] */
