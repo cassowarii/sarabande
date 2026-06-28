@@ -358,6 +358,18 @@ static sbAst name_node(hParser pr, sbLexToken token) {
   return new_node(pr, &n);
 }
 
+static sbAst id_sym_node(hParser pr, sbLexToken token) {
+  if (token.type != T_IDENTIFIER) {
+    PANIC("can't create sym node with token of type %d", token.type);
+  }
+
+  sbAstNode n = (sbAstNode) {
+    .type = AST_VAL_SYMBOL,
+    .symb = token.symb,
+  };
+  return new_node(pr, &n);
+}
+
 static sbAst parse_expr(hParser pr, u8 min_precedence);
 static sbAst parse_comma_exprs(hParser pr, sbAst after) {
   sbAst result = NO_NODE;
@@ -433,6 +445,15 @@ static sbAst parse_name(hParser pr) {
   if (t.type == T_IDENTIFIER) {
     next_token(pr);
     return name_node(pr, t);
+  }
+  return NO_NODE;
+}
+
+static sbAst parse_name_as_sym(hParser pr) {
+  sbLexToken t = peek_ahead(pr, 0);
+  if (t.type == T_IDENTIFIER) {
+    next_token(pr);
+    return id_sym_node(pr, t);
   }
   return NO_NODE;
 }
@@ -575,7 +596,17 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
       rhs = parse_expr(pr, 0);
       if (!expect(pr, T_RBRACKET)) return syntax_error(pr);
     } else if (op.type == T_DOT || op.type == T_ARROW) {
-      sbAst method_name = parse_name(pr);
+      /* . and -> parse an identifier to their right as a symbol that will
+       * name the method to be called. to call a method whose name isn't
+       * a symbol, you need a.[expr] or a->[expr] */
+      sbAst method_name = NO_NODE;
+      if (expect(pr, T_LBRACKET)) {
+        method_name = parse_expr(pr, 0);
+        if (!expect(pr, T_RBRACKET)) return syntax_error(pr);
+      } else {
+        method_name = parse_name_as_sym(pr);
+      }
+      if (method_name == NO_NODE) return syntax_error(pr);
       if (!expect(pr, T_LPAREN)) return syntax_error(pr);
       sbAst params = parse_comma_exprs(pr, NULL);
       if (!expect(pr, T_RPAREN)) return syntax_error(pr);
@@ -588,6 +619,18 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
     } else if (op.type == T_BACKSQUIGARROW) {
       /* a <~ b, c, d can have multiple comma things on the right side */
       rhs = parse_comma_exprs(pr, NULL);
+    } else if (op.type == T_PAAMAYIM_NEKUDOTAYIM) {
+      /* :: is similar to . and -> above, will parse the thing to the right
+       * as a symbol unless using the syntax a::[expr] */
+      if (expect(pr, T_LBRACKET)) {
+        /* a::[whatever] */
+        rhs = parse_expr(pr, 0);
+        if (!expect(pr, T_RBRACKET)) return syntax_error(pr);
+      } else {
+        /* a::b */
+        rhs = parse_name_as_sym(pr);
+      }
+      if (rhs == NO_NODE) return syntax_error(pr);
     } else {
       rhs = parse_expr(pr, infix->right_precedence);
     }
