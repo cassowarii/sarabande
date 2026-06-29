@@ -35,6 +35,7 @@ typedef enum sbIrStmtType {
   IR_S_EXPR,
   IR_S_ASSIGN,
   IR_S_JUMP,
+  IR_S_ARG,
   IR_S_RETURN,
 } sbIrStmtType;
 
@@ -57,6 +58,7 @@ typedef struct sbIrLabel {
 
 typedef struct sbIrVariable {
   usize slot_id;
+  flag initialized;
   usize first_appearance;
   usize last_appearance;
   usize assigned_index;
@@ -96,13 +98,17 @@ typedef struct sbIrAssign {
 } sbIrAssign;
 
 typedef struct sbIrStmt {
-  usize position;
+  i32 position;
   sbIrStmtType type;
   union {
     sbIrExpr *expr;
     sbIrLabel *label;
     sbIrAssign assign;
     sbIrJump jump;
+    struct {
+      flag last;
+      sbIrVariable *var;
+    } arg;
   };
 } sbIrStmt;
 
@@ -110,10 +116,10 @@ struct sbIrProgram;
 
 typedef struct sbIrChunk {
   struct sbIrProgram *program;
-  usize id;
-  usize label_count;
-  usize variable_count;
-  usize lowest_var_id;
+  i32 id;
+  i32 label_count;
+  i32 variable_count;
+  i32 lowest_var_id;
   sbBuffer stmts;
 } sbIrChunk;
 
@@ -121,6 +127,7 @@ typedef struct sbIrProgram {
   sbArena arena;
   sbBuffer varmapping;
   sbBuffer chunks;
+  i32 error_count;
 } sbIrProgram;
 
 typedef struct sbIrProgram *hIrProgram;

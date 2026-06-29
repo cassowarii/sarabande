@@ -37,8 +37,13 @@ int main(int argc, char **argv) {
         /* free AST, don't need it anymore */
         sbParser_deinitialize(&pr);
 
-        // print out program
-        sbIrProgram_print(&ir);
+        if (ir.error_count > 0) {
+          fprintf(stderr, "Could not run '%s' due to errors.\n", argv[1]);
+          return -3;
+        } else {
+          // print out program
+          sbIrProgram_print(&ir);
+        }
 
         sbIrProgram_deinitialize(&ir);
 

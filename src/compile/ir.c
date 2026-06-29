@@ -5,6 +5,8 @@
 
 #include "mem/debug.h"
 
+#include <stdarg.h>
+
 typedef struct varmapentry {
   const char *name;
   usize name_len;
@@ -46,7 +48,7 @@ void sbIrProgram_print(hIrProgram ir) {
 
   for (usize i = 0; i < nchunks; i++) {
     sbIrChunk *ck = ((sbIrChunk**)ir->chunks.data)[i];
-    printf("\nCHUNK %zu with %zu variables\n", ck->id, ck->variable_count);
+    printf("\nCHUNK %d with %d variables\n", ck->id, ck->variable_count);
 
     usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
     for (usize j = 0; j < nstmts; j++) {
@@ -59,6 +61,26 @@ void sbIrProgram_print(hIrProgram ir) {
 }
 
 /* --- */
+
+static void vprogram_error(hIrProgram ir, const char *error, va_list args) {
+  ir->error_count ++;
+  fprintf(stderr, "error: ");
+  vfprintf(stderr, error, args);
+}
+
+static void program_error(hIrProgram ir, const char *error, ...) {
+  va_list args;
+  va_start(args, error);
+  vprogram_error(ir, error, args);
+  va_end(args);
+}
+
+static void chunk_error(hIrChunk ck, const char *error, ...) {
+  va_list args;
+  va_start(args, error);
+  vprogram_error(ck->program, error, args);
+  va_end(args);
+}
 
 static sbIrChunk *new_chunk(hIrProgram ir) {
   usize nchunks = ir->chunks.size / sizeof(sbIrChunk*);
@@ -108,7 +130,7 @@ static sbIrVariable *create_var(hIrChunk ck, const char *name, usize name_len) {
 /* find variables that already exist */
 static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
   usize nvars = ck->program->varmapping.size / sizeof(varmapentry);
-  for (usize i = 0; i < nvars; i++) {
+  for (usize i = ck->lowest_var_id; i < nvars; i++) {
     varmapentry *entry = &((varmapentry*)ck->program->varmapping.data)[i];
     if (sbstrncmp(name, entry->name, name_len) == 0) {
       return entry->var;
@@ -116,7 +138,7 @@ static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
   }
 
   /* TODO do a different thing here */
-  fprintf(stderr, "unknown variable name! '%s'\n", name);
+  chunk_error(ck, "unknown variable name! '%s'\n", name);
   return NULL;
 }
 
@@ -264,10 +286,19 @@ static void put_expr(hIrChunk ck, sbIrExpr *expr) {
 
 static void print_expr(sbIrExpr *e);
 static void put_assign(hIrChunk ck, sbIrVariable *assign_to, sbIrExpr *expr) {
+  assign_to->initialized = TRUE;
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_ASSIGN,
     .assign.var = assign_to,
     .assign.expr = expr,
+  });
+}
+
+static void put_argument(hIrChunk ck, sbIrVariable *v, flag last) {
+  put_ir_stmt(ck, &(sbIrStmt) {
+    .type = IR_S_ARG,
+    .arg.last = last,
+    .arg.var = v,
   });
 }
 
@@ -300,23 +331,43 @@ static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node);
 static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seqast) {
   sbIrChunk *ck = new_chunk(ir);
 
+  /* create new scope to hold function parameters */
+  usize parameter_scope_level = ck->program->varmapping.size / sizeof(varmapentry);
+
+  sbBuffer arg_vars;
+  sbBuffer_initialize(&arg_vars, 1024);
   sbAst param_comma = paramsAst;
   while (param_comma != NO_NODE) {
     if (param_comma->seq.left->type != AST_NODE_NAME) {
-      fprintf(stderr, "Only variable names are permitted as function parameters!\n");
       /* TODO: Actually... */
+      program_error(ir, "Only variable names are permitted as function parameters!");
       break;
     }
     const char *vname = sbSymbol_name(param_comma->seq.left->symb);
-    create_var(ck, vname, strlen(vname));
+    sbIrVariable *v1 = create_var(ck, vname, strlen(vname));
+    sbBuffer_append(&arg_vars, &v1, sizeof(sbIrVariable*));
+    v1->initialized = TRUE;
     param_comma = param_comma->seq.right;
   }
 
+  while (arg_vars.size > 0) {
+    /* We need to bind function arguments in reverse order that they are passed,
+     * because arguments are going to be passed on a stack, and we want to evaluate
+     * function arguments left-to-right. */
+    sbIrVariable *var = *(sbIrVariable**)sbBuffer_shrink(&arg_vars, sizeof(sbIrVariable*));
+    put_argument(ck, var, arg_vars.size == 0);
+  }
+
   compile_ast_stmtseq(ck, seqast, TRUE);
+
+  /* exit parameters' lexical scope */
+  sbBuffer_set_size(&ck->program->varmapping, parameter_scope_level * sizeof(varmapentry));
+
   return ck;
 }
 
 static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return) {
+  /* create new scope to hold lexical block variables */
   usize lowest_var = ck->program->varmapping.size / sizeof(varmapentry);
 
   sbAst considering = seqast;
@@ -368,8 +419,7 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
   /* now, i is the number of statements we were left with after deleting some */
   sbBuffer_set_size(&ck->stmts, i * sizeof(sbIrStmt*));
 
-  /* after the block is done, we need to reset the varmapping to not include
-   * any variables that were introduced inside this block */
+  /* exit block lexical scope */
   sbBuffer_set_size(&ck->program->varmapping, lowest_var * sizeof(varmapentry));
 }
 
@@ -420,7 +470,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
         N1 = node->seq.left;  /* things to bind to */
         while (N1 != NO_NODE) {
           if (N1->seq.left->type != AST_NODE_NAME) {
-            fprintf(stderr, "Only variable names are permitted after 'let'!\n");
+            chunk_error(ck, "Only variable names are permitted after 'let'!");
             break;
           }
           const char *vname = sbSymbol_name(N1->seq.left->symb);
@@ -431,14 +481,26 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
         /* let ... = ... */
         if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of let!");
         N1 = node->seq.left;  /* things to bind to */
-        N2 = node->seq.right; /* values to assign */
-        while (N1 != NO_NODE && N2 != NO_NODE) {
+        while (N1 != NO_NODE) {
+          /* create all variables first, then initialize them.
+           * we can write something like "let q, r = 5, q + 1", but if we write something
+           * like "let q, r = r + 1, 5", we should fail with "r is not initialized," not
+           * "i don't know what r means". */
           if (N1->seq.left->type != AST_NODE_NAME) {
-            fprintf(stderr, "Only variable names are permitted on the left side of 'let'!\n");
+            chunk_error(ck, "Only variable names are permitted on the left side of 'let'!");
             break;
           }
           const char *vname = sbSymbol_name(N1->seq.left->symb);
           V1 = create_var(ck, vname, strlen(vname));
+          N1 = N1->seq.right;
+        }
+
+        N1 = node->seq.left;  /* things to bind to */
+        N2 = node->seq.right; /* values to assign */
+        while (N1 != NO_NODE && N2 != NO_NODE) {
+          /* now assign to all the variables we just created */
+          const char *vname = sbSymbol_name(N1->seq.left->symb);
+          V1 = var_name(ck, vname, strlen(vname));
           E1 = compile_ast_expr(ck, N2->seq.left);
           put_assign(ck, V1, E1);
           N1 = N1->seq.right;
@@ -446,9 +508,9 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
         }
 
         if (N1 != NO_NODE) {
-          fprintf(stderr, "too many bindings on left side of assignment!");
+          chunk_error(ck, "too many bindings on left side of assignment!");
         } else if (N2 != NO_NODE) {
-          fprintf(stderr, "too many values on right side of assignment!");
+          chunk_error(ck, "too many values on right side of assignment!");
         }
       }
       break;
@@ -481,9 +543,9 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       }
 
       if (N1 != NO_NODE) {
-        fprintf(stderr, "too many bindings on left side of assignment!");
+        chunk_error(ck, "Too many bindings on left side of assignment");
       } else if (N2 != NO_NODE) {
-        fprintf(stderr, "too many values on right side of assignment!");
+        chunk_error(ck, "Too many values on right side of assignment");
       }
       break;
 
@@ -614,7 +676,7 @@ static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node) {
     return var_name(ck, sbSymbol_name(node->symb), strlen(sbSymbol_name(node->symb)));
   } else {
     /* TODO make errors not bad */
-    fprintf(stderr, "expecting a name at this point! (got %d)\n", node->type);
+    chunk_error(ck, "Only a variable name is permitted here. (got %d)\n", node->type);
     return NULL;
   }
 }
@@ -649,7 +711,13 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     return expr_value(ck, &HVINT(node->i));
   } else if (node->type == AST_NODE_NAME) {
     /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
-    return expr_var(ck, compile_ast_var(ck, node));
+    sbIrVariable *var = compile_ast_var(ck, node);
+    if (var->initialized) {
+      return expr_var(ck, var);
+    } else {
+      chunk_error(ck, "Variable '%s' has not yet been initialized here!\n", sbSymbol_name(node->symb));
+      return NULL;
+    }
   } else {
     PANIC("expr todo! (%d)", node->type);
   }
@@ -662,7 +730,7 @@ static void print_expr(sbIrExpr *e) {
       printf("variable %zu", e->var->slot_id);
       break;
     case IR_E_FUNC:
-      printf("{ chunk %zu }", e->func->id);
+      printf("{ chunk %d }", e->func->id);
       break;
     case IR_E_VALUE:
       if (e->value.type == IT_NIL) {
@@ -699,6 +767,13 @@ static void print_expr(sbIrExpr *e) {
 
 static void print_stmt(sbIrStmt *s) {
   switch (s->type) {
+    case IR_S_ARG:
+      if (s->arg.last) {
+        printf("  bind last function argument to variable %zu\n", s->arg.var->slot_id);
+      } else {
+        printf("  bind function argument to variable %zu\n", s->arg.var->slot_id);
+      }
+      break;
     case IR_S_LABEL:
       printf("label %zu:\n", s->label->id);
       break;
