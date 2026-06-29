@@ -59,9 +59,9 @@ typedef struct tokenspelling {
 } tokenspelling;
 
 static sbAstNode NONE_SENTINEL_VALUE = {0};
-static sbAst NO_NODE = &NONE_SENTINEL_VALUE;
 static sbAstNode ERROR_SENTINEL_VALUE = { .type = AST_ERROR };
-static sbAst ERROR_NODE = &ERROR_SENTINEL_VALUE;
+sbAst NO_NODE = &NONE_SENTINEL_VALUE;
+sbAst ERROR_NODE = &ERROR_SENTINEL_VALUE;
 
 static tokenspelling token_spellings[] = {
   { T_NEWLINE, "newline" },
@@ -298,6 +298,7 @@ static sbAst unop_node(hParser pr, sbAstOp operation, sbAst child) {
     .type = AST_NODE_OP,
     .op.type = operation,
     .op.left = child,
+    .op.right = NO_NODE,
   };
   return new_node(pr, &n);
 }
@@ -335,6 +336,7 @@ static sbAst wrap_node(hParser pr, sbAstType type, sbAst left) {
   sbAstNode n = (sbAstNode) {
     .type = type,
     .seq.left = left,
+    .seq.right = NO_NODE,
   };
   return new_node(pr, &n);
 }
@@ -698,7 +700,8 @@ static sbAst parse_stmt(hParser pr) {
       sbLexToken t = peek_ahead(pr, 0);
       if (t.type == T_rIF) {
         /* else if ...as above... */
-        else_body = parse_stmt(pr);
+        /* (we pretend like the second 'if' is inside a block) */
+        else_body = seq_node(pr, AST_NODE_SEQ, parse_stmt(pr), NO_NODE);
       } else {
         else_body = parse_block(pr);
       }
@@ -733,7 +736,7 @@ static sbAst parse_stmt(hParser pr) {
     } else if (expect(pr, T_rUNTIL)) {
       /* repeat { ... } until */
       sbAst condition = parse_expr(pr, 0);
-      return seq_node(pr, AST_NODE_REPEAT, body, condition);
+      return seq_node(pr, AST_NODE_REPEAT, body, unop_node(pr, AST_OP_NOT, condition));
     } else {
       /* repeat { ... } # infinite loop */
       return seq_node(pr, AST_NODE_REPEAT, body, NO_NODE);

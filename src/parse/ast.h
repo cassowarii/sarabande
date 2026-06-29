@@ -1,3 +1,6 @@
+#ifndef __SARABANDE_AST_H__
+#define __SARABANDE_AST_H__
+
 #include "common.h"
 
 #include "data/value.h"
@@ -99,3 +102,8 @@ typedef struct sbAstNode {
 } sbAstNode;
 
 typedef sbAstNode *sbAst;
+
+extern sbAst NO_NODE;
+extern sbAst ERROR_NODE;
+
+#endif

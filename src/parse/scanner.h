@@ -7,6 +7,12 @@
 #include "token.h"
 #include "mem/mem.h"
 
+/* Phase 2 of the compiler.
+ * This takes the stream of single characters coming from filereader
+ * and groups them together into individual tokens which have a type.
+ * We recognize things like operators, identifiers, numbers, and
+ * strings here. */
+
 typedef struct sbScanner {
     sbLexToken next_token;
     hFileReader file_reader;

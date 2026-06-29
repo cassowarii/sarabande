@@ -4,6 +4,7 @@
 #include "data/string.h"
 #include "data/hashtable.h"
 #include "data/symbol.h"
+#include "compile/ir.h"
 #include "vm/exec.h"
 
 int main(int argc, char **argv) {
@@ -19,13 +20,27 @@ int main(int argc, char **argv) {
 
         if (parse_result == NULL) {
           fprintf(stderr, "fatal error: Could not open script '%s'\n", argv[1]);
+          return -2;
         } else if (parse_result->type == AST_ERROR) {
           fprintf(stderr, "fatal error: Could not run '%s' due to syntax errors.\n", argv[1]);
-        } else {
-          printf("wow! the syntax is good!\n");
+          return -1;
         }
 
+        /* syntax is valid, now try to compile */
+
+        sbIrProgram ir = {0};
+
+        sbIrProgram_initialize(&ir, 32768);
+
+        sbIrProgram_compile_ast(&ir, parse_result);
+
+        /* free AST, don't need it anymore */
         sbParser_deinitialize(&pr);
+
+        // print out program
+        sbIrProgram_print(&ir);
+
+        sbIrProgram_deinitialize(&ir);
 
         sbSymbol_sys_deinit();
         sbHash_sys_deinit();

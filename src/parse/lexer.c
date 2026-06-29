@@ -226,6 +226,7 @@ static flag block_header_can_end_after(sbTokenType type) {
         || type == T_FATARROW
         || type == T_SQUIGARROW
         || type == T_rCASE
+        || type == T_rREPEAT
         || type == T_ELLIPSIS
         || type == T_rDO;
 }
@@ -398,7 +399,11 @@ static void compute_next_token(hLexer lx) {
     }
 
     if (begins_brace_terminated_state(token.type)) {
-        brackets_stack_push(lx, 'B');
+        /* only start brace-terminated state if we are actually starting a new line,
+         * or if we are after an "else" (special case for else if) */
+        if (lx->last_token_seen.type == ';' || lx->last_token_seen.type == T_rELSE) {
+            brackets_stack_push(lx, 'B');
+        }
     }
 
     if (close_invisible_parens_before(token.type)) {
