@@ -56,7 +56,7 @@ typedef struct sbIrLabel {
 } sbIrLabel;
 
 typedef struct sbIrVariable {
-  usize created_index;
+  usize slot_id;
   usize first_appearance;
   usize last_appearance;
   usize assigned_index;
@@ -113,6 +113,7 @@ typedef struct sbIrChunk {
   usize id;
   usize label_count;
   usize variable_count;
+  usize lowest_var_id;
   sbBuffer stmts;
 } sbIrChunk;
 

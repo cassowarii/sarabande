@@ -46,7 +46,7 @@ void sbIrProgram_print(hIrProgram ir) {
 
   for (usize i = 0; i < nchunks; i++) {
     sbIrChunk *ck = ((sbIrChunk**)ir->chunks.data)[i];
-    printf("\nCHUNK %zu (%p)\n", ck->id, ck);
+    printf("\nCHUNK %zu with %zu variables\n", ck->id, ck->variable_count);
 
     usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
     for (usize j = 0; j < nstmts; j++) {
@@ -66,6 +66,14 @@ static sbIrChunk *new_chunk(hIrProgram ir) {
   sbBuffer_initialize(&chunk->stmts, 1024);
   chunk->id = nchunks;
   chunk->program = ir;
+
+  /* calculate how many variables are already in scope and then
+   * store this info in the chunk. we can use this for calculating
+   * which variables are upvalues, and also to know when certain
+   * variable slots can be reused due to lexical scope */
+  usize nvars = ir->varmapping.size / sizeof(varmapentry);
+  chunk->lowest_var_id = nvars;
+
   sbBuffer_append(&ir->chunks, &chunk, sizeof(sbIrChunk*));
   return chunk;
 }
@@ -78,9 +86,15 @@ static void chunk_deinitialize(hIrChunk ck) {
 static sbIrVariable *create_var(hIrChunk ck, const char *name, usize name_len) {
   sbIrVariable *new_var = sbArena_alloc(&ck->program->arena, sizeof(sbIrVariable));
 
-  ck->variable_count ++;
+  usize nvars = ck->program->varmapping.size / sizeof(varmapentry);
+
   *new_var = (sbIrVariable) {0};
-  new_var->created_index = ck->variable_count,
+  new_var->slot_id = nvars - ck->lowest_var_id + 1;
+  if (new_var->slot_id > ck->variable_count) {
+    /* store max variable slot count used so we know how many
+     * need to be allocated for our chunk */
+    ck->variable_count = new_var->slot_id;
+  }
 
   sbBuffer_append(&ck->program->varmapping, &(varmapentry) {
     .name = name,
@@ -215,6 +229,12 @@ static void put_jump(hIrChunk ck, flag inverted, sbIrExpr *condition, sbIrLabel 
     alias_label(last_stmt(ck)->label, label);
   }
 
+  if (condition && condition->type == IR_E_OP && condition->op.type == AST_OP_NOT) {
+    /* optimization: JUMP IF TRUE (NOT ...) can become JUMP IF FALSE (...) */
+    inverted = !inverted;
+    condition = condition->op.left;
+  }
+
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_JUMP,
     .jump.inverted = inverted,
@@ -297,7 +317,7 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
 }
 
 static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return) {
-  usize varmapsize = ck->program->varmapping.size;
+  usize lowest_var = ck->program->varmapping.size / sizeof(varmapentry);
 
   sbAst considering = seqast;
   while (considering != NO_NODE) {
@@ -312,23 +332,45 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
     considering = considering->seq.right;
   }
 
-  /* after the block is done, we need to reset the varmapping to not include
-   * any variables that were introduced inside this block */
-  sbBuffer_set_size(&ck->program->varmapping, varmapsize);
-
   if (implicit_return) {
     put_implicit_return(ck);
   }
 
+  /* remove extraneous statements, consolidate aliased labels */
   usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
-  for (usize i = 0; i < nstmts; i++) {
+  usize i = 0;
+  usize j = 0;
+  while (j < nstmts) {
+    flag delete = FALSE;
     sbIrStmt *s = ((sbIrStmt**)ck->stmts.data)[i];
     if (s->type == IR_S_JUMP) {
       while (s->jump.label->aliased_to) {
         s->jump.label = s->jump.label->aliased_to;
       }
+    } else if (s->type == IR_S_LABEL) {
+      if (s->label->aliased_to) delete = TRUE;
     }
+
+    if (delete) j++;
+    if (j == nstmts) break;
+    if (j > i) {
+      /* deleting a statement would leave a gap, so keep track of
+       * where we are with things that are deleted (j) and copy them
+       * backwards to the current position (i) */
+      sbIrStmt *t = ((sbIrStmt**)ck->stmts.data)[j];
+      *s = *t;
+    }
+
+    i++;
+    j++;
   }
+
+  /* now, i is the number of statements we were left with after deleting some */
+  sbBuffer_set_size(&ck->stmts, i * sizeof(sbIrStmt*));
+
+  /* after the block is done, we need to reset the varmapping to not include
+   * any variables that were introduced inside this block */
+  sbBuffer_set_size(&ck->program->varmapping, lowest_var * sizeof(varmapentry));
 }
 
 static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
@@ -617,7 +659,7 @@ static void print_expr(sbIrExpr *e) {
   printf("(");
   switch(e->type) {
     case IR_E_VAR:
-      printf("variable %zu", e->var->created_index);
+      printf("variable %zu", e->var->slot_id);
       break;
     case IR_E_FUNC:
       printf("{ chunk %zu }", e->func->id);
@@ -658,9 +700,7 @@ static void print_expr(sbIrExpr *e) {
 static void print_stmt(sbIrStmt *s) {
   switch (s->type) {
     case IR_S_LABEL:
-      if (!s->label->aliased_to) {
-        printf("label %zu:\n", s->label->id);
-      }
+      printf("label %zu:\n", s->label->id);
       break;
     case IR_S_JUMP:
       printf("  jump to label %zu", s->jump.label->id);
@@ -689,7 +729,7 @@ static void print_stmt(sbIrStmt *s) {
       printf("\n");
       break;
     case IR_S_ASSIGN:
-      printf("  variable %zu = ", s->assign.var->created_index);
+      printf("  variable %zu = ", s->assign.var->slot_id);
       print_expr(s->assign.expr);
       printf("\n");
       break;
