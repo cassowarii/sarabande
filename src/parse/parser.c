@@ -802,9 +802,9 @@ static sbAst parse_stmt(hParser pr) {
     if (expr == NO_NODE) return NO_NODE;
 
     if (expect(pr, T_DOUBLEPLUS)) {
-      expr = wrap_node(pr, AST_NODE_INCR, expr);
+      expr = unop_node(pr, AST_OP_INCR, expr);
     } else if (expect(pr, T_DOUBLEMINUS)) {
-      expr = wrap_node(pr, AST_NODE_DECR, expr);
+      expr = unop_node(pr, AST_OP_DECR, expr);
     } else {
       if (expect(pr, ',')) {
         /* (implicit return) a, b, c */

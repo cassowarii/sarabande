@@ -11,7 +11,7 @@ typedef struct varmapentry {
   sbIrVariable *var;
 } varmapentry;
 
-static void compile_ast_function(hIrChunk ck, sbAst seqast);
+static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst params, sbAst seqast);
 static sbIrChunk *new_chunk(hIrProgram ir);
 static void chunk_deinitialize(hIrChunk ck);
 static void print_stmt(sbIrStmt *s);
@@ -36,8 +36,9 @@ void sbIrProgram_deinitialize(hIrProgram ir) {
 }
 
 void sbIrProgram_compile_ast(hIrProgram ir, sbAst ast) {
-  sbIrChunk *ck = new_chunk(ir);
-  compile_ast_function(ck, ast);
+  /* compile a full program as like the body of a function
+   * with no parameters */
+  compile_ast_function(ir, NO_NODE, ast);
 }
 
 void sbIrProgram_print(hIrProgram ir) {
@@ -132,12 +133,34 @@ static sbIrExpr *expr_value(hIrChunk ck, hV *value) {
   });
 }
 
+static sbIrExpr *expr_func(hIrChunk ck, sbIrChunk *func) {
+  return new_expr(ck, &(sbIrExpr) {
+    .type = IR_E_FUNC,
+    .func = func,
+  });
+}
+
 static sbIrExpr *expr_op(hIrChunk ck, sbAstOp op, sbIrExpr *left, sbIrExpr *right) {
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_OP,
     .op.type = op,
     .op.left = left,
     .op.right = right,
+  });
+}
+
+static sbIrExpr *expr_call(hIrChunk ck, sbIrExpr *to_call, sbIrExpr *param) {
+  return new_expr(ck, &(sbIrExpr) {
+    .type = IR_E_CALL,
+    .call.func = to_call,
+    .call.param = param,
+  });
+}
+
+static sbIrExpr *expr_param(hIrChunk ck, sbIrExpr *value) {
+  return new_expr(ck, &(sbIrExpr) {
+    .type = IR_E_PARAM,
+    .param.this = value,
   });
 }
 
@@ -202,9 +225,24 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast);
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst exprast);
 static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node);
 
-static void compile_ast_function(hIrChunk ck, sbAst seqast) {
+static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seqast) {
+  sbIrChunk *ck = new_chunk(ir);
+
+  sbAst param_comma = paramsAst;
+  while (param_comma != NO_NODE) {
+    if (param_comma->seq.left->type != AST_NODE_NAME) {
+      fprintf(stderr, "Only variable names are permitted as function parameters!\n");
+      /* TODO: Actually... */
+      break;
+    }
+    const char *vname = sbSymbol_name(param_comma->seq.left->symb);
+    create_var(ck, vname, strlen(vname));
+    param_comma = param_comma->seq.right;
+  }
+
   compile_ast_stmtseq(ck, seqast);
   put_return(ck);
+  return ck;
 }
 
 static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
@@ -230,6 +268,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
   sbIrExpr *E1;
   sbIrLabel *L1, *L2;
   sbIrVariable *V1;
+  sbIrChunk *C1;
   sbAst N1, N2;
   switch (node->type) {
     case AST_NODE_LET:
@@ -279,6 +318,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
           N1 = N1->seq.right;
           N2 = N2->seq.right;
         }
+
         if (N1 != NO_NODE) {
           fprintf(stderr, "too many bindings on left side of assignment!");
         } else if (N2 != NO_NODE) {
@@ -299,6 +339,9 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
        * we need to convert them to the appropriate method calls.
        * Right now we don't have method calls, but eventually, we
        * will have them. */
+      /* Probably we should just call out to a "compile_ast_assign"
+       * function here which handles all that, and we could also call
+       * it from 'let'. */
       if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of assign!");
       if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of assign!");
       N1 = node->seq.left;  /* things to bind to */
@@ -316,6 +359,23 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
       } else if (N2 != NO_NODE) {
         fprintf(stderr, "too many values on right side of assignment!");
       }
+      break;
+
+    case AST_NODE_DEF:
+      /* DEF is like LET, except we are assigning a function value.
+       * TODO: I still need to think about how to handle function
+       * calling conventions / parameters with this variable system. */
+      if (node->seq.left->type != AST_NODE_NAME) PANIC("expected name for function in def!");
+      if (node->seq.right->type != AST_VAL_FUNC) PANIC("expected function body for function in def!");
+      sbAst func_node = node->seq.right;
+      if (func_node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival as function params!");
+      if (func_node->seq.right->type != AST_NODE_SEQ) PANIC("expected SEQ node as function body!");
+
+      const char *vname = sbSymbol_name(node->seq.left->symb);
+      V1 = create_var(ck, vname, strlen(vname));
+      C1 = compile_ast_function(ck->program, func_node->seq.left, func_node->seq.right);
+      E1 = expr_func(ck, C1);
+      put_assign(ck, V1, E1);
       break;
 
     case AST_NODE_WHILE:
@@ -436,7 +496,18 @@ static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node) {
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
   if (node == NO_NODE) return NULL;
 
-  if (node->type == AST_NODE_OP) {
+  if (node->type == AST_NODE_FUNCCALL) {
+    sbIrExpr *called = compile_ast_expr(ck, node->seq.left);
+    sbAst param_ast = node->seq.right;
+    sbIrExpr *param = NULL;
+    sbIrExpr **place_here = &param;
+    while (param_ast != NO_NODE) {
+      *place_here = expr_param(ck, compile_ast_expr(ck, param_ast->seq.left));
+      place_here = &(*place_here)->param.next;
+      param_ast = param_ast->seq.right;
+    }
+    return expr_call(ck, called, param);
+  } else if (node->type == AST_NODE_OP) {
     sbIrExpr *left = NULL, *right = NULL;
     if (node->op.left != NO_NODE) {
       left = compile_ast_expr(ck, node->op.left);
@@ -451,7 +522,7 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
     return expr_var(ck, compile_ast_var(ck, node));
   } else {
-    PANIC("todo!");
+    PANIC("expr todo! (%d)", node->type);
   }
 }
 
@@ -460,6 +531,9 @@ static void print_expr(sbIrExpr *e) {
   switch(e->type) {
     case IR_E_VAR:
       printf("variable %zu", e->var->created_index);
+      break;
+    case IR_E_FUNC:
+      printf("{ chunk %zu }", e->func->id);
       break;
     case IR_E_VALUE:
       if (e->value.type == IT_INTEGER) {
@@ -475,6 +549,17 @@ static void print_expr(sbIrExpr *e) {
         print_expr(e->op.right);
       }
       break;
+    case IR_E_CALL:
+      printf("CALL: ");
+      print_expr(e->call.func);
+      printf(" with params ");
+      sbIrExpr *param = e->call.param;
+      while (param) {
+        print_expr(param->param.this);
+        printf(",");
+        param = param->param.next;
+      }
+      break;
     default:
       printf("(something)");
   }
@@ -487,7 +572,7 @@ static void print_stmt(sbIrStmt *s) {
       printf("label %zu:\n", s->label->id);
       break;
     case IR_S_JUMP:
-      printf("jump to label %zu", s->jump.label->id);
+      printf("  jump to label %zu", s->jump.label->id);
       if (s->jump.condition) {
         if (s->jump.inverted) {
           printf(" if not ");
@@ -499,18 +584,19 @@ static void print_stmt(sbIrStmt *s) {
       printf("\n");
       break;
     case IR_S_RETURN:
-      printf("return\n");
+      printf("  return\n");
       break;
     case IR_S_EXPR:
+      printf("  ");
       print_expr(s->expr);
       printf("\n");
       break;
     case IR_S_ASSIGN:
-      printf("variable %zu = ", s->assign.var->created_index);
+      printf("  variable %zu = ", s->assign.var->created_index);
       print_expr(s->assign.expr);
       printf("\n");
       break;
     default:
-      printf("do something\n");
+      printf("  (do something)\n");
   }
 }

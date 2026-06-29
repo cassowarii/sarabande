@@ -44,6 +44,8 @@ typedef enum sbIrExprType {
   IR_E_OP,
   IR_E_VAR,
   IR_E_FUNC,
+  IR_E_CALL,
+  IR_E_PARAM,
 } sbIrExprType;
 
 typedef struct sbIrLabel {
@@ -76,6 +78,14 @@ typedef struct sbIrExpr {
       struct sbIrExpr *left;
       struct sbIrExpr *right;
     } op;
+    struct {
+      struct sbIrExpr *func;
+      struct sbIrExpr *param;
+    } call;
+    struct {
+      struct sbIrExpr *this;
+      struct sbIrExpr *next;
+    } param;
   };
 } sbIrExpr;
 
