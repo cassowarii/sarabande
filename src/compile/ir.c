@@ -239,11 +239,15 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
        *    LET a
        *    a = 3
        *
+       *    LET a, b = 5, 6
+       * linearizes to:
+       *    LET a, b
+       *    a = 5
+       *    b = 6
+       *
        * "LET a" doesn't actually appear in the output IR code,
        * but it allows us to interpret the name "a" inside the
        * current block to refer to a consistent variable slot.
-       * TODO: I need to add support for declaring multiple
-       * variables in one line.
        */
       if (node->seq.right == NO_NODE) {
         /* let ... */
@@ -284,6 +288,17 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
       break;
 
     case AST_NODE_ASSIGN:
+      /*
+       *    x, y, z = 1, 2, 3
+       * linearizes to
+       *    x = 1
+       *    y = 2
+       *    z = 3
+       *
+       * TODO: For things that are not straight variable names,
+       * we need to convert them to the appropriate method calls.
+       * Right now we don't have method calls, but eventually, we
+       * will have them. */
       if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of assign!");
       if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of assign!");
       N1 = node->seq.left;  /* things to bind to */
