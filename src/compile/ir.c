@@ -11,7 +11,7 @@ typedef struct varmapentry {
   sbIrVariable *var;
 } varmapentry;
 
-static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast);
+static void compile_ast_function(hIrChunk ck, sbAst seqast);
 static sbIrChunk *new_chunk(hIrProgram ir);
 static void chunk_deinitialize(hIrChunk ck);
 static void print_stmt(sbIrStmt *s);
@@ -37,7 +37,7 @@ void sbIrProgram_deinitialize(hIrProgram ir) {
 
 void sbIrProgram_compile_ast(hIrProgram ir, sbAst ast) {
   sbIrChunk *ck = new_chunk(ir);
-  compile_ast_stmtseq(ck, ast);
+  compile_ast_function(ck, ast);
 }
 
 void sbIrProgram_print(hIrProgram ir) {
@@ -198,8 +198,14 @@ static void put_return(hIrChunk ck) {
 }
 
 static void compile_ast_stmt(hIrChunk ck, sbAst stmtast);
+static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast);
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst exprast);
 static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node);
+
+static void compile_ast_function(hIrChunk ck, sbAst seqast) {
+  compile_ast_stmtseq(ck, seqast);
+  put_return(ck);
+}
 
 static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
   usize varmapsize = ck->program->varmapping.size;
@@ -212,7 +218,6 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
     }
 
     compile_ast_stmt(ck, considering->seq.left);
-    //put_return(ck);
     considering = considering->seq.right;
   }
 
@@ -225,6 +230,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
   sbIrExpr *E1;
   sbIrLabel *L1, *L2;
   sbIrVariable *V1;
+  sbAst N1, N2;
   switch (node->type) {
     case AST_NODE_LET:
       /*
@@ -239,23 +245,62 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
        * TODO: I need to add support for declaring multiple
        * variables in one line.
        */
-      if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of let!");
-      const char *vname = sbSymbol_name(node->seq.left->seq.left->symb);
-      V1 = create_var(ck, vname, strlen(vname));
-      if (node->seq.right != NO_NODE) {
+      if (node->seq.right == NO_NODE) {
+        /* let ... */
+        if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of let!");
+        N1 = node->seq.left;  /* things to bind to */
+        while (N1 != NO_NODE) {
+          if (N1->seq.left->type != AST_NODE_NAME) {
+            fprintf(stderr, "Only variable names are permitted after 'let'!\n");
+            break;
+          }
+          const char *vname = sbSymbol_name(N1->seq.left->symb);
+          V1 = create_var(ck, vname, strlen(vname));
+          N1 = N1->seq.right;
+        }
+      } else {
         /* let ... = ... */
         if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of let!");
-        E1 = compile_ast_expr(ck, node->seq.right->seq.left);
-        put_assign(ck, V1, E1);
+        N1 = node->seq.left;  /* things to bind to */
+        N2 = node->seq.right; /* values to assign */
+        while (N1 != NO_NODE && N2 != NO_NODE) {
+          if (N1->seq.left->type != AST_NODE_NAME) {
+            fprintf(stderr, "Only variable names are permitted on the left side of 'let'!\n");
+            break;
+          }
+          const char *vname = sbSymbol_name(N1->seq.left->symb);
+          V1 = create_var(ck, vname, strlen(vname));
+          E1 = compile_ast_expr(ck, N2->seq.left);
+          put_assign(ck, V1, E1);
+          N1 = N1->seq.right;
+          N2 = N2->seq.right;
+        }
+        if (N1 != NO_NODE) {
+          fprintf(stderr, "too many bindings on left side of assignment!");
+        } else if (N2 != NO_NODE) {
+          fprintf(stderr, "too many values on right side of assignment!");
+        }
       }
       break;
 
     case AST_NODE_ASSIGN:
       if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of assign!");
       if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of assign!");
-      V1 = compile_ast_var(ck, node->seq.left->seq.left);
-      E1 = compile_ast_expr(ck, node->seq.right->seq.left);
-      put_assign(ck, V1, E1);
+      N1 = node->seq.left;  /* things to bind to */
+      N2 = node->seq.right; /* values to assign */
+      while (N1 != NO_NODE && N2 != NO_NODE) {
+        V1 = compile_ast_var(ck, N1->seq.left);
+        E1 = compile_ast_expr(ck, N2->seq.left);
+        put_assign(ck, V1, E1);
+        N1 = N1->seq.right;
+        N2 = N2->seq.right;
+      }
+
+      if (N1 != NO_NODE) {
+        fprintf(stderr, "too many bindings on left side of assignment!");
+      } else if (N2 != NO_NODE) {
+        fprintf(stderr, "too many values on right side of assignment!");
+      }
       break;
 
     case AST_NODE_WHILE:

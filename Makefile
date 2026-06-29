@@ -14,6 +14,10 @@ build/a.out: $(OBJECTS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(SRC) $(OBJECTS) $(LIBS) -o $@
 
+.PHONY: parsedebug
+parsedebug: CFLAGS += -DPARSEDEBUG
+parsedebug: build/a.out
+
 $(OBJ)/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(LIBS) -I$(SRC) -c $< -o $@

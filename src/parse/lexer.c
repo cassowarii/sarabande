@@ -399,9 +399,9 @@ static void compute_next_token(hLexer lx) {
     }
 
     if (begins_brace_terminated_state(token.type)) {
-        /* only start brace-terminated state if we are actually starting a new line,
-         * or if we are after an "else" (special case for else if) */
-        if (lx->last_token_seen.type == ';' || lx->last_token_seen.type == T_rELSE) {
+        /* don't start brace-terminated state if we are directly after a '}' (otherwise it gets
+         * confused by things like repeat..until */
+        if (lx->last_token_seen.type != '}') {
             brackets_stack_push(lx, 'B');
         }
     }

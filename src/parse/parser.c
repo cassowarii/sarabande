@@ -201,6 +201,11 @@ static sbLexToken next_token(hParser pr) {
 
   sbLexToken t = peek_ahead(pr, 0);
 
+#ifdef PARSEDEBUG
+  fprint_token(stdout, t);
+  printf("\n");
+#endif
+
   return t;
 }
 
