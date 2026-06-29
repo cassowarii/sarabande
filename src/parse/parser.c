@@ -763,12 +763,16 @@ static sbAst parse_stmt(hParser pr) {
     sbAst body = parse_block(pr);
     return tri_node(pr, AST_NODE_MATCH, pattern, guard_clause, body);
   } else if (t.type == T_rLET) {
-    /* let a, b = ... */
     next_token(pr);
     sbAst bindings = parse_comma_exprs(pr, NULL);
-    if (!expect(pr, T_EQUALS)) return syntax_error(pr);
-    sbAst values = parse_comma_exprs(pr, NULL);
-    return seq_node(pr, AST_NODE_LET, bindings, values);
+    if (expect(pr, T_EQUALS)) {
+      /* let a, b = ... */
+      sbAst values = parse_comma_exprs(pr, NULL);
+      return seq_node(pr, AST_NODE_LET, bindings, values);
+    } else {
+      /* let a, b */
+      return seq_node(pr, AST_NODE_LET, bindings, NO_NODE);
+    }
   } else if (t.type == T_rDEF) {
     /* def a b, c { ... } */
     next_token(pr);
@@ -806,6 +810,11 @@ static sbAst parse_stmt(hParser pr) {
         /* a, b, c = 1, 2, 3 */
         next_token(pr);
         sbAst assigned_values = parse_comma_exprs(pr, 0);
+        if (expr->type != AST_NODE_MULTIVAL) {
+          /* if we have an = with one thing on the left side,
+           * wrap it in a multival anyway for consistency */
+          expr = seq_node(pr, AST_NODE_MULTIVAL, expr, NO_NODE);
+        }
         expr = seq_node(pr, AST_NODE_ASSIGN, expr, assigned_values);
       }
     }

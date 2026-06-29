@@ -5,10 +5,6 @@
 
 #include "mem/debug.h"
 
-#define IF_NOT 1
-#define IF_YES 0
-#define ALWAYS 0
-
 typedef struct varmapentry {
   const char *name;
   usize name_len;
@@ -24,6 +20,7 @@ void sbIrProgram_initialize(hIrProgram ir, usize initial_arena_size) {
   *ir = (sbIrProgram) {0};
   sbArena_initialize(&ir->arena, initial_arena_size);
   sbBuffer_initialize(&ir->chunks, 4096);
+  sbBuffer_initialize(&ir->varmapping, 4096);
 }
 
 void sbIrProgram_deinitialize(hIrProgram ir) {
@@ -103,6 +100,8 @@ static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
     }
   }
 
+  /* TODO do a different thing here */
+  fprintf(stderr, "unknown variable name! '%s'\n", name);
   return NULL;
 }
 
@@ -119,16 +118,10 @@ static sbIrExpr *new_expr(hIrChunk ck, sbIrExpr *expr) {
   return where_to_put;
 }
 
-static sbIrExpr *expr_var(hIrChunk ck, const char *name, usize name_len) {
-  sbIrVariable *var_by_name = var_name(ck, name, name_len);
-  /* TODO do a different thing */
-  if (!var_by_name) {
-    fprintf(stderr, "unknown variable name! '%s'\n", name);
-    return NULL;
-  }
+static sbIrExpr *expr_var(hIrChunk ck, sbIrVariable *var) {
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_VAR,
-    .var = var_by_name,
+    .var = var,
   });
 }
 
@@ -170,6 +163,18 @@ static void put_jump(hIrChunk ck, flag inverted, sbIrExpr *condition, sbIrLabel 
   });
 }
 
+static void put_jump_if_yes(hIrChunk ck, sbIrExpr *condition, sbIrLabel *label) {
+  put_jump(ck, 0, condition, label);
+}
+
+static void put_jump_if_no(hIrChunk ck, sbIrExpr *condition, sbIrLabel *label) {
+  put_jump(ck, 1, condition, label);
+}
+
+static void put_jump_unconditional(hIrChunk ck, sbIrLabel *label) {
+  put_jump(ck, 0, NULL, label);
+}
+
 static void put_expr(hIrChunk ck, sbIrExpr *expr) {
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_EXPR,
@@ -177,6 +182,7 @@ static void put_expr(hIrChunk ck, sbIrExpr *expr) {
   });
 }
 
+static void print_expr(sbIrExpr *e);
 static void put_assign(hIrChunk ck, sbIrVariable *assign_to, sbIrExpr *expr) {
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_ASSIGN,
@@ -193,6 +199,7 @@ static void put_return(hIrChunk ck) {
 
 static void compile_ast_stmt(hIrChunk ck, sbAst stmtast);
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst exprast);
+static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node);
 
 static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
   usize varmapsize = ck->program->varmapping.size;
@@ -205,6 +212,7 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
     }
 
     compile_ast_stmt(ck, considering->seq.left);
+    //put_return(ck);
     considering = considering->seq.right;
   }
 
@@ -213,10 +221,43 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
   sbBuffer_set_size(&ck->program->varmapping, varmapsize);
 }
 
-void compile_ast_stmt(hIrChunk ck, sbAst node) {
-  sbIrExpr *E1;//, *E2;
+static void compile_ast_stmt(hIrChunk ck, sbAst node) {
+  sbIrExpr *E1;
   sbIrLabel *L1, *L2;
+  sbIrVariable *V1;
   switch (node->type) {
+    case AST_NODE_LET:
+      /*
+       *    LET a = 3
+       * linearizes to:
+       *    LET a
+       *    a = 3
+       *
+       * "LET a" doesn't actually appear in the output IR code,
+       * but it allows us to interpret the name "a" inside the
+       * current block to refer to a consistent variable slot.
+       * TODO: I need to add support for declaring multiple
+       * variables in one line.
+       */
+      if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of let!");
+      const char *vname = sbSymbol_name(node->seq.left->seq.left->symb);
+      V1 = create_var(ck, vname, strlen(vname));
+      if (node->seq.right != NO_NODE) {
+        /* let ... = ... */
+        if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of let!");
+        E1 = compile_ast_expr(ck, node->seq.right->seq.left);
+        put_assign(ck, V1, E1);
+      }
+      break;
+
+    case AST_NODE_ASSIGN:
+      if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of assign!");
+      if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of assign!");
+      V1 = compile_ast_var(ck, node->seq.left->seq.left);
+      E1 = compile_ast_expr(ck, node->seq.right->seq.left);
+      put_assign(ck, V1, E1);
+      break;
+
     case AST_NODE_WHILE:
       /*
        *    WHILE condition { things }
@@ -233,14 +274,17 @@ void compile_ast_stmt(hIrChunk ck, sbAst node) {
        * to be handled by passing in labels to this
        * stmtseq. If we have no labels, we're not in
        * a loop, and should error. */
+      /* match continue / success jump can be handled
+       * the same way. Maybe we should have a "labels
+       * context" struct that captures all of these. */
       L1 = new_label(ck);
       L2 = new_label(ck);
       E1 = compile_ast_expr(ck, node->seq.left);
-      put_jump(ck, ALWAYS, NULL, L2);
+      put_jump_unconditional(ck, L2);
       put_label(ck, L1);
       compile_ast_stmtseq(ck, node->seq.right);
       put_label(ck, L2);
-      put_jump(ck, IF_YES, E1, L1);
+      put_jump_if_yes(ck, E1, L1);
       break;
 
     case AST_NODE_IF:
@@ -266,7 +310,7 @@ void compile_ast_stmt(hIrChunk ck, sbAst node) {
         /* no else branch */
         E1 = compile_ast_expr(ck, node->tri.left);
         L1 = new_label(ck);
-        put_jump(ck, IF_NOT, E1, L1);
+        put_jump_if_no(ck, E1, L1);
         compile_ast_stmtseq(ck, node->tri.center);
         put_label(ck, L1);
       } else {
@@ -274,9 +318,9 @@ void compile_ast_stmt(hIrChunk ck, sbAst node) {
         E1 = compile_ast_expr(ck, node->tri.left);
         L1 = new_label(ck);
         L2 = new_label(ck);
-        put_jump(ck, IF_NOT, E1, L1);
+        put_jump_if_no(ck, E1, L1);
         compile_ast_stmtseq(ck, node->tri.center);
-        put_jump(ck, ALWAYS, NULL, L2);
+        put_jump_unconditional(ck, L2);
         put_label(ck, L1);
         compile_ast_stmtseq(ck, node->tri.right);
         put_label(ck, L2);
@@ -305,17 +349,27 @@ void compile_ast_stmt(hIrChunk ck, sbAst node) {
         E1 = compile_ast_expr(ck, node->seq.right);
         put_label(ck, L1);
         compile_ast_stmtseq(ck, node->seq.left);
-        put_jump(ck, IF_YES, E1, L1);
+        put_jump_if_yes(ck, E1, L1);
       } else {
         put_label(ck, L1);
         compile_ast_stmtseq(ck, node->seq.left);
-        put_jump(ck, ALWAYS, NULL, L1);
+        put_jump_unconditional(ck, L1);
       }
       break;
 
     default:
       /* probably an expr node */
       put_expr(ck, compile_ast_expr(ck, node));
+  }
+}
+
+static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node) {
+  if (node->type == AST_NODE_NAME) {
+    return var_name(ck, sbSymbol_name(node->symb), strlen(sbSymbol_name(node->symb)));
+  } else {
+    /* TODO make errors not bad */
+    fprintf(stderr, "expecting a name at this point! (got %d)\n", node->type);
+    return NULL;
   }
 }
 
@@ -335,7 +389,7 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     return expr_value(ck, &HVINT(node->i));
   } else if (node->type == AST_NODE_NAME) {
     /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
-    return expr_var(ck, sbSymbol_name(node->symb), strlen(sbSymbol_name(node->symb)));
+    return expr_var(ck, compile_ast_var(ck, node));
   } else {
     PANIC("todo!");
   }
@@ -392,6 +446,10 @@ static void print_stmt(sbIrStmt *s) {
       printf("\n");
       break;
     case IR_S_ASSIGN:
+      printf("variable %zu = ", s->assign.var->created_index);
+      print_expr(s->assign.expr);
+      printf("\n");
+      break;
     default:
       printf("do something\n");
   }
