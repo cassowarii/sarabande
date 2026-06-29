@@ -50,6 +50,7 @@ typedef enum sbIrExprType {
 
 typedef struct sbIrLabel {
   flag found_yet;
+  struct sbIrLabel *aliased_to;
   usize id;
   usize block_position;
 } sbIrLabel;

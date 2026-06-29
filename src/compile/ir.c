@@ -106,6 +106,14 @@ static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
   return NULL;
 }
 
+static sbIrExpr SENTINEL_NIL_EXPR = {
+  .type = IR_E_VALUE,
+  .value = (hV) { .type = IT_NIL }
+};
+static sbIrExpr *NIL_EXPR = &SENTINEL_NIL_EXPR;
+static sbIrStmt SENTINEL_NO_STMT = {0};
+static sbIrStmt *NO_STMT = &SENTINEL_NO_STMT;
+
 static sbIrLabel *new_label(hIrChunk ck) {
   sbIrLabel *l = sbArena_alloc(&ck->program->arena, sizeof(sbIrLabel));
   ck->label_count ++;
@@ -170,7 +178,29 @@ static void put_ir_stmt(hIrChunk ck, sbIrStmt *stmt) {
   sbBuffer_append(&ck->stmts, &where_to_put, sizeof(sbIrStmt*));
 }
 
+static sbIrStmt *last_stmt(hIrChunk ck) {
+  usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
+  if (nstmts == 0) return NO_STMT;
+  return ((sbIrStmt**)ck->stmts.data)[nstmts - 1];
+}
+
+static void erase_last_stmt(hIrChunk ck) {
+  usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
+  if (nstmts == 0) return;
+  sbBuffer_set_size(&ck->stmts, (nstmts - 1) * sizeof(sbIrStmt*));
+}
+
+static void alias_label(sbIrLabel *l1, sbIrLabel *l2) {
+  l1->aliased_to = l2;
+}
+
 static void put_label(hIrChunk ck, sbIrLabel *l) {
+  if (last_stmt(ck)->type == IR_S_LABEL) {
+    /* two labels in a row can be consolidated. this isn't really an optimization,
+     * but it may improve consideration of other things */
+    alias_label(l, last_stmt(ck)->label);
+  }
+
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_LABEL,
     .label = l,
@@ -178,6 +208,13 @@ static void put_label(hIrChunk ck, sbIrLabel *l) {
 }
 
 static void put_jump(hIrChunk ck, flag inverted, sbIrExpr *condition, sbIrLabel *label) {
+  if (last_stmt(ck)->type == IR_S_LABEL && condition == NULL) {
+    /* optimization: a label immediately followed by an unconditional jump
+     * means we can consider the label to be equivalent to wherever
+     * the jump was to. */
+    alias_label(last_stmt(ck)->label, label);
+  }
+
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_JUMP,
     .jump.inverted = inverted,
@@ -214,14 +251,29 @@ static void put_assign(hIrChunk ck, sbIrVariable *assign_to, sbIrExpr *expr) {
   });
 }
 
-static void put_return(hIrChunk ck) {
+static void put_return(hIrChunk ck, sbIrExpr *e) {
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_RETURN,
+    .expr = e,
   });
 }
 
-static void compile_ast_stmt(hIrChunk ck, sbAst stmtast);
-static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast);
+static void put_implicit_return(hIrChunk ck) {
+  sbIrStmt *last_s = last_stmt(ck);
+  if (last_s->type == IR_S_RETURN) {
+    /* don't put additional returns directly after a return,
+     * that's silly */
+    return;
+  } else if (last_s->type == IR_S_EXPR) {
+    erase_last_stmt(ck);
+    put_return(ck, last_s->expr);
+  } else {
+    put_return(ck, NIL_EXPR);
+  }
+}
+
+static void compile_ast_stmt(hIrChunk ck, sbAst stmtast, flag implicit_return);
+static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return);
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst exprast);
 static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node);
 
@@ -240,12 +292,11 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
     param_comma = param_comma->seq.right;
   }
 
-  compile_ast_stmtseq(ck, seqast);
-  put_return(ck);
+  compile_ast_stmtseq(ck, seqast, TRUE);
   return ck;
 }
 
-static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
+static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return) {
   usize varmapsize = ck->program->varmapping.size;
 
   sbAst considering = seqast;
@@ -255,22 +306,55 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast) {
       PANIC("compile_ast_stmtseq expects a SEQ node! (received instead #%d)", seqast->type);
     }
 
-    compile_ast_stmt(ck, considering->seq.left);
+    flag is_last_stmt = (considering->seq.right == NO_NODE);
+
+    compile_ast_stmt(ck, considering->seq.left, implicit_return && is_last_stmt);
     considering = considering->seq.right;
   }
 
   /* after the block is done, we need to reset the varmapping to not include
    * any variables that were introduced inside this block */
   sbBuffer_set_size(&ck->program->varmapping, varmapsize);
+
+  if (implicit_return) {
+    put_implicit_return(ck);
+  }
+
+  usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
+  for (usize i = 0; i < nstmts; i++) {
+    sbIrStmt *s = ((sbIrStmt**)ck->stmts.data)[i];
+    if (s->type == IR_S_JUMP) {
+      while (s->jump.label->aliased_to) {
+        s->jump.label = s->jump.label->aliased_to;
+      }
+    }
+  }
 }
 
-static void compile_ast_stmt(hIrChunk ck, sbAst node) {
+static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
   sbIrExpr *E1;
   sbIrLabel *L1, *L2;
   sbIrVariable *V1;
   sbIrChunk *C1;
   sbAst N1, N2;
   switch (node->type) {
+    case AST_NODE_RETURN:
+      /*
+       *    RETURN a
+       * linearizes to:
+       *    RETURN a
+       * 
+       * OK, this one's pretty simple.
+       */
+      if (node->seq.left == NO_NODE) {
+        E1 = NULL;
+      } else {
+        /* TODO handle multival here */
+        E1 = compile_ast_expr(ck, node->seq.left->seq.left);
+      }
+      put_return(ck, E1);
+      break;
+
     case AST_NODE_LET:
       /*
        *    LET a = 3
@@ -402,7 +486,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
       E1 = compile_ast_expr(ck, node->seq.left);
       put_jump_unconditional(ck, L2);
       put_label(ck, L1);
-      compile_ast_stmtseq(ck, node->seq.right);
+      compile_ast_stmtseq(ck, node->seq.right, FALSE);
       put_label(ck, L2);
       put_jump_if_yes(ck, E1, L1);
       break;
@@ -431,7 +515,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
         E1 = compile_ast_expr(ck, node->tri.left);
         L1 = new_label(ck);
         put_jump_if_no(ck, E1, L1);
-        compile_ast_stmtseq(ck, node->tri.center);
+        compile_ast_stmtseq(ck, node->tri.center, implicit_return);
         put_label(ck, L1);
       } else {
         /* yes else branch */
@@ -439,10 +523,10 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
         L1 = new_label(ck);
         L2 = new_label(ck);
         put_jump_if_no(ck, E1, L1);
-        compile_ast_stmtseq(ck, node->tri.center);
+        compile_ast_stmtseq(ck, node->tri.center, implicit_return);
         put_jump_unconditional(ck, L2);
         put_label(ck, L1);
-        compile_ast_stmtseq(ck, node->tri.right);
+        compile_ast_stmtseq(ck, node->tri.right, implicit_return);
         put_label(ck, L2);
       }
       break;
@@ -468,11 +552,11 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node) {
       if (node->seq.right) {
         E1 = compile_ast_expr(ck, node->seq.right);
         put_label(ck, L1);
-        compile_ast_stmtseq(ck, node->seq.left);
+        compile_ast_stmtseq(ck, node->seq.left, FALSE);
         put_jump_if_yes(ck, E1, L1);
       } else {
         put_label(ck, L1);
-        compile_ast_stmtseq(ck, node->seq.left);
+        compile_ast_stmtseq(ck, node->seq.left, FALSE);
         put_jump_unconditional(ck, L1);
       }
       break;
@@ -507,6 +591,9 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
       param_ast = param_ast->seq.right;
     }
     return expr_call(ck, called, param);
+  } else if (node->type == AST_VAL_FUNC) {
+    sbIrChunk *func = compile_ast_function(ck->program, node->seq.left, node->seq.right);
+    return expr_func(ck, func);
   } else if (node->type == AST_NODE_OP) {
     sbIrExpr *left = NULL, *right = NULL;
     if (node->op.left != NO_NODE) {
@@ -527,7 +614,7 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
 }
 
 static void print_expr(sbIrExpr *e) {
-  printf("[ ");
+  printf("(");
   switch(e->type) {
     case IR_E_VAR:
       printf("variable %zu", e->var->created_index);
@@ -536,10 +623,12 @@ static void print_expr(sbIrExpr *e) {
       printf("{ chunk %zu }", e->func->id);
       break;
     case IR_E_VALUE:
-      if (e->value.type == IT_INTEGER) {
+      if (e->value.type == IT_NIL) {
+        printf("nil");
+      } else if (e->value.type == IT_INTEGER) {
         printf("%lld", e->value.integer);
       } else {
-        printf("(some value)");
+        printf("some value");
       }
       break;
     case IR_E_OP:
@@ -561,21 +650,23 @@ static void print_expr(sbIrExpr *e) {
       }
       break;
     default:
-      printf("(something)");
+      printf("something");
   }
-  printf(" ]");
+  printf(")");
 }
 
 static void print_stmt(sbIrStmt *s) {
   switch (s->type) {
     case IR_S_LABEL:
-      printf("label %zu:\n", s->label->id);
+      if (!s->label->aliased_to) {
+        printf("label %zu:\n", s->label->id);
+      }
       break;
     case IR_S_JUMP:
       printf("  jump to label %zu", s->jump.label->id);
       if (s->jump.condition) {
         if (s->jump.inverted) {
-          printf(" if not ");
+          printf(" unless ");
         } else {
           printf(" if ");
         }
@@ -584,7 +675,13 @@ static void print_stmt(sbIrStmt *s) {
       printf("\n");
       break;
     case IR_S_RETURN:
-      printf("  return\n");
+      printf("  return ");
+      if (s->expr) {
+        print_expr(s->expr);
+      } else {
+        printf("NOTHING");
+      }
+      printf("\n");
       break;
     case IR_S_EXPR:
       printf("  ");
