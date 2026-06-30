@@ -35,7 +35,7 @@ void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir) {
 void emit_arg(sbVmCompiler *cm, usize number) {
   printf("    arg %zu\n", number);
   u8 buf[9];
-  if (number < 256) {
+  if (number < 253) {
     buf[0] = number;
     sbVmCompiler_write_code(cm, buf, 1);
   } else if (number < 65536) {
@@ -79,10 +79,28 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
     EMIT(BC_NUMARG);
     EARG(chunk->num_args);
   }
+
+  EMIT(BC_ALLOC_VARS);
+  EARG(chunk->variable_count);
+
   for (int i = 0; i < nstmts; i++) {
     sbIrStmt *stmt = ((sbIrStmt**)chunk->stmts.data)[i];
-
     compile_stmt(cm, stmt);
+  }
+
+  /* Go back and fill in locations for forward jumps, whose
+   * positions we now know. */
+  usize nlabelpos = cm->label_positions.size / sizeof(struct labelpos);
+  for (int i = 0; i < nlabelpos; i++) {
+    struct labelpos lp = ((struct labelpos*)cm->label_positions.data)[i];
+    u8 location_bytes[4];
+    u32 position = lp.label->block_position;
+    printf("now we know that the jump at %d should go to %d\n", lp.offset - 2, position);
+    location_bytes[0] = (position >> 24) & 0xFF;
+    location_bytes[1] = (position >> 16) & 0xFF;
+    location_bytes[2] = (position >>  8) & 0xFF;
+    location_bytes[3] = (position >>  0) & 0xFF;
+    sbVmCompiler_overwrite_code_at(cm, lp.offset, location_bytes, 4);
   }
 }
 
@@ -91,6 +109,8 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
  * address, and say "please put the address of this label here later!" */
 void record_labelpos(sbVmCompiler *cm, sbIrLabel *label, u32 offset) {
   struct labelpos lp = {
+    .label = label,
+    .offset = offset,
   };
 
   sbBuffer_append(&cm->label_positions, &lp, sizeof(struct labelpos));
@@ -104,20 +124,28 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       EMIT(BC_POP);
       break;
     case IR_S_JUMP:
-      if (stmt->jump.label->found_yet) {
-        if (stmt->jump.condition == NULL) {
-          EMIT(BC_JMP);
+      if (stmt->jump.condition == NULL) {
+        EMIT(BC_JMP);
+      } else {
+        compile_expr(cm, stmt->jump.condition);
+        printf("%3zu ", sbVmCompiler_get_position(cm));
+        if (stmt->jump.inverted) {
+          EMIT(BC_JF);
         } else {
-          compile_expr(cm, stmt->jump.condition);
-          if (stmt->jump.inverted) {
-            EMIT(BC_JF);
-          } else {
-            EMIT(BC_JT);
-          }
+          EMIT(BC_JT);
         }
+      }
+      if (stmt->jump.label->found_yet) {
         EARG(stmt->jump.label->block_position);
       } else {
-        printf("haven't implemented forward jump yet!\n");
+        printf("<forward jump>\n");
+        EMIT(BC_VLONG_NUM);
+        /* we have to remember to come back and fill in the address later when we
+         * know where this label is! */
+        record_labelpos(cm, stmt->jump.label, sbVmCompiler_get_position(cm));
+        /* leave behind four zeroes at this offset that we can later put the
+         * address into */
+        EMIT(0, 0, 0, 0);
       }
       break;
     case IR_S_LABEL:

@@ -165,7 +165,7 @@ u64 get_param(hVm vm) {
 /* execute one instruction! wow! */
 void execute_instruction(hVm vm) {
   sbOpcode op = get_opcode(vm);
-  u32 param;
+  u64 param;
   hV *v, *w, res;
 
   switch (op) {
@@ -194,6 +194,9 @@ void execute_instruction(hVm vm) {
     case BC_LD_BLK:
       param = get_param(vm);
       push_stack(vm, &HVFUNC(param));
+      return;
+    case BC_LD_NIL:
+      push_stack(vm, &HVNIL);
       return;
     case BC_ST_VAR:
       param = get_param(vm);

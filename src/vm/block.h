@@ -43,6 +43,8 @@ void sbVmCompiler_deinitialize(sbVmCompiler *pb);
 
 void sbVmCompiler_write_code(sbVmCompiler *pb, const u8 *data, usize length);
 
+void sbVmCompiler_overwrite_code_at(sbVmCompiler *cm, usize offset, const u8 *data, usize length);
+
 usize sbVmCompiler_get_position(sbVmCompiler *cm);
 
 void sbVmCompiler_add_constant(sbVmCompiler *pb, hV *constant);

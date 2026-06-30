@@ -25,6 +25,11 @@ void sbVmCompiler_write_code(sbVmCompiler *cm, const u8 *data, usize length) {
   sbBuffer_append(&cm->bytecode, data, length);
 }
 
+void sbVmCompiler_overwrite_code_at(sbVmCompiler *cm, usize offset, const u8 *data, usize length) {
+  if (offset + length > cm->bytecode.size) PANIC("buffer overflow with overwrite_code_at!");
+  memcpy(&cm->bytecode.data[offset], data, length);
+}
+
 usize sbVmCompiler_get_position(sbVmCompiler *cm) {
   return cm->bytecode.size;
 }

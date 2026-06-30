@@ -14,7 +14,7 @@ hV sbV_sub(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     return sbV_int(sbInteger_diff(a->integer, b->integer));
   } else {
-    PANIC("todo");
+    PANIC("todo (subtract type %llu minus %llu)", a->type, b->type);
   }
 }
 

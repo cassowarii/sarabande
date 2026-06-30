@@ -7,6 +7,7 @@
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = OBJSL(s) })
 #define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
 #define HVFUNC(i) ((hV) { .type = IT_FUNCTION, .data = i })
+#define HVNIL ((hV) { .type = IT_NIL })
 
 typedef u64 hHash;
 typedef u64 hString;
