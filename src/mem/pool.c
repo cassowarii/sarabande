@@ -35,6 +35,9 @@ void sbPool_initialize(hPool pl, usize elem_size, usize block_size) {
   *pl = (sbPool) {0};
   pl->elem_size = elem_size;
   pl->block_size = block_size;
+  pl->block_ptr_capacity = 8;
+  pl->block_ptrs = calloc(pl->block_ptr_capacity, sizeof(void*));
+  pl->used_counts = calloc(pl->block_ptr_capacity, sizeof(u16));
   alloc_new_block(pl);
 }
 
