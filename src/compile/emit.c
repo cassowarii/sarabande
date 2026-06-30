@@ -102,6 +102,7 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
     location_bytes[3] = (position >>  0) & 0xFF;
     sbVmCompiler_overwrite_code_at(cm, lp.offset, location_bytes, 4);
   }
+  sbBuffer_set_size(&cm->label_positions, 0);
 }
 
 /* when compiling one line at a time, we don't know the position

@@ -356,7 +356,8 @@ void execute_instruction(hVm vm) {
       /* have to set new rstack space to 0 so we don't accidentally decrement
        * the ref count of variables from a previous stack frame (or of just garbage)  */
       memset(vm->rp, 0, param * sizeof(hV));
-      vm->rp += param * sizeof(hV);
+      /* we allocate one more variable at 0 for internal use */
+      vm->rp += (param + 1) * sizeof(hV);
       vm->fp->num_locals += param;
       return;
     case BC_LIST_GATHER:
