@@ -1,3 +1,6 @@
+#ifndef __SARABANDE_BLOCK_H__
+#define __SARABANDE_BLOCK_H__
+
 #include "common.h"
 
 #define TEST_VM_BLK(bc, cn) ((sbVmBlock) { \
@@ -9,10 +12,11 @@
 
 /* dynamic sized block that we can more easily add
  * things to while compiling */
-typedef struct sbVmPartialBlock {
+typedef struct sbVmCompiler {
   sbBuffer bytecode;
   sbBuffer constants;
-} sbVmPartialBlock;
+  sbBuffer label_positions;
+} sbVmCompiler;
 
 /* fixed size / frozen block of bytecode */
 typedef struct sbVmBlock {
@@ -31,15 +35,17 @@ typedef struct sbVmProgram {
 
 typedef usize sbBlockId;
 
-sbVmPartialBlock sbVmBlock_create(usize initial_bytecode_size, usize initial_constant_size);
+sbVmCompiler sbVmCompiler_create(usize initial_bytecode_size, usize initial_constant_size);
 
-void sbVmBlock_reset(sbVmPartialBlock *pb);
+void sbVmCompiler_reset(sbVmCompiler *pb);
 
-void sbVmBlock_deinitialize(sbVmPartialBlock *pb);
+void sbVmCompiler_deinitialize(sbVmCompiler *pb);
 
-void sbVmBlock_write_code(sbVmPartialBlock *pb, const u8 *data, usize length);
+void sbVmCompiler_write_code(sbVmCompiler *pb, const u8 *data, usize length);
 
-void sbVmBlock_add_constant(sbVmPartialBlock *pb, hV *constant);
+usize sbVmCompiler_get_position(sbVmCompiler *cm);
+
+void sbVmCompiler_add_constant(sbVmCompiler *pb, hV *constant);
 
 void sbVmProgram_initialize(sbVmProgram *pm, usize initial_arena_size);
 
@@ -48,4 +54,6 @@ void sbVmProgram_deinitialize(sbVmProgram *pm);
 /* finalize a partial-block and add it to the program.
  * copies the data, so the same partial-block object can be reset
  * and reused after calling this function. */
-sbBlockId sbVmProgram_add_block(sbVmProgram *pm, sbVmPartialBlock *pb);
+sbBlockId sbVmProgram_add_block(sbVmProgram *pm, sbVmCompiler *pb);
+
+#endif

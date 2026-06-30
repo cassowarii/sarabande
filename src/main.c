@@ -5,6 +5,7 @@
 #include "data/hashtable.h"
 #include "data/symbol.h"
 #include "compile/ir.h"
+#include "compile/emit.h"
 #include "vm/exec.h"
 
 int main(int argc, char **argv) {
@@ -45,8 +46,14 @@ int main(int argc, char **argv) {
           sbIrProgram_print(&ir);
         }
 
+        sbVmProgram pm;
+        sbVmProgram_initialize(&pm, 65536);
+
+        sbEmit_compile_program(&pm, &ir);
+
         sbIrProgram_deinitialize(&ir);
 
+        sbVmProgram_deinitialize(&pm);
         sbSymbol_sys_deinit();
         sbHash_sys_deinit();
         sbString_sys_deinit();
@@ -60,7 +67,7 @@ int main(int argc, char **argv) {
     sbVmProgram pm;
     sbVmProgram_initialize(&pm, 65536);
 
-    sbVmPartialBlock pb = sbVmBlock_create(4096, 4096);
+    sbVmCompiler pb = sbVmCompiler_create(4096, 4096);
 
     u8 code1[] = {
       BC_ALLOC_VARS, 0x02,           /* 0 1 */
@@ -84,12 +91,12 @@ int main(int argc, char **argv) {
       BC_HALT,
     };
 
-    sbVmBlock_add_constant(&pb, &HVINT(5));
-    sbVmBlock_add_constant(&pb, &HVINT(9));
+    sbVmCompiler_add_constant(&pb, &HVINT(5));
+    sbVmCompiler_add_constant(&pb, &HVINT(9));
 
-    sbVmBlock_write_code(&pb, code1, sizeof(code1));
+    sbVmCompiler_write_code(&pb, code1, sizeof(code1));
     sbVmProgram_add_block(&pm, &pb);
-    sbVmBlock_reset(&pb);
+    sbVmCompiler_reset(&pb);
 
     u8 code2[] = {
       BC_LD_CONST, 0x00,
@@ -97,11 +104,13 @@ int main(int argc, char **argv) {
       BC_RET,
     };
 
-    sbVmBlock_add_constant(&pb, &HVINT(7));
+    sbVmCompiler_add_constant(&pb, &HVINT(7));
 
-    sbVmBlock_write_code(&pb, code2, sizeof(code2));
+    sbVmCompiler_write_code(&pb, code2, sizeof(code2));
     sbVmProgram_add_block(&pm, &pb);
-    sbVmBlock_reset(&pb);
+    sbVmCompiler_reset(&pb);
+
+    sbVmCompiler_deinitialize(&pb);
 
     sbVm_execute(&vm, &pm);
 
@@ -110,6 +119,4 @@ int main(int argc, char **argv) {
       printf("%02X ", *p);
     }
     printf("\n");
-
-    sbVmBlock_deinitialize(&pb);
 }

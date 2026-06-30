@@ -2,31 +2,37 @@
 
 #define INITIAL_PROGRAM_BLOCK_SIZE 32
 
-sbVmPartialBlock sbVmBlock_create(usize initial_bytecode_size, usize initial_constant_size) {
-  sbVmPartialBlock pb = {0};
-  sbBuffer_initialize(&pb.bytecode, initial_bytecode_size);
-  sbBuffer_initialize(&pb.constants, initial_constant_size);
-  return pb;
+sbVmCompiler sbVmCompiler_create(usize initial_bytecode_size, usize initial_constant_size) {
+  sbVmCompiler cm = {0};
+  sbBuffer_initialize(&cm.bytecode, initial_bytecode_size);
+  sbBuffer_initialize(&cm.constants, initial_constant_size);
+  sbBuffer_initialize(&cm.label_positions, 1024);
+  return cm;
 }
 
-void sbVmBlock_reset(sbVmPartialBlock *pb) {
-  sbBuffer_reset(&pb->bytecode);
-  sbBuffer_reset(&pb->constants);
+void sbVmCompiler_reset(sbVmCompiler *cm) {
+  sbBuffer_reset(&cm->bytecode);
+  sbBuffer_reset(&cm->constants);
 }
 
-void sbVmBlock_deinitialize(sbVmPartialBlock *pb) {
-  sbBuffer_deinitialize(&pb->bytecode);
-  sbBuffer_deinitialize(&pb->constants);
+void sbVmCompiler_deinitialize(sbVmCompiler *cm) {
+  sbBuffer_deinitialize(&cm->bytecode);
+  sbBuffer_deinitialize(&cm->constants);
+  sbBuffer_deinitialize(&cm->label_positions);
 }
 
-void sbVmBlock_write_code(sbVmPartialBlock *pb, const u8 *data, usize length) {
-  sbBuffer_append(&pb->bytecode, data, length);
+void sbVmCompiler_write_code(sbVmCompiler *cm, const u8 *data, usize length) {
+  sbBuffer_append(&cm->bytecode, data, length);
 }
 
-void sbVmBlock_add_constant(sbVmPartialBlock *pb, hV *constant) {
+usize sbVmCompiler_get_position(sbVmCompiler *cm) {
+  return cm->bytecode.size;
+}
+
+void sbVmCompiler_add_constant(sbVmCompiler *cm, hV *constant) {
   sbV_retain(constant);
 
-  sbBuffer_append(&pb->constants, constant, sizeof(hV));
+  sbBuffer_append(&cm->constants, constant, sizeof(hV));
 }
 
 void sbVmProgram_initialize(sbVmProgram *pm, usize initial_arena_size) {
@@ -45,18 +51,18 @@ void sbVmProgram_deinitialize(sbVmProgram *pm) {
 /* finalize a partial-block and add it to the program.
  * copies the data, so the same partial-block object can be reset
  * and reused after calling this function. */
-sbBlockId sbVmProgram_add_block(sbVmProgram *pm, sbVmPartialBlock *pb) {
-  usize bytecode_length = pb->bytecode.size;
-  usize constants_length = pb->constants.size;
+sbBlockId sbVmProgram_add_block(sbVmProgram *pm, sbVmCompiler *cm) {
+  usize bytecode_length = cm->bytecode.size;
+  usize constants_length = cm->constants.size;
   while (bytecode_length % 8 != 0) bytecode_length ++;
 
   u8 *block_data = sbArena_alloc(&pm->arena, bytecode_length + constants_length);
 
   u8 *bytecode = &block_data[0];
-  memcpy(bytecode, pb->bytecode.data, bytecode_length);
+  memcpy(bytecode, cm->bytecode.data, bytecode_length);
 
   u8 *constants = &block_data[bytecode_length];
-  memcpy(constants, pb->constants.data, constants_length);
+  memcpy(constants, cm->constants.data, constants_length);
 
   sbVmBlock bk = {
     .bytecode = bytecode,

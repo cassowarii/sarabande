@@ -768,10 +768,9 @@ static void print_expr(sbIrExpr *e) {
 static void print_stmt(sbIrStmt *s) {
   switch (s->type) {
     case IR_S_ARG:
+      printf("  bind function argument to variable %zu\n", s->arg.var->slot_id);
       if (s->arg.last) {
-        printf("  bind last function argument to variable %zu\n", s->arg.var->slot_id);
-      } else {
-        printf("  bind function argument to variable %zu\n", s->arg.var->slot_id);
+        printf("  (no function arguments left on the stack now)\n");
       }
       break;
     case IR_S_LABEL:
