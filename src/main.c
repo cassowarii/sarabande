@@ -9,7 +9,7 @@
 #include "vm/exec.h"
 
 int main(int argc, char **argv) {
-    if (argc == 2) {
+    if (argc >= 2) {
         sbString_sys_init();
         sbHash_sys_init();
         sbSymbol_sys_init();
@@ -17,13 +17,26 @@ int main(int argc, char **argv) {
         sbParser pr;
         sbParser_initialize(&pr);
 
-        sbAst parse_result = sbParser_parse_file(&pr, argv[1]);
+        const char *filename;
+        flag debugmode = FALSE;
+        if (argc == 3 && sbstrncmp(argv[1], "-D", 2) == 0) {
+          filename = argv[2];
+          debugmode = TRUE;
+        } else if (argc == 2) {
+          filename = argv[1];
+        } else {
+          printf("usage: %s [-D] <filename>\n", argv[0]);
+          printf("usage:    -D = bytecode debugger\n");
+          return 0;
+        }
+
+        sbAst parse_result = sbParser_parse_file(&pr, filename);
 
         if (parse_result == NULL) {
-          fprintf(stderr, "fatal error: Could not open script '%s'\n", argv[1]);
+          fprintf(stderr, "fatal error: Could not open script '%s'\n", filename);
           return -2;
         } else if (parse_result->type == AST_ERROR) {
-          fprintf(stderr, "fatal error: Could not run '%s' due to syntax errors.\n", argv[1]);
+          fprintf(stderr, "fatal error: Could not run '%s' due to syntax errors.\n", filename);
           return -1;
         }
 
@@ -39,7 +52,7 @@ int main(int argc, char **argv) {
         sbParser_deinitialize(&pr);
 
         if (ir.error_count > 0) {
-          fprintf(stderr, "Could not run '%s' due to errors.\n", argv[1]);
+          fprintf(stderr, "Could not run '%s' due to errors.\n", filename);
           return -3;
         } else {
           // print out program
@@ -53,70 +66,23 @@ int main(int argc, char **argv) {
 
         sbIrProgram_deinitialize(&ir);
 
+        sbVm vm = {0};
+        sbVm_initialize(&vm, 1048576, 1048576, debugmode);
+
+        sbVm_execute(&vm, &pm);
+
+        printf("Stack result: ");
+        for (u8 *p = vm.stack; p < vm.sp; p++) {
+          printf("%02X ", *p);
+        }
+        printf("\n");
+
         sbVmProgram_deinitialize(&pm);
+        sbVm_deinitialize(&vm);
         sbSymbol_sys_deinit();
         sbHash_sys_deinit();
         sbString_sys_deinit();
     } else {
         fprintf(stderr, "please provide a file as input\n");
     }
-
-    sbVm vm = {0};
-    sbVm_initialize(&vm, 1048576, 1048576);
-
-    sbVmProgram pm;
-    sbVmProgram_initialize(&pm, 65536);
-
-    sbVmCompiler pb = sbVmCompiler_create(4096, 4096);
-
-    u8 code1[] = {
-      BC_ALLOC_VARS, 0x02,           /* 0 1 */
-      BC_LD_IMM, 0x00,    /* var1 = 0   2 3 */
-      BC_ST_VAR, 0x01,    /* ...        4 5 */
-      BC_LD_CONST, 0x01,  /* var0 = 9   6 7 */
-      BC_ST_VAR, 0x00,    /* ...        8 9 */
-      BC_LD_CONST, 0x00,  /* (LABEL) var1 += 5 ; 10 11 */
-      BC_LD_VAR, 0x01,    /* ... */
-      BC_OP_ADD,          /* ... */
-      BC_ST_VAR, 0x01,    /* ... */
-      BC_LD_VAR, 0x00,    /* var0 = var0 - 1 */
-      BC_OP_DECR,         /* ... */
-      BC_ST_VAR, 0x00,    /* ... */
-      BC_LD_VAR, 0x00,    /* if var0 != 0 */
-      BC_LD_IMM, 0x00,    /* ... */
-      BC_OP_EQ,           /* ... */
-      BC_JF, 0x0A,        /* ...then goto LABEL */
-      BC_LD_VAR, 0x01,    /* return var1 */
-      BC_LD_IMM, 0x01,    /* ... */
-      BC_HALT,
-    };
-
-    sbVmCompiler_add_constant(&pb, &HVINT(5));
-    sbVmCompiler_add_constant(&pb, &HVINT(9));
-
-    sbVmCompiler_write_code(&pb, code1, sizeof(code1));
-    sbVmProgram_add_block(&pm, &pb);
-    sbVmCompiler_reset(&pb);
-
-    u8 code2[] = {
-      BC_LD_CONST, 0x00,
-      BC_OP_ADD,
-      BC_RET,
-    };
-
-    sbVmCompiler_add_constant(&pb, &HVINT(7));
-
-    sbVmCompiler_write_code(&pb, code2, sizeof(code2));
-    sbVmProgram_add_block(&pm, &pb);
-    sbVmCompiler_reset(&pb);
-
-    sbVmCompiler_deinitialize(&pb);
-
-    sbVm_execute(&vm, &pm);
-
-    printf("Stack result: ");
-    for (u8 *p = vm.stack; p < vm.sp; p++) {
-      printf("%02X ", *p);
-    }
-    printf("\n");
 }

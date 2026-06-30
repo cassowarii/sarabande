@@ -348,6 +348,7 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
     sbBuffer_append(&arg_vars, &v1, sizeof(sbIrVariable*));
     v1->initialized = TRUE;
     param_comma = param_comma->seq.right;
+    ck->num_args ++;
   }
 
   while (arg_vars.size > 0) {

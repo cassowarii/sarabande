@@ -5,7 +5,7 @@
 void call_block(hVm vm, usize block_id);
 void execute_instruction(hVm vm);
 
-void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize) {
+void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
   *vm = (sbVm) {0};
   vm->stack = malloc(stacksize);
   vm->stacksize = stacksize;
@@ -15,6 +15,8 @@ void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize) {
   vm->sp = vm->stack;
   vm->fp = (sbVmStackFrame*)vm->rstack;
   vm->rp = vm->rstack;
+
+  vm->debugmode = debugmode;
 }
 
 void sbVm_deinitialize(hVm vm) {
@@ -33,6 +35,13 @@ sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm) {
 
   while (vm->running) {
     execute_instruction(vm);
+    if (vm->debugmode) {
+      printf("Stack: ");
+      for (u8 *p = vm->stack; p < vm->sp; p++) {
+        printf("%02X ", *p);
+      }
+      printf("\n");
+    }
   }
 
   return VM_STAT_SUCCESS;
@@ -62,9 +71,14 @@ void return_from_block(hVm vm) {
 
   sbVmStackFrame *frame = (sbVmStackFrame*)vm->fp;
 
-  vm->fp = frame->last_fp;
-  vm->rp = frame->last_rp;
-  vm->ip = frame->return_addr;
+  if (frame->return_addr == NULL) {
+    /* returning to address 0 means quit */
+    vm->running = FALSE;
+  } else {
+    vm->fp = frame->last_fp;
+    vm->rp = frame->last_rp;
+    vm->ip = frame->return_addr;
+  }
 }
 
 void debug_print_hv(const hV *value) {
@@ -177,6 +191,10 @@ void execute_instruction(hVm vm) {
     case BC_LD_UPVAL:
       /* Hey, was there upval in there? */
       PANIC("todo");
+    case BC_LD_BLK:
+      param = get_param(vm);
+      push_stack(vm, &HVFUNC(param));
+      return;
     case BC_ST_VAR:
       param = get_param(vm);
       v = peek_stack(vm, 0);
@@ -185,6 +203,22 @@ void execute_instruction(hVm vm) {
       return;
     case BC_ST_UPVAL:
       PANIC("todo");
+    case BC_ST_ARG:
+      param = get_param(vm);
+      v = pop_stack(vm); /* argument count */
+      if (v->type != IT_INTEGER) {
+        /* internal error! this should be generated correctly */
+        PANIC("calling convention violation: number of args should be an integer");
+      }
+      w = pop_stack(vm); /* argument value */
+      store_local(vm, param, w);
+      /* we track the number of arguments remaining, for variadic functions later */
+      v->integer --;
+      if (v->integer > 0) {
+        /* if last integer, don't put the 0 count back on the stack */
+        push_stack(vm, v);
+      }
+      return;
     case BC_POP:
       v = pop_stack(vm);
       return;
@@ -194,7 +228,25 @@ void execute_instruction(hVm vm) {
       return;
     case BC_CALL:
       v = pop_stack(vm);
-      call_block(vm, v->integer);
+      if (v->type != IT_FUNCTION) {
+        /* We need to figure out exception support or some such.
+         * User error should not panic. */
+        PANIC("attempt to call a non-function value");
+      }
+      call_block(vm, v->data);
+      return;
+    case BC_NUMARG:
+      param = get_param(vm);
+      v = pop_stack(vm);
+      if (v->type != IT_INTEGER) {
+        /* internal error! this should be generated correctly */
+        PANIC("calling convention violation: number of args should be an integer");
+      }
+      if (v->integer != param) {
+        /* This should be an exception. */
+        PANIC("wrong number of arguments passed to function.");
+      }
+      push_stack(vm, v);
       return;
     case BC_JMP:
       param = get_param(vm);
@@ -233,6 +285,20 @@ void execute_instruction(hVm vm) {
       } else {
         push_stack(vm, &HVBOOL(FALSE));
       }
+      return;
+    case BC_OP_LT:
+      v = peek_stack(vm, 1);
+      w = peek_stack(vm, 0);
+      res = sbV_lt(v, w);
+      npop_stack(vm, 2);
+      push_stack(vm, &res);
+      return;
+    case BC_OP_LE:
+      v = peek_stack(vm, 1);
+      w = peek_stack(vm, 0);
+      res = sbV_le(v, w);
+      npop_stack(vm, 2);
+      push_stack(vm, &res);
       return;
     case BC_OP_ADD:
       v = peek_stack(vm, 1);
@@ -295,8 +361,8 @@ void execute_instruction(hVm vm) {
       PANIC("todo");
     case BC_LONG_NUM:
     case BC_VLONG_NUM:
-      PANIC("illegal opcode $%02X at position $%08zX\n", op, (usize)vm->ip);
+      PANIC("illegal opcode $%02X at position $%016zX", op, (usize)vm->ip);
     default:
-      PANIC("unrecognized opcode $%02X at position $%08zX\n", op, (usize)vm->ip);
+      PANIC("unrecognized opcode $%02X at position $%016zX", op, (usize)vm->ip);
   }
 }

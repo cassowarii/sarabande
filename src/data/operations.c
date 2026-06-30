@@ -6,7 +6,7 @@ hV sbV_add(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     return sbV_int(sbInteger_sum(a->integer, b->integer));
   } else {
-    PANIC("todo");
+    PANIC("todo (add type %llu and type %llu)", a->type, b->type);
   }
 }
 
@@ -55,5 +55,29 @@ hV sbV_eq(const hV *a, const hV *b) {
     return HVBOOL(TRUE);
   } else {
     return HVBOOL(FALSE);
+  }
+}
+
+hV sbV_lt(const hV *a, const hV *b) {
+  if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
+    if (a->integer < b->integer) {
+      return HVBOOL(TRUE);
+    } else {
+      return HVBOOL(FALSE);
+    }
+  } else {
+    PANIC("todo");
+  }
+}
+
+hV sbV_le(const hV *a, const hV *b) {
+  if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
+    if (a->integer <= b->integer) {
+      return HVBOOL(TRUE);
+    } else {
+      return HVBOOL(FALSE);
+    }
+  } else {
+    PANIC("todo");
   }
 }

@@ -6,6 +6,7 @@
 #define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = OBJSL(s) })
 #define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
+#define HVFUNC(i) ((hV) { .type = IT_FUNCTION, .data = i })
 
 typedef u64 hHash;
 typedef u64 hString;
@@ -37,6 +38,7 @@ typedef struct hV {
     hInteger integer;
     u64 boolean;
     double float_val;
+    u64 data;
   };
 } hV;
 
@@ -47,6 +49,7 @@ hV sbV_float(double fl);
 hV sbV_hash(hHash hash);
 hV sbV_int(hInteger i);
 hV sbV_boolean(flag b);
+hV sbV_function(u64 id);
 
 flag sbV_c_eq(const hV *a, const hV *b);
 flag sbV_c_falsy(const hV *a);

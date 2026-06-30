@@ -117,6 +117,8 @@ struct sbIrProgram;
 typedef struct sbIrChunk {
   struct sbIrProgram *program;
   i32 id;
+  i16 num_args;
+  flag variadic;
   i32 label_count;
   i32 variable_count;
   i32 lowest_var_id;

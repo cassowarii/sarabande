@@ -51,6 +51,13 @@ hV sbV_int(hInteger i) {
   };
 }
 
+hV sbV_function(u64 id) {
+  return (hV) {
+    .type = IT_FUNCTION,
+    .data = id,
+  };
+}
+
 flag sbV_c_eq(const hV *a, const hV *b) {
   if (a->type != b->type) return FALSE;
   if (a->type == ITX_TOMBSTONE || b->type == ITX_TOMBSTONE) return FALSE;

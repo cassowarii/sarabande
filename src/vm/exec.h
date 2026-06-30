@@ -65,11 +65,12 @@ typedef struct sbVm {
 
   sbVmProgram *program;
   flag running;
+  flag debugmode;
 } sbVm;
 
 typedef sbVm *hVm;
 
-void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize);
+void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode);
 
 void sbVm_deinitialize(hVm vm);
 
