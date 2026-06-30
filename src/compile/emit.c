@@ -32,19 +32,26 @@ void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir) {
 
 /* --- */
 
-void emit_arg(sbVmCompiler *cm, usize number) {
-  printf("    arg %zu\n", number);
+void emit_arg(sbVmCompiler *cm, i64 actual_number) {
+  printf("    arg %lld\n", actual_number);
   u8 buf[9];
-  if (number < 253) {
+  u64 number = actual_number;
+  if (0 <= actual_number && actual_number < 253) {
     buf[0] = number;
     sbVmCompiler_write_code(cm, buf, 1);
-  } else if (number < 65536) {
+  } else if (-32768 < actual_number && actual_number < 32768) {
     buf[0] = BC_LONG_NUM;
+    if (actual_number < 0) {
+      number = actual_number + 65536;
+    }
     buf[1] = number >> 8;
     buf[2] = number & 0xFF;
     sbVmCompiler_write_code(cm, buf, 3);
-  } else if (number < (1LL << 32)) {
+  } else if (-(1L << 31) < actual_number && actual_number < (1L << 31)) {
     buf[0] = BC_VLONG_NUM;
+    if (actual_number < 0) {
+      number = actual_number + (1LL << 32);
+    }
     buf[1] = (number >> 24) & 0xFF;;
     buf[2] = (number >> 16) & 0xFF;
     buf[3] = (number >> 8)  & 0xFF;
@@ -52,6 +59,7 @@ void emit_arg(sbVmCompiler *cm, usize number) {
     sbVmCompiler_write_code(cm, buf, 5);
   } else {
     buf[0] = BC_VVLONG_NUM;
+    number = (u64)actual_number;
     buf[1] = (number >> 56) & 0xFF;;
     buf[2] = (number >> 48) & 0xFF;;
     buf[3] = (number >> 40) & 0xFF;;
@@ -80,8 +88,10 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
     EARG(chunk->num_args);
   }
 
-  EMIT(BC_ALLOC_VARS);
-  EARG(chunk->variable_count);
+  if (chunk->variable_count > 0) {
+    EMIT(BC_ALLOC_VARS);
+    EARG(chunk->variable_count);
+  }
 
   for (int i = 0; i < nstmts; i++) {
     sbIrStmt *stmt = ((sbIrStmt**)chunk->stmts.data)[i];
@@ -209,11 +219,17 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
     case IR_E_VALUE:
       if (expr->value.type == IT_NIL) {
         EMIT(BC_LD_NIL);
-      } else if (expr->value.type == IT_INTEGER) {
+      } else if (expr->value.type == IT_BOOLEAN && expr->value.boolean) {
+        EMIT(BC_LD_TRUE);
+      } else if (expr->value.type == IT_BOOLEAN) {
+        EMIT(BC_LD_FALSE);
+      } else if (expr->value.type == IT_INTEGER && expr->value.integer < (2 << 16)) {
         EMIT(BC_LD_IMM);
         EARG(expr->value.integer);
       } else {
-        printf("(some value)\n");
+        u32 constant_index = sbVmCompiler_add_constant(cm, &expr->value);
+        EMIT(BC_LD_CONST);
+        EARG(constant_index);
       }
       break;
     default:

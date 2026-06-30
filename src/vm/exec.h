@@ -52,13 +52,13 @@ typedef struct sbVmStackFrame {
 } sbVmStackFrame;
 
 typedef struct sbVm {
-  u8 *stack;        /* for calculations */
-  u8 *rstack;       /* for locals and return addresses, like FORTH */
+  u8 *stack;          /* for calculations */
+  u8 *rstack;         /* for locals and return addresses, like FORTH */
 
-  const u8 *ip;     /* instruction pointer */
+  const u8 *ip;       /* instruction pointer */
   sbVmStackFrame *fp; /* frame pointer */
-  u8 *sp;           /* stack pointer */
-  u8 *rp;           /* rstack pointer */
+  u8 *sp;             /* stack pointer */
+  u8 *rp;             /* rstack pointer */
 
   usize stacksize;    /* to detect overflow, save these */
   usize rstacksize;   /* ^^ */

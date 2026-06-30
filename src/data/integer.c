@@ -80,7 +80,10 @@ hInteger sbInteger_diff(hInteger a, hInteger b) {
 
 hInteger sbInteger_mul(hInteger a, hInteger b) {
   if (!is_bigint(a) && !is_bigint(b)) {
-    if (b < SARABANDE_INT_MAX / a && b > SARABANDE_INT_MIN / a) {
+    flag zero_ok = (a == 0);
+    flag pos_ok = (a > 0 && b < SARABANDE_INT_MAX / a && b > SARABANDE_INT_MIN / a);
+    flag neg_ok = (a < 0 && b < SARABANDE_INT_MIN / a && b > SARABANDE_INT_MAX / a);
+    if (zero_ok || pos_ok || neg_ok) {
       return sbInteger_new(a * b);
     }
   }
@@ -97,7 +100,10 @@ hInteger sbInteger_floordiv(hInteger a, hInteger b) {
 /* --- */
 
 flag is_bigint(hInteger n) {
-  return (n & FLAG_BIGINT);
+  /* bigint flag is the second bit after the sign bit, normally for smaller
+   * numbers this bit is equal to the sign bit, so we see if it's NOT equal
+   * as a flag that a number is a bigint */
+  return (n > 0 && (n & FLAG_BIGINT)) || (n < 0 && !(n & FLAG_BIGINT));
 }
 
 static intblk *alloc_new_block() {

@@ -199,6 +199,59 @@ static usize read_symbol(hScanner sc) {
     return token_size;
 }
 
+static void read_integer(hScanner sc, sbLexToken *new_token, flag negative) {
+    new_token->type = T_INTEGER;
+
+    i64 intval = 0;
+    int base = 10;
+    int num_done = FALSE;
+    char ch = PEEK;
+
+    if (ch == '0') {
+        /* skip a leading zero, and see if it has some base indicator */
+        ch = NEXT;
+        if (ch == 'b') {
+            ch = NEXT;
+            base = 2;
+        } else if (ch == 'o') {
+            ch = NEXT;
+            base = 8;
+        } else if (ch == 'x') {
+            ch = NEXT;
+            base = 16;
+        } else if (is_space(ch) || ch == '\n') {
+            /* it was literally just the number 0 (probably) */
+            num_done = TRUE;
+        } else {
+            new_token->type = T_BADNUMBER;
+            num_done = TRUE;
+        }
+    }
+
+    if (!num_done) {
+        do {
+            /* TODO: promote to bigint, don't allow overflow */
+            intval *= base;
+            intval += base_digit_value(ch);
+            do {
+                /* skip over underscores in numeric literals */
+                ch = NEXT;
+            } while (ch == '_');
+        } while (is_base_digit(ch, base));
+
+        /* if we are now looking at still a character that's a letter or digit, throw error */
+        if (is_digit(ch) || is_alpha(ch)) {
+            new_token->type = T_BADNUMBER;
+            NEXT;
+        } else {
+            new_token->i = intval;
+            if (negative) {
+              new_token->i *= -1;
+            }
+        }
+    }
+}
+
 static sbLexToken compute_next_token(hScanner sc) {
     int ch_int = PEEK;
     unsigned char ch = (unsigned char)ch_int;
@@ -359,6 +412,9 @@ static sbLexToken compute_next_token(hScanner sc) {
         } else if (ch == '=') {
             new_token.type = T_MINUSEQUALS;
             NEXT;
+        } else if (is_digit(ch)) {
+            /* negative number literal */
+            read_integer(sc, &new_token, TRUE);
         } else {
             new_token.type = T_MINUS;
         }
@@ -448,52 +504,7 @@ static sbLexToken compute_next_token(hScanner sc) {
         new_token.symb = sbSymbol_from_bytes(sc->dynamic_buffer.data, sc->dynamic_buffer.size - 1);
         new_token.size = token_size;
     } else if (is_digit(ch)) {
-        new_token.type = T_INTEGER;
-
-        i64 intval = 0;
-        int base = 10;
-        int num_done = FALSE;
-
-        if (ch == '0') {
-            /* skip a leading zero, and see if it has some base indicator */
-            ch = NEXT;
-            if (ch == 'b') {
-                ch = NEXT;
-                base = 2;
-            } else if (ch == 'o') {
-                ch = NEXT;
-                base = 8;
-            } else if (ch == 'x') {
-                ch = NEXT;
-                base = 16;
-            } else if (is_space(ch) || ch == '\n') {
-                /* it was literally just the number 0 (probably) */
-                num_done = TRUE;
-            } else {
-                new_token.type = T_BADNUMBER;
-                num_done = TRUE;
-            }
-        }
-
-        if (!num_done) {
-            do {
-                /* TODO: promote to bigint, don't allow overflow */
-                intval *= base;
-                intval += base_digit_value(ch);
-                do {
-                    /* skip over underscores in numeric literals */
-                    ch = NEXT;
-                } while (ch == '_');
-            } while (is_base_digit(ch, base));
-
-            /* if we are now looking at still a character that's a letter or digit, throw error */
-            if (is_digit(ch) || is_alpha(ch)) {
-                new_token.type = T_BADNUMBER;
-                NEXT;
-            } else {
-                new_token.i = intval;
-            }
-        }
+        read_integer(sc, &new_token, FALSE);
     } else {
         new_token.type = T_ERROR;
         NEXT;

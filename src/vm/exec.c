@@ -117,7 +117,17 @@ hV *peek_stack(hVm vm, usize offset) {
 }
 
 sbOpcode get_opcode(hVm vm) {
+  if (vm->ip >= vm->fp->block->bytecode_end) PANIC("execution outside defined code area");
   return *(vm->ip++);
+}
+
+void next_byte(hVm vm, u64 *result) {
+  u8 byte = *(vm->ip++);
+#ifdef DEBUG
+  if (vm->debugmode) printf("%02X ", byte);
+#endif
+  *result <<= 8;
+  *result |= byte;
 }
 
 /* small numbers that are parameters to opcodes can
@@ -126,84 +136,89 @@ sbOpcode get_opcode(hVm vm) {
  * 32 bit scale can be FD + bytebytebytebyte,
  * 64 bit can be FE + bytebytebytebytebytebytebytebyte,
  * in big-endian format */
-u64 get_param(hVm vm) {
+i64 get_param(hVm vm) {
   u64 result = *((u8*)vm->ip++);
+#ifdef DEBUG
+  if (vm->debugmode) printf("%02llX ", result);
+#endif
+  i64 signed_result = result;
 
   if (result == BC_LONG_NUM) {
-    result = *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
+    result = 0;
+    next_byte(vm, &result);
+    next_byte(vm, &result);
+    signed_result = result;
+    if (result > (1 << 15)) signed_result = result - (1 << 16);
   } else if (result == BC_VLONG_NUM) {
-    result = *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
+    printf("here now\n");
+    result = 0;
+    next_byte(vm, &result); // 0
+    next_byte(vm, &result); // 1
+    next_byte(vm, &result); // 2
+    next_byte(vm, &result); // 3
+    signed_result = result;
+    if (result > (1L << 31)) signed_result = result - (1L << 32);
   } else if (result == BC_VVLONG_NUM) {
-    result = *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
-    result <<= 8;
-    result |= *(vm->ip++);
+    result = 0;
+    next_byte(vm, &result); // 0
+    next_byte(vm, &result); // 1
+    next_byte(vm, &result); // 2
+    next_byte(vm, &result); // 3
+    next_byte(vm, &result); // 4
+    next_byte(vm, &result); // 5
+    next_byte(vm, &result); // 6
+    next_byte(vm, &result); // 7
+    signed_result = (i64)result;
   }
 
-  return result;
+  return signed_result;
 }
 
 /* execute one instruction! wow! */
 void execute_instruction(hVm vm) {
   sbOpcode op = get_opcode(vm);
+#ifdef DEBUG
+  if (vm->debugmode) printf("op %02X ", op);
+#endif
   u64 param;
   hV *v, *w, res;
 
   switch (op) {
     case BC_NOP:
-      return;
+      break;
     case BC_HALT:
       vm->running = FALSE;
-      return;
+      break;
     case BC_LD_IMM:
       param = get_param(vm);
       push_stack(vm, &HVINT(param));
-      return;
+      break;
     case BC_LD_CONST:
       param = get_param(vm);
       push_stack(vm, &vm->fp->block->constants[param]);
-      return;
+      break;
     case BC_LD_CTX:
       PANIC("todo");
     case BC_LD_VAR:
       param = get_param(vm);
       push_stack(vm, &vm->fp->locals[param]);
-      return;
+      break;
     case BC_LD_UPVAL:
       /* Hey, was there upval in there? */
       PANIC("todo");
     case BC_LD_BLK:
       param = get_param(vm);
       push_stack(vm, &HVFUNC(param));
-      return;
+      break;
     case BC_LD_NIL:
       push_stack(vm, &HVNIL);
-      return;
+      break;
     case BC_ST_VAR:
       param = get_param(vm);
       v = peek_stack(vm, 0);
       store_local(vm, param, v);
       pop_stack(vm);
-      return;
+      break;
     case BC_ST_UPVAL:
       PANIC("todo");
     case BC_ST_ARG:
@@ -221,14 +236,14 @@ void execute_instruction(hVm vm) {
         /* if last integer, don't put the 0 count back on the stack */
         push_stack(vm, v);
       }
-      return;
+      break;
     case BC_POP:
       v = pop_stack(vm);
-      return;
+      break;
     case BC_NPOP:
       param = get_param(vm);
       npop_stack(vm, param);
-      return;
+      break;
     case BC_CALL:
       v = pop_stack(vm);
       if (v->type != IT_FUNCTION) {
@@ -237,7 +252,7 @@ void execute_instruction(hVm vm) {
         PANIC("attempt to call a non-function value");
       }
       call_block(vm, v->data);
-      return;
+      break;
     case BC_NUMARG:
       param = get_param(vm);
       v = pop_stack(vm);
@@ -250,28 +265,28 @@ void execute_instruction(hVm vm) {
         PANIC("wrong number of arguments passed to function.");
       }
       push_stack(vm, v);
-      return;
+      break;
     case BC_JMP:
       param = get_param(vm);
       vm->ip = &vm->fp->block->bytecode[param];
-      return;
+      break;
     case BC_JT:
       param = get_param(vm);
       v = pop_stack(vm);
       if (!sbV_c_falsy(v)) {
         vm->ip = &vm->fp->block->bytecode[param];
       }
-      return;
+      break;
     case BC_JF:
       param = get_param(vm);
       v = pop_stack(vm);
       if (sbV_c_falsy(v)) {
         vm->ip = &vm->fp->block->bytecode[param];
       }
-      return;
+      break;
     case BC_RET:
       return_from_block(vm);
-      return;
+      break;
     case BC_SEND:
       PANIC("todo");
     case BC_OP_EQ:
@@ -280,7 +295,7 @@ void execute_instruction(hVm vm) {
       res = sbV_eq(v, w);
       npop_stack(vm, 2);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_NOT:
       v = pop_stack(vm);
       if (sbV_c_falsy(v)) {
@@ -288,42 +303,42 @@ void execute_instruction(hVm vm) {
       } else {
         push_stack(vm, &HVBOOL(FALSE));
       }
-      return;
+      break;
     case BC_OP_LT:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_lt(v, w);
       npop_stack(vm, 2);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_LE:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_le(v, w);
       npop_stack(vm, 2);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_ADD:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_add(v, w);
       npop_stack(vm, 2);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_SUB:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_sub(v, w);
       npop_stack(vm, 2);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_MUL:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_mul(v, w);
       npop_stack(vm, 2);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_DIV:
       PANIC("todo");
     case BC_OP_FLDIV:
@@ -332,7 +347,7 @@ void execute_instruction(hVm vm) {
       res = sbV_floordiv(v, w);
       npop_stack(vm, 2);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_NEG:
     case BC_OP_MOD:
     case BC_OP_POW:
@@ -342,16 +357,17 @@ void execute_instruction(hVm vm) {
       res = sbV_incr(v);
       pop_stack(vm);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_DECR:
       v = peek_stack(vm, 0);
       res = sbV_decr(v);
       pop_stack(vm);
       push_stack(vm, &res);
-      return;
+      break;
     case BC_OP_DEREF:
       PANIC("todo");
     case BC_ALLOC_VARS:
+      /* TODO check for overflow */
       param = get_param(vm);
       /* have to set new rstack space to 0 so we don't accidentally decrement
        * the ref count of variables from a previous stack frame (or of just garbage)  */
@@ -359,7 +375,7 @@ void execute_instruction(hVm vm) {
       /* we allocate one more variable at 0 for internal use */
       vm->rp += (param + 1) * sizeof(hV);
       vm->fp->num_locals += param;
-      return;
+      break;
     case BC_LIST_GATHER:
     case BC_HASH_GATHER:
       PANIC("todo");
@@ -369,4 +385,7 @@ void execute_instruction(hVm vm) {
     default:
       PANIC("unrecognized opcode $%02X at position $%016zX", op, (usize)vm->ip);
   }
+#ifdef DEBUG
+  if (vm->debugmode) printf("\n");
+#endif
 }

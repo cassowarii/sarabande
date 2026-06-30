@@ -12,6 +12,8 @@ typedef enum sbOpcode {
   BC_LD_UPVAL,          // push value onto stack from closure
   BC_LD_BLK,            // push reference to function onto stack
   BC_LD_NIL,            // push nil onto stack
+  BC_LD_TRUE,           // push true onto stack
+  BC_LD_FALSE,          // push false onto stack
   BC_ST_VAR,            // pop value from stack into variable
   BC_ST_UPVAL,          // pop value from stack into closure
   BC_ST_ARG,            // decrement TOS and store NOS in variable
