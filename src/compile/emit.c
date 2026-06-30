@@ -196,8 +196,8 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       E1 = expr->call.param;
       while (E1) {
         count ++;
-        compile_expr(cm, E1->param.this);
-        E1 = E1->param.next;
+        compile_expr(cm, E1->list.this);
+        E1 = E1->list.next;
       }
       EMIT(BC_LD_IMM);
       EARG(count); /* calling convention: store argument count on stack */

@@ -13,6 +13,7 @@ typedef u64 hHash;
 typedef u64 hString;
 typedef u64 hSymbol;
 typedef i64 hInteger;
+typedef u64 hList;
 
 enum intrinsic_type {
   IT_NOTHING,          // sentinel for "no value here"

@@ -203,6 +203,9 @@ static flag int_constant_fold(sbAstOp op, hInteger left, hInteger right, hIntege
     case AST_OP_MOD:
       *result = left % right;
       break;
+    case AST_OP_UNMINUS:
+      *result = -left;
+      break;
     default:
       return FALSE;
   }
@@ -211,10 +214,10 @@ static flag int_constant_fold(sbAstOp op, hInteger left, hInteger right, hIntege
 
 static sbIrExpr *expr_op(hIrChunk ck, sbAstOp op, sbIrExpr *left, sbIrExpr *right) {
   if (left->type == IR_E_VALUE && left->value.type == IT_INTEGER
-        && right->type == IR_E_VALUE && right->value.type == IT_INTEGER) {
+        && (!right || (right->type == IR_E_VALUE && right->value.type == IT_INTEGER))) {
     /* Try constant folding */
     hInteger result;
-    flag folded = int_constant_fold(op, left->value.integer, right->value.integer, &result);
+    flag folded = int_constant_fold(op, left->value.integer, right ? right->value.integer : 0, &result);
     if (folded) {
       return new_expr(ck, &(sbIrExpr) {
         .type = IR_E_VALUE,
@@ -242,7 +245,7 @@ static sbIrExpr *expr_call(hIrChunk ck, sbIrExpr *to_call, sbIrExpr *param) {
 static sbIrExpr *expr_param(hIrChunk ck, sbIrExpr *value) {
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_PARAM,
-    .param.this = value,
+    .list.this = value,
   });
 }
 
@@ -734,7 +737,7 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     sbIrExpr **place_here = &param;
     while (param_ast != NO_NODE) {
       *place_here = expr_param(ck, compile_ast_expr(ck, param_ast->seq.left));
-      place_here = &(*place_here)->param.next;
+      place_here = &(*place_here)->list.next;
       param_ast = param_ast->seq.right;
     }
     return expr_call(ck, called, param);
@@ -799,9 +802,9 @@ static void print_expr(sbIrExpr *e) {
       debug(" with params ");
       sbIrExpr *param = e->call.param;
       while (param) {
-        print_expr(param->param.this);
+        print_expr(param->list.this);
         debug(",");
-        param = param->param.next;
+        param = param->list.next;
       }
       break;
     default:

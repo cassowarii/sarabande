@@ -3,4 +3,8 @@
 
 #include "data/value.h"
 
+void data_sys_init();
+
+void data_sys_deinit();
+
 #endif

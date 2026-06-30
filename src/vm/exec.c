@@ -1,6 +1,6 @@
 #include "vm/exec.h"
 
-#include "data/operations.h"
+#include "vm/operations.h"
 
 void call_block(hVm vm, usize block_id);
 void execute_instruction(hVm vm);

@@ -88,7 +88,7 @@ typedef struct sbIrExpr {
     struct {
       struct sbIrExpr *this;
       struct sbIrExpr *next;
-    } param;
+    } list;
   };
 } sbIrExpr;
 
