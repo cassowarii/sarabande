@@ -2,7 +2,7 @@
 
 #define STRING1(...) #__VA_ARGS__
 #define STRING2(...) STRING1(__VA_ARGS__)
-#define EMIT(...) do { printf(STRING2(__VA_ARGS__) "\n"); sbVmCompiler_write_code(cm, (u8[]) { __VA_ARGS__ }, sizeof((u8[]) { __VA_ARGS__ })); } while (0)
+#define EMIT(...) do { debug(STRING2(__VA_ARGS__) "\n"); sbVmCompiler_write_code(cm, (u8[]) { __VA_ARGS__ }, sizeof((u8[]) { __VA_ARGS__ })); } while (0)
 #define EARG(x) (emit_arg(cm, x))
 
 struct labelpos {
@@ -33,7 +33,7 @@ void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir) {
 /* --- */
 
 void emit_arg(sbVmCompiler *cm, i64 actual_number) {
-  printf("    arg %lld\n", actual_number);
+  debug("    arg %lld\n", actual_number);
   u8 buf[9];
   u64 number = actual_number;
   if (0 <= actual_number && actual_number < 253) {
@@ -74,10 +74,7 @@ void emit_arg(sbVmCompiler *cm, i64 actual_number) {
 
 
 void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
-  //sbVmCompiler_add_constant(&cm, &HVINT(5));
-  //sbVmCompiler_add_constant(&cm, &HVINT(9));
-
-  printf("\n--block %d--\n", chunk->id);
+  debug("\n--block %d--\n", chunk->id);
 
   int nstmts = chunk->stmts.size / sizeof(sbIrStmt*);
   if (chunk->id > 0) {
@@ -105,7 +102,7 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
     struct labelpos lp = ((struct labelpos*)cm->label_positions.data)[i];
     u8 location_bytes[4];
     u32 position = lp.label->block_position;
-    printf("now we know that the jump at %d should go to %d\n", lp.offset - 2, position);
+    debug("now we know that the jump at %d should go to %d\n", lp.offset - 2, position);
     location_bytes[0] = (position >> 24) & 0xFF;
     location_bytes[1] = (position >> 16) & 0xFF;
     location_bytes[2] = (position >>  8) & 0xFF;
@@ -128,7 +125,7 @@ void record_labelpos(sbVmCompiler *cm, sbIrLabel *label, u32 offset) {
 }
 
 void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
-  printf("%3zu ", sbVmCompiler_get_position(cm));
+  debug("%3zu ", sbVmCompiler_get_position(cm));
   switch (stmt->type) {
     case IR_S_EXPR:
       compile_expr(cm, stmt->expr);
@@ -139,7 +136,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
         EMIT(BC_JMP);
       } else {
         compile_expr(cm, stmt->jump.condition);
-        printf("%3zu ", sbVmCompiler_get_position(cm));
+        debug("%3zu ", sbVmCompiler_get_position(cm));
         if (stmt->jump.inverted) {
           EMIT(BC_JF);
         } else {
@@ -149,7 +146,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       if (stmt->jump.label->found_yet) {
         EARG(stmt->jump.label->block_position);
       } else {
-        printf("<forward jump>\n");
+        debug("<forward jump>\n");
         EMIT(BC_VLONG_NUM);
         /* we have to remember to come back and fill in the address later when we
          * know where this label is! */
@@ -162,7 +159,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
     case IR_S_LABEL:
       stmt->label->found_yet = TRUE;
       stmt->label->block_position = sbVmCompiler_get_position(cm);
-      printf("\n");
+      debug("\n");
       break;
     case IR_S_ASSIGN:
       compile_expr(cm, stmt->assign.expr);
@@ -180,7 +177,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       EMIT(BC_RET);
       break;
     default:
-      printf("haven't implemented this yet!\n");
+      debug("haven't implemented this yet!\n");
   }
 }
 
@@ -233,7 +230,7 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       }
       break;
     default:
-      printf("(compile an expr)\n");
+      debug("(compile an expr)\n");
   }
 }
 
@@ -250,6 +247,6 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_LE: EMIT(BC_OP_LE); break;
     case AST_OP_GE: EMIT(BC_OP_LT, BC_OP_NOT); break;
     default:
-      printf("unknown operation!\n");
+      debug("unknown operation!\n");
   }
 }

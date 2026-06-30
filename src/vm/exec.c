@@ -36,11 +36,11 @@ sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm) {
   while (vm->running) {
     execute_instruction(vm);
     if (vm->debugmode) {
-      printf("Stack: ");
+      debug("Stack: ");
       for (u8 *p = vm->stack; p < vm->sp; p++) {
-        printf("%02X ", *p);
+        debug("%02X ", *p);
       }
-      printf("\n");
+      debug("\n");
     }
   }
 
@@ -82,7 +82,7 @@ void return_from_block(hVm vm) {
 }
 
 void debug_print_hv(const hV *value) {
-  printf("%016llx %016llx\n", *(u64*)value, *((u64*)value+1));
+  debug("%016llx %016llx\n", *(u64*)value, *((u64*)value+1));
 }
 
 void store_local(hVm vm, usize local_index, const hV *value) {
@@ -123,9 +123,7 @@ sbOpcode get_opcode(hVm vm) {
 
 void next_byte(hVm vm, u64 *result) {
   u8 byte = *(vm->ip++);
-#ifdef DEBUG
-  if (vm->debugmode) printf("%02X ", byte);
-#endif
+  if (vm->debugmode) debug("%02X ", byte);
   *result <<= 8;
   *result |= byte;
 }
@@ -138,9 +136,7 @@ void next_byte(hVm vm, u64 *result) {
  * in big-endian format */
 i64 get_param(hVm vm) {
   u64 result = *((u8*)vm->ip++);
-#ifdef DEBUG
-  if (vm->debugmode) printf("%02llX ", result);
-#endif
+  if (vm->debugmode) debug("%02llX ", result);
   i64 signed_result = result;
 
   if (result == BC_LONG_NUM) {
@@ -150,7 +146,6 @@ i64 get_param(hVm vm) {
     signed_result = result;
     if (result > (1 << 15)) signed_result = result - (1 << 16);
   } else if (result == BC_VLONG_NUM) {
-    printf("here now\n");
     result = 0;
     next_byte(vm, &result); // 0
     next_byte(vm, &result); // 1
@@ -177,9 +172,7 @@ i64 get_param(hVm vm) {
 /* execute one instruction! wow! */
 void execute_instruction(hVm vm) {
   sbOpcode op = get_opcode(vm);
-#ifdef DEBUG
-  if (vm->debugmode) printf("op %02X ", op);
-#endif
+  if (vm->debugmode) debug("op %02X ", op);
   u64 param;
   hV *v, *w, res;
 
@@ -385,7 +378,5 @@ void execute_instruction(hVm vm) {
     default:
       PANIC("unrecognized opcode $%02X at position $%016zX", op, (usize)vm->ip);
   }
-#ifdef DEBUG
-  if (vm->debugmode) printf("\n");
-#endif
+  if (vm->debugmode) debug("\n");
 }

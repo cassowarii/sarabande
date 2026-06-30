@@ -3,8 +3,10 @@
 
 #ifdef DEBUG
 #define PANIC(...) do { fprintf(stderr, "PANIC: " __VA_ARGS__); fprintf(stderr, "\n       at " __FILE__ ":%d\n", __LINE__); abort(); } while (0)
+#define debug(...) printf(__VA_ARGS__)
 #else
 #define PANIC(...) do { fprintf(stderr, "PANIC: " __VA_ARGS__); fprintf(stderr, "\n"); abort(); } while (0)
+#define debug(...) 0
 #endif
 
 #include <stdio.h>

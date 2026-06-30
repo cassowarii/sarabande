@@ -48,7 +48,7 @@ void sbIrProgram_print(hIrProgram ir) {
 
   for (usize i = 0; i < nchunks; i++) {
     sbIrChunk *ck = ((sbIrChunk**)ir->chunks.data)[i];
-    printf("\nCHUNK %d with %d variables\n", ck->id, ck->variable_count);
+    debug("\nCHUNK %d with %d variables\n", ck->id, ck->variable_count);
 
     usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
     for (usize j = 0; j < nstmts; j++) {
@@ -56,7 +56,7 @@ void sbIrProgram_print(hIrProgram ir) {
       print_stmt(s);
     }
 
-    printf("\n");
+    debug("\n");
   }
 }
 
@@ -725,90 +725,90 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
 }
 
 static void print_expr(sbIrExpr *e) {
-  printf("(");
+  debug("(");
   switch(e->type) {
     case IR_E_VAR:
-      printf("variable %zu", e->var->slot_id);
+      debug("variable %zu", e->var->slot_id);
       break;
     case IR_E_FUNC:
-      printf("{ chunk %d }", e->func->id);
+      debug("{ chunk %d }", e->func->id);
       break;
     case IR_E_VALUE:
       if (e->value.type == IT_NIL) {
-        printf("nil");
+        debug("nil");
       } else if (e->value.type == IT_INTEGER) {
-        printf("%lld", e->value.integer);
+        debug("%lld", e->value.integer);
       } else {
-        printf("some value");
+        debug("some value");
       }
       break;
     case IR_E_OP:
       print_expr(e->op.left);
-      printf(" %c ", e->op.type);
+      debug(" %c ", e->op.type);
       if (e->op.right) {
         print_expr(e->op.right);
       }
       break;
     case IR_E_CALL:
-      printf("CALL: ");
+      debug("CALL: ");
       print_expr(e->call.func);
-      printf(" with params ");
+      debug(" with params ");
       sbIrExpr *param = e->call.param;
       while (param) {
         print_expr(param->param.this);
-        printf(",");
+        debug(",");
         param = param->param.next;
       }
       break;
     default:
-      printf("something");
+      debug("something");
   }
-  printf(")");
+  debug(")");
 }
 
 static void print_stmt(sbIrStmt *s) {
   switch (s->type) {
     case IR_S_ARG:
-      printf("  bind function argument to variable %zu\n", s->arg.var->slot_id);
+      debug("  bind function argument to variable %zu\n", s->arg.var->slot_id);
       if (s->arg.last) {
-        printf("  (no function arguments left on the stack now)\n");
+        debug("  (no function arguments left on the stack now)\n");
       }
       break;
     case IR_S_LABEL:
-      printf("label %zu:\n", s->label->id);
+      debug("label %zu:\n", s->label->id);
       break;
     case IR_S_JUMP:
-      printf("  jump to label %zu", s->jump.label->id);
+      debug("  jump to label %zu", s->jump.label->id);
       if (s->jump.condition) {
         if (s->jump.inverted) {
-          printf(" unless ");
+          debug(" unless ");
         } else {
-          printf(" if ");
+          debug(" if ");
         }
         print_expr(s->jump.condition);
       }
-      printf("\n");
+      debug("\n");
       break;
     case IR_S_RETURN:
-      printf("  return ");
+      debug("  return ");
       if (s->expr) {
         print_expr(s->expr);
       } else {
-        printf("NOTHING");
+        debug("NOTHING");
       }
-      printf("\n");
+      debug("\n");
       break;
     case IR_S_EXPR:
-      printf("  ");
+      debug("  ");
       print_expr(s->expr);
-      printf("\n");
+      debug("\n");
       break;
     case IR_S_ASSIGN:
-      printf("  variable %zu = ", s->assign.var->slot_id);
+      debug("  variable %zu = ", s->assign.var->slot_id);
       print_expr(s->assign.expr);
-      printf("\n");
+      debug("\n");
       break;
     default:
-      printf("  (do something)\n");
+      debug("  (do something)\n");
   }
 }
