@@ -44,30 +44,30 @@ void emit_arg(sbVmCompiler *cm, i64 actual_number) {
     if (actual_number < 0) {
       number = actual_number + 65536;
     }
-    buf[1] = number >> 8;
-    buf[2] = number & 0xFF;
+    buf[1] = (number >>  8) & 0xFF;
+    buf[2] = (number >>  0) & 0xFF;
     sbVmCompiler_write_code(cm, buf, 3);
   } else if (-(1L << 31) < actual_number && actual_number < (1L << 31)) {
     buf[0] = BC_VLONG_NUM;
     if (actual_number < 0) {
       number = actual_number + (1LL << 32);
     }
-    buf[1] = (number >> 24) & 0xFF;;
+    buf[1] = (number >> 24) & 0xFF;
     buf[2] = (number >> 16) & 0xFF;
-    buf[3] = (number >> 8)  & 0xFF;
-    buf[4] = number & 0xFF;
+    buf[3] = (number >>  8) & 0xFF;
+    buf[4] = (number >>  0) & 0xFF;
     sbVmCompiler_write_code(cm, buf, 5);
   } else {
     buf[0] = BC_VVLONG_NUM;
     number = (u64)actual_number;
-    buf[1] = (number >> 56) & 0xFF;;
-    buf[2] = (number >> 48) & 0xFF;;
-    buf[3] = (number >> 40) & 0xFF;;
-    buf[4] = (number >> 32) & 0xFF;;
-    buf[5] = (number >> 24) & 0xFF;;
+    buf[1] = (number >> 56) & 0xFF;
+    buf[2] = (number >> 48) & 0xFF;
+    buf[3] = (number >> 40) & 0xFF;
+    buf[4] = (number >> 32) & 0xFF;
+    buf[5] = (number >> 24) & 0xFF;
     buf[6] = (number >> 16) & 0xFF;
-    buf[7] = (number >> 8)  & 0xFF;
-    buf[8] = number & 0xFF;
+    buf[7] = (number >>  8) & 0xFF;
+    buf[8] = (number >>  0) & 0xFF;
     sbVmCompiler_write_code(cm, buf, 9);
   }
 }
@@ -146,7 +146,6 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       if (stmt->jump.label->found_yet) {
         EARG(stmt->jump.label->block_position);
       } else {
-        debug("<forward jump>\n");
         EMIT(BC_VLONG_NUM);
         /* we have to remember to come back and fill in the address later when we
          * know where this label is! */
@@ -220,7 +219,7 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
         EMIT(BC_LD_TRUE);
       } else if (expr->value.type == IT_BOOLEAN) {
         EMIT(BC_LD_FALSE);
-      } else if (expr->value.type == IT_INTEGER && expr->value.integer < (2 << 16)) {
+      } else if (expr->value.type == IT_INTEGER && expr->value.integer < (2 << 8)) {
         EMIT(BC_LD_IMM);
         EARG(expr->value.integer);
       } else {

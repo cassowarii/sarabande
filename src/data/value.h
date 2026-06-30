@@ -4,7 +4,7 @@
 #include "common.h"
 
 #define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
-#define HVSTR(s) ((hV) { .type = IT_STRING, .string = OBJSL(s) })
+#define HVSTR(s) ((hV) { .type = IT_STRING, .string = s })
 #define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
 #define HVFUNC(i) ((hV) { .type = IT_FUNCTION, .data = i })
 #define HVNIL ((hV) { .type = IT_NIL })

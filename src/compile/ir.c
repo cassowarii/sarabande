@@ -62,6 +62,16 @@ void sbIrProgram_print(hIrProgram ir) {
 
 /* --- */
 
+static sbIrExpr SENTINEL_NIL_EXPR = {
+  .type = IR_E_VALUE,
+  .value = (hV) { .type = IT_NIL }
+};
+static sbIrStmt SENTINEL_NO_STMT = {0};
+static sbIrVariable SENTINEL_NO_VAR = {0};
+static sbIrExpr *NIL_EXPR = &SENTINEL_NIL_EXPR;
+static sbIrStmt *NO_STMT = &SENTINEL_NO_STMT;
+static sbIrVariable *NO_VAR = &SENTINEL_NO_VAR;
+
 static void vprogram_error(hIrProgram ir, const char *error, va_list args) {
   ir->error_count ++;
   fprintf(stderr, "error: ");
@@ -139,16 +149,8 @@ static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
 
   /* TODO do a different thing here */
   chunk_error(ck, "unknown variable name! '%s'\n", name);
-  return NULL;
+  return NO_VAR;
 }
-
-static sbIrExpr SENTINEL_NIL_EXPR = {
-  .type = IR_E_VALUE,
-  .value = (hV) { .type = IT_NIL }
-};
-static sbIrExpr *NIL_EXPR = &SENTINEL_NIL_EXPR;
-static sbIrStmt SENTINEL_NO_STMT = {0};
-static sbIrStmt *NO_STMT = &SENTINEL_NO_STMT;
 
 static sbIrLabel *new_label(hIrChunk ck) {
   sbIrLabel *l = sbArena_alloc(&ck->program->arena, sizeof(sbIrLabel));
@@ -184,7 +186,43 @@ static sbIrExpr *expr_func(hIrChunk ck, sbIrChunk *func) {
   });
 }
 
+static flag int_constant_fold(sbAstOp op, hInteger left, hInteger right, hInteger *result) {
+  switch (op) {
+    case AST_OP_ADD:
+      *result = left + right;
+      break;
+    case AST_OP_SUB:
+      *result = left - right;
+      break;
+    case AST_OP_MUL:
+      *result = left * right;
+      break;
+    case AST_OP_FLDIV:
+      *result = left / right;
+      break;
+    case AST_OP_MOD:
+      *result = left % right;
+      break;
+    default:
+      return FALSE;
+  }
+  return TRUE;
+}
+
 static sbIrExpr *expr_op(hIrChunk ck, sbAstOp op, sbIrExpr *left, sbIrExpr *right) {
+  if (left->type == IR_E_VALUE && left->value.type == IT_INTEGER
+        && right->type == IR_E_VALUE && right->value.type == IT_INTEGER) {
+    /* Try constant folding */
+    hInteger result;
+    flag folded = int_constant_fold(op, left->value.integer, right->value.integer, &result);
+    if (folded) {
+      return new_expr(ck, &(sbIrExpr) {
+        .type = IR_E_VALUE,
+        .value = HVINT(result),
+      });
+    }
+  }
+
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_OP,
     .op.type = op,
@@ -382,6 +420,10 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
 
     compile_ast_stmt(ck, considering->seq.left, implicit_return && is_last_stmt);
     considering = considering->seq.right;
+
+    if (ck->program->error_count > 0) {
+      return;
+    }
   }
 
   if (implicit_return) {
@@ -678,7 +720,7 @@ static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node) {
   } else {
     /* TODO make errors not bad */
     chunk_error(ck, "Only a variable name is permitted here. (got %d)\n", node->type);
-    return NULL;
+    return NO_VAR;
   }
 }
 
@@ -710,6 +752,8 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     return expr_op(ck, node->op.type, left, right);
   } else if (node->type == AST_VAL_INT) {
     return expr_value(ck, &HVINT(node->i));
+  } else if (node->type == AST_VAL_STRING) {
+    return expr_value(ck, &HVSTR(node->str));
   } else if (node->type == AST_NODE_NAME) {
     /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
     sbIrVariable *var = compile_ast_var(ck, node);
