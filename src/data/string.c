@@ -25,15 +25,7 @@
 
 /* TODO: Move these globals into some kind of "execution context" struct
  * that we can pass around to be reentrant */
-/* also TODO a better (slightly more annoying to code) way to structure
- * this would be SoA style: instead of storing used_count and allocated
- * inside the block and entry respectively, store them in a separate
- * array next to the pointers that we can scan quickly. less important
- * for allocated since it's already in the strblk anyway, but for used_count
- * this could be important because the counts will otherwise be scattered
- * to the four winds */
-sbBuffer g_string_blocks;
-usize g_free_block_index;
+sbPool g_string_pool;
 
 typedef struct strentry {
   GCINFO gc;
@@ -47,18 +39,9 @@ typedef struct strentry {
   };
 } strentry;
 
-typedef struct strblk {
-  usize id;
-  usize used_count;
-  usize next_free_index;
-  strentry entries[STRINGS_PER_BLOCK];
-} strblk;
-
 static const char *get_ptr_of_entry(strentry *e);
 static char *get_mutable_ptr_of_entry(strentry *e, usize length, hString *handle);
 static strentry *find_entry_for_handle(hString handle);
-static strblk *get_strblk(usize index);
-static strentry *get_entry(strblk *blk, usize index);
 static strentry *new_entry(usize length);
 static void place_str_at_offset(strentry *e, usize offset, const char *str, usize length);
 static int buffers_eq(const char *a_ptr, usize a_length, const char *b_ptr, usize b_length);
@@ -67,22 +50,17 @@ static flag is_tinystr(hString handle);
 static usize tinystr_length(hString handle);
 static void tinystr_into_buffer(char *buffer, hString handle, usize max_length);
 static hString tinystr_from_buffer(const char *buffer, usize length);
-static strblk *new_strblk();
 static void set_entry_size(strentry *e, usize length);
 
 void sbString_sys_init() {
-  g_free_block_index = 0;
-  sbBuffer_initialize(&g_string_blocks, sizeof(strblk*) * 8);
-
-  /* we need to have at least one strblk to start */
-  new_strblk();
+  sbPool_initialize(&g_string_pool, sizeof(strentry), STRINGS_PER_BLOCK);
 }
 
 void sbString_sys_deinit() {
   /* TODO free these i guess, or don't deinitialize this buffer, right now this
    * would just drop the pointers to no benefit. look, i'm going to write a
    * garbage collector, ok? give me a second */
-  //sbBuffer_deinitialize(&g_string_blocks);
+  //sbPool_deinitialize(&g_string_pool);
 }
 
 hString sbString_new(const char *value, usize length) {
@@ -265,8 +243,7 @@ static usize tinystr_length(hString handle) {
 
 static strentry *find_entry_for_handle(hString handle) {
   if (is_tinystr(handle)) return NULL;
-  strblk *blk = get_strblk((handle & ~FLAG_NONTINY) / STRINGS_PER_BLOCK);
-  return get_entry(blk, (handle & ~FLAG_NONTINY) % STRINGS_PER_BLOCK);
+  return sbPool_get_entry(&g_string_pool, handle & ~FLAG_NONTINY);
 }
 
 static strentry *duplicate_strentry(strentry *e, usize length) {
@@ -381,77 +358,6 @@ static hString tinystr_from_buffer(const char *buffer, usize length) {
   return new_handle;
 }
 
-static strblk *get_strblk(usize index) {
-  usize nblocks = g_string_blocks.size / sizeof(strblk*);
-  if (index >= nblocks) PANIC("attempt to get a string from a block (#%zu) that does not exist!", index);
-
-  return ((strblk**)g_string_blocks.data)[index];
-}
-
-static strentry *get_entry(strblk *blk, usize index) {
-  if (index >= STRINGS_PER_BLOCK) PANIC("attempt to get a string (#%zu) that does not exist in block (#%zu)!", index, blk->id);
-
-  return &blk->entries[index];
-}
-
-static strblk *new_strblk() {
-  usize nblocks = g_string_blocks.size / sizeof(strblk*);
-  strblk *new_block = calloc(1, sizeof(strblk));
-  new_block->id = nblocks;
-  strblk **where_to_put = sbBuffer_expand(&g_string_blocks, sizeof(strblk*));
-  *where_to_put = new_block;
-  return new_block;
-}
-
-static strentry *alloc_entry(strblk *blk) {
-  if (blk->used_count == STRINGS_PER_BLOCK) PANIC("attempt to allocate from a full strblk (#%zu)!", blk->id);
-
-  blk->used_count ++;
-
-  usize free_index = blk->next_free_index;
-
-  if (blk->used_count < STRINGS_PER_BLOCK) {
-    usize next_free_index = blk->next_free_index;
-    do {
-      next_free_index ++;
-      next_free_index %= STRINGS_PER_BLOCK;
-    } while (blk->entries[next_free_index].allocated && next_free_index != blk->next_free_index);
-
-    if (next_free_index == blk->next_free_index) {
-      PANIC("free count lied! for strblk (#%zu)", blk->id);
-    }
-
-    blk->next_free_index = next_free_index;
-  }
-
-  blk->entries[free_index].allocated = TRUE;
-
-  return &blk->entries[free_index];
-}
-
-static strblk *find_free_block() {
-  strblk *block_with_free = get_strblk(g_free_block_index);
-
-  if (block_with_free->used_count == STRINGS_PER_BLOCK) {
-    usize nblocks = g_string_blocks.size / sizeof(strblk*);
-    usize start_index = g_free_block_index;
-
-    do {
-      g_free_block_index ++;
-      g_free_block_index %= nblocks;
-      block_with_free = get_strblk(g_free_block_index);
-    } while (g_free_block_index != start_index && block_with_free->used_count == STRINGS_PER_BLOCK);
-
-    if (g_free_block_index == start_index) {
-      /* Where did that bring you? Back to me. */
-      block_with_free = new_strblk();
-      g_free_block_index = nblocks;
-    }
-  }
-
-  return block_with_free;
-}
-
 static void set_entry_size(strentry *e, usize length) {
   if (e->is_external) {
     sbBuffer_set_size(&e->somewhere_else_value, length + 1);
@@ -460,7 +366,7 @@ static void set_entry_size(strentry *e, usize length) {
     e->somewhere_else_value.data[length] = '\0';
   } else {
     if (length > INLINE_BUFFER_SIZE - 1) {
-      /* new length is too big for inline, so we need to copy to the heap */
+      /* new length is too big for inline, so we need to copy to the external heap */
       sbBuffer new_buf = {0};
       /* length + 1 for NUL terminator. even though we track the length, it's
        * easier to just preserve NUL terminator for talking to C lib functions */
@@ -499,9 +405,9 @@ static void place_str_at_offset(strentry *e, usize offset, const char *str, usiz
 }
 
 static strentry *new_entry(usize length) {
-  strblk *new_block = find_free_block();
-  strentry *new_entry = alloc_entry(new_block);
-  new_entry->handle = ((new_block->id * STRINGS_PER_BLOCK + (new_entry - new_block->entries)) | FLAG_NONTINY);
+  usize index;
+  strentry *new_entry = sbPool_alloc(&g_string_pool, &index);
+  new_entry->handle = (index | FLAG_NONTINY);
   set_entry_size(new_entry, length);
   return new_entry;
 }

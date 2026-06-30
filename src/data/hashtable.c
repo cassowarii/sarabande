@@ -6,7 +6,7 @@
 #define INLINE_TABLE_LENGTH 64
 
 /* TODO eliminate globals */
-sbBuffer g_hashtable_blocks = {0};
+sbPool g_hashtable_pool = {0};
 
 typedef struct hashentry {
   hV key;
@@ -20,19 +20,12 @@ typedef struct hashtbl {
   flag allocated;
   flag is_inline;
   union {
+    /* TODO should be SoA instead of AoS */
     hashentry inline_entries[INLINE_TABLE_LENGTH];
     hashentry *external_entries;
   };
 } hashtbl;
 
-typedef struct hashblk {
-  usize id;
-  usize used_count;
-  usize last_index;
-  hashtbl tables[HASHES_PER_BLOCK];
-} hashblk;
-
-static hashblk *alloc_new_block();
 static hashtbl *new_tbl(usize initial_size);
 static hashentry *get_entry_ptr_for_tbl(hashtbl *t, usize *length_out);
 static hashtbl *find_tbl_for_handle(hHash handle);
@@ -43,12 +36,11 @@ static hashentry *set_key_in_array(hashentry *entries, usize length, hV *key, hV
 static hashentry *find_entry_by_key(hashtbl *t, hV *key);
 
 void sbHash_sys_init() {
-  sbBuffer_initialize(&g_hashtable_blocks, 8 * sizeof(hashblk*));
-  alloc_new_block();
+  sbPool_initialize(&g_hashtable_pool, sizeof(hashtbl), HASHES_PER_BLOCK);
 }
 
 void sbHash_sys_deinit() {
-  //sbBuffer_deinitialize(&g_hashtable_blocks);
+  //sbPool_deinitialize(&g_hashtable_pool);
 }
 
 /* https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function */
@@ -112,54 +104,6 @@ void sbHash_delete(hHash h, hV *key, hV *value) {
 }
 
 /* --- */
-
-static hashblk *alloc_new_block() {
-  usize nblocks = g_hashtable_blocks.size / sizeof(hashblk*);
-  hashblk *new_block = calloc(1, sizeof(hashblk));
-  new_block->id = nblocks;
-  sbBuffer_append(&g_hashtable_blocks, &new_block, sizeof(hashblk*));
-  return new_block;
-}
-
-static hashblk *find_free_block() {
-  usize nblocks = g_hashtable_blocks.size / sizeof(hashblk*);
-  hashblk *free_block = NULL;
-  for (usize i = 0; i < nblocks; i++) {
-    if (((hashblk**)g_hashtable_blocks.data)[i]->used_count < HASHES_PER_BLOCK) {
-      free_block = ((hashblk**)g_hashtable_blocks.data)[i];
-      break;
-    }
-  }
-
-  if (free_block == NULL) {
-    free_block = alloc_new_block();
-  }
-
-  return free_block;
-}
-
-static hashblk *get_block(usize index) {
-  usize nblocks = g_hashtable_blocks.size / sizeof(hashblk*);
-  if (index > nblocks) PANIC("request for a hash block (#%zu) that does not exist!", index);
-  return ((hashblk**)g_hashtable_blocks.data)[index];
-}
-
-static hashtbl *find_free_entry(hashblk *blk) {
-  if (blk->used_count >= HASHES_PER_BLOCK) PANIC("request for new table in full hashblk!");
-
-  while (blk->tables[blk->last_index].allocated) {
-    blk->last_index++;
-    blk->last_index %= HASHES_PER_BLOCK;
-  }
-  blk->tables[blk->last_index].allocated = 1;
-  blk->used_count ++;
-
-  hashtbl *result = &blk->tables[blk->last_index];
-
-  result->handle = blk->id * HASHES_PER_BLOCK + blk->last_index;
-
-  return result;
-}
 
 static void set_hashtbl_size(hashtbl *t, usize new_size, flag rehash_all) {
   if (new_size < INLINE_TABLE_LENGTH) new_size = INLINE_TABLE_LENGTH;
@@ -274,12 +218,13 @@ static hashentry delete_key(hashtbl *t, hV *key) {
 }
 
 static hashtbl *find_tbl_for_handle(hHash handle) {
-  hashblk *block = get_block(handle / HASHES_PER_BLOCK);
-  return &block->tables[handle % HASHES_PER_BLOCK];
+  return sbPool_get_entry(&g_hashtable_pool, handle);
 }
 
 static hashtbl *new_tbl(usize initial_size) {
-  hashtbl *t = find_free_entry(find_free_block());
+  usize index;
+  hashtbl *t = sbPool_alloc(&g_hashtable_pool, &index);
   set_hashtbl_size(t, initial_size, FALSE);
+  t->handle = index;
   return t;
 }

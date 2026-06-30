@@ -2,8 +2,10 @@
 #define __SB_MEM_H__
 
 #include "global.h"
+
 #include "arena.h"
 #include "buffer.h"
 #include "cstrutil.h"
+#include "pool.h"
 
 #endif

@@ -14,12 +14,14 @@ build/a.out: $(OBJECTS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(SRC) $(OBJECTS) $(LIBS) -o $@
 
-.PHONY: parsedebug optimized
+.PHONY: parsedebug optimized dev
 parsedebug: CFLAGS += -DPARSEDEBUG
-parsedebug: build/a.out
+parsedebug: clean build/a.out
 
 optimized: CFLAGS=-Wall -O3 -flto
-optimized: build/a.out
+optimized: clean build/a.out
+
+dev: clean build/a.out
 
 $(OBJ)/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)

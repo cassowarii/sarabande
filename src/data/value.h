@@ -15,19 +15,19 @@ typedef u64 hSymbol;
 typedef i64 hInteger;
 
 enum intrinsic_type {
-  IT_NOTHING,     // sentinel for "no value here"
-  IT_NIL,         // nil ("there is a value here, but it's nil")
-  IT_BOOLEAN,     // true / false
-  IT_STRING,      // `abcdefg`
-  IT_SYMBOL,      // :hello
-  IT_INTEGER,     // 324892
-  IT_FLOAT,       // 0.0345
-  IT_DATETIME,    // unix timestamp
-  IT_REF,         // pointer \abc
-  IT_LIST,        // list [1, 3, 5, 7]
-  IT_HASH,        // hash {a: 1, b: 2}
-  IT_FUNCTION,    // function => a, b { a + b }
-  ITX_TOMBSTONE,  // <hashtable_tombstone>
+  IT_NOTHING,          // sentinel for "no value here"
+  IT_NIL = -1,         // nil ("there is a value here, but it's nil")
+  IT_BOOLEAN = -2,     // true / false
+  IT_STRING = -3,      // `abcdefg`
+  IT_SYMBOL = -4,      // :hello
+  IT_INTEGER = -5,     // 324892
+  IT_FLOAT = -6,       // 0.0345
+  IT_DATETIME = -7,    // unix timestamp
+  IT_REF = -8,         // pointer \abc
+  IT_LIST = -9,        // list [1, 3, 5, 7]
+  IT_HASH = -10,       // hash {a: 1, b: 2}
+  IT_FUNCTION = -11,   // function => a, b { a + b }
+  ITX_TOMBSTONE = -12, // <hashtable_tombstone>
 };
 
 typedef struct hV {
