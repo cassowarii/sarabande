@@ -180,10 +180,20 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
   }
 }
 
+void compile_list(sbVmCompiler *cm, sbIrExpr *expr) {
+  sbIrExpr *considering = expr;
+  usize count = 0;
+  while (considering) {
+    count ++;
+    compile_expr(cm, considering->list.this);
+    considering = considering->list.next;
+  }
+  EMIT(BC_LD_IMM);
+  EARG(count); /* calling convention: store argument count on stack */
+}
+
 void compile_op(sbVmCompiler *cm, sbAstOp op);
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
-  sbIrExpr *E1;
-  int count = 0;
   switch(expr->type) {
     case IR_E_OP:
       compile_expr(cm, expr->op.left);
@@ -193,14 +203,8 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       compile_op(cm, expr->op.type);
       break;
     case IR_E_CALL:
-      E1 = expr->call.param;
-      while (E1) {
-        count ++;
-        compile_expr(cm, E1->list.this);
-        E1 = E1->list.next;
-      }
-      EMIT(BC_LD_IMM);
-      EARG(count); /* calling convention: store argument count on stack */
+      /* calling convention: store argument count on stack */
+      compile_list(cm, expr->call.param);
       compile_expr(cm, expr->call.func);
       EMIT(BC_CALL);
       break;
@@ -211,6 +215,10 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
     case IR_E_FUNC:
       EMIT(BC_LD_BLK);
       EARG(expr->func->id);
+      break;
+    case IR_E_LIST:
+      compile_list(cm, expr);
+      EMIT(BC_LIST_GATHER);
       break;
     case IR_E_VALUE:
       if (expr->value.type == IT_NIL) {
@@ -245,6 +253,7 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_GT: EMIT(BC_OP_LE, BC_OP_NOT); break;
     case AST_OP_LE: EMIT(BC_OP_LE); break;
     case AST_OP_GE: EMIT(BC_OP_LT, BC_OP_NOT); break;
+    case AST_OP_INDEX: EMIT(BC_OP_INDEX); break;
     default:
       debug("unknown operation!\n");
   }

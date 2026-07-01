@@ -210,7 +210,9 @@ static void read_integer(hScanner sc, sbLexToken *new_token, flag negative) {
     if (ch == '0') {
         /* skip a leading zero, and see if it has some base indicator */
         ch = NEXT;
-        if (ch == 'b') {
+        if (is_digit(ch)) {
+            /* just a base 10 number with a leading zero */
+        } else if (ch == 'b') {
             ch = NEXT;
             base = 2;
         } else if (ch == 'o') {
@@ -219,11 +221,12 @@ static void read_integer(hScanner sc, sbLexToken *new_token, flag negative) {
         } else if (ch == 'x') {
             ch = NEXT;
             base = 16;
-        } else if (is_space(ch) || ch == '\n') {
-            /* it was literally just the number 0 (probably) */
+        } else if (is_alpha(ch)) {
+            /* it's like some other weird letter? */
+            new_token->type = T_BADNUMBER;
             num_done = TRUE;
         } else {
-            new_token->type = T_BADNUMBER;
+            /* it was literally just the number 0 (probably) */
             num_done = TRUE;
         }
     }

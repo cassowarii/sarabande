@@ -17,3 +17,7 @@ hV sbV_eq(const hV *a, const hV *b);
 hV sbV_lt(const hV *a, const hV *b);
 
 hV sbV_le(const hV *a, const hV *b);
+
+hV sbV_append(hV *a, hV *b);
+
+hV sbV_index(hV *a, hV *b);

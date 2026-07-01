@@ -7,6 +7,7 @@
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = s })
 #define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
 #define HVFUNC(i) ((hV) { .type = IT_FUNCTION, .data = i })
+#define HVLIST(l) ((hV) { .type = IT_LIST, .list = l })
 #define HVNIL ((hV) { .type = IT_NIL })
 
 typedef u64 hHash;
@@ -37,6 +38,7 @@ typedef struct hV {
     hString string;
     hSymbol symbol;
     hHash hash;
+    hList list;
     hInteger integer;
     u64 boolean;
     double float_val;
@@ -52,6 +54,7 @@ hV sbV_hash(hHash hash);
 hV sbV_int(hInteger i);
 hV sbV_boolean(flag b);
 hV sbV_function(u64 id);
+hV sbV_empty_list(usize capacity);
 
 flag sbV_c_eq(const hV *a, const hV *b);
 flag sbV_c_falsy(const hV *a);

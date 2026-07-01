@@ -357,6 +357,13 @@ void execute_instruction(hVm vm) {
       pop_stack(vm);
       push_stack(vm, &res);
       break;
+    case BC_OP_INDEX:
+      v = peek_stack(vm, 1);
+      w = peek_stack(vm, 0);
+      res = sbV_index(v, w);
+      npop_stack(vm, 2);
+      push_stack(vm, &res);
+      break;
     case BC_OP_DEREF:
       PANIC("todo");
     case BC_ALLOC_VARS:
@@ -370,6 +377,20 @@ void execute_instruction(hVm vm) {
       vm->fp->num_locals += param;
       break;
     case BC_LIST_GATHER:
+      v = pop_stack(vm);
+      if (v->type != IT_INTEGER) {
+        /* internal error! this should be generated correctly */
+        PANIC("internal violation: LIST_GATHER should receive an integer on top of stack");
+      }
+      param = v->integer;
+      res = sbV_empty_list(param);
+      while (param > 0) {
+        w = pop_stack(vm);
+        sbV_append(&res, w);
+        param --;
+      }
+      push_stack(vm, &res);
+      break;
     case BC_HASH_GATHER:
       PANIC("todo");
     case BC_LONG_NUM:

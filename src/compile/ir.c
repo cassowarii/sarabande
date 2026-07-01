@@ -242,9 +242,9 @@ static sbIrExpr *expr_call(hIrChunk ck, sbIrExpr *to_call, sbIrExpr *param) {
   });
 }
 
-static sbIrExpr *expr_param(hIrChunk ck, sbIrExpr *value) {
+static sbIrExpr *expr_list(hIrChunk ck, sbIrExpr *value) {
   return new_expr(ck, &(sbIrExpr) {
-    .type = IR_E_PARAM,
+    .type = IR_E_LIST,
     .list.this = value,
   });
 }
@@ -727,23 +727,31 @@ static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node) {
   }
 }
 
+static sbIrExpr *compile_ast_list(hIrChunk ck, sbAst node) {
+  sbAst considering = node;
+  sbIrExpr *list = NULL;
+  sbIrExpr **place_here = &list;
+  while (considering != NO_NODE) {
+    *place_here = expr_list(ck, compile_ast_expr(ck, considering->seq.left));
+    place_here = &(*place_here)->list.next;
+    considering = considering->seq.right;
+  }
+  return list;
+}
+
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
   if (node == NO_NODE) return NULL;
 
   if (node->type == AST_NODE_FUNCCALL) {
     sbIrExpr *called = compile_ast_expr(ck, node->seq.left);
-    sbAst param_ast = node->seq.right;
-    sbIrExpr *param = NULL;
-    sbIrExpr **place_here = &param;
-    while (param_ast != NO_NODE) {
-      *place_here = expr_param(ck, compile_ast_expr(ck, param_ast->seq.left));
-      place_here = &(*place_here)->list.next;
-      param_ast = param_ast->seq.right;
-    }
-    return expr_call(ck, called, param);
+    sbIrExpr *params = compile_ast_list(ck, node->seq.right);
+    return expr_call(ck, called, params);
   } else if (node->type == AST_VAL_FUNC) {
     sbIrChunk *func = compile_ast_function(ck->program, node->seq.left, node->seq.right);
     return expr_func(ck, func);
+  } else if (node->type == AST_VAL_LIST) {
+    sbIrExpr *list = compile_ast_list(ck, node->seq.left);
+    return list;
   } else if (node->type == AST_NODE_OP) {
     sbIrExpr *left = NULL, *right = NULL;
     if (node->op.left != NO_NODE) {

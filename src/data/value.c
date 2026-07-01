@@ -1,6 +1,7 @@
 #include "data/value.h"
 
 #include "data/string.h"
+#include "data/list.h"
 #include "data/hashtable.h"
 
 #define FLAG_NONINTRINSIC (1ULL << 63)
@@ -55,6 +56,13 @@ hV sbV_function(u64 id) {
   return (hV) {
     .type = IT_FUNCTION,
     .data = id,
+  };
+}
+
+hV sbV_empty_list(usize capacity) {
+  return (hV) {
+    .type = IT_LIST,
+    .list = sbList_new(capacity),
   };
 }
 

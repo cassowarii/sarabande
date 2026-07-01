@@ -1,6 +1,7 @@
 #include "vm/operations.h"
 
 #include "data/integer.h"
+#include "data/list.h"
 
 hV sbV_add(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
@@ -79,5 +80,22 @@ hV sbV_le(const hV *a, const hV *b) {
     }
   } else {
     PANIC("todo");
+  }
+}
+
+hV sbV_append(hV *a, hV *b) {
+  if (a->type == IT_LIST) {
+    sbList_append(a->list, b);
+    return HVNIL;
+  } else {
+    PANIC("todo");
+  }
+}
+
+hV sbV_index(hV *a, hV *b) {
+  if (a->type == IT_LIST && b->type == IT_INTEGER) {
+    return sbList_index(a->list, b->integer);
+  } else {
+    PANIC("todo %lld %lld", a->type, b->type);
   }
 }
