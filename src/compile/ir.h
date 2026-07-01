@@ -47,6 +47,7 @@ typedef enum sbIrExprType {
   IR_E_FUNC,
   IR_E_CALL,
   IR_E_LIST,
+  IR_E_HASH,
 } sbIrExprType;
 
 typedef struct sbIrLabel {

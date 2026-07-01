@@ -249,6 +249,13 @@ static sbIrExpr *expr_list(hIrChunk ck, sbIrExpr *value) {
   });
 }
 
+static sbIrExpr *expr_hash(hIrChunk ck, sbIrExpr *value) {
+  return new_expr(ck, &(sbIrExpr) {
+    .type = IR_E_HASH,
+    .list.this = value,
+  });
+}
+
 static void put_ir_stmt(hIrChunk ck, sbIrStmt *stmt) {
   sbIrStmt *where_to_put = sbArena_alloc(&ck->program->arena, sizeof(sbIrStmt));
   memcpy(where_to_put, stmt, sizeof(sbIrStmt));
@@ -739,6 +746,26 @@ static sbIrExpr *compile_ast_list(hIrChunk ck, sbAst node) {
   return list;
 }
 
+static sbIrExpr *compile_ast_hash(hIrChunk ck, sbAst node) {
+  sbAst considering = node;
+  sbIrExpr *list = NULL;
+  sbIrExpr **place_here = &list;
+  while (considering != NO_NODE) {
+    /* we'll just make a list of "lists" that are actually just cons-cells of a key and value */
+    sbAst hash_entry = considering->seq.left;
+    if (hash_entry->type != AST_NODE_HASHENTRY) {
+      PANIC("Hash table literals should only contain hashentries (%d)", hash_entry->type);
+    }
+    sbIrExpr *compiled_entry = expr_list(ck, compile_ast_expr(ck, hash_entry->seq.left)); // key
+    compiled_entry->list.next = compile_ast_expr(ck, hash_entry->seq.right); // value
+
+    *place_here = expr_hash(ck, compiled_entry);
+    place_here = &(*place_here)->list.next;
+    considering = considering->seq.right;
+  }
+  return list;
+}
+
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
   if (node == NO_NODE) return NULL;
 
@@ -752,6 +779,9 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
   } else if (node->type == AST_VAL_LIST) {
     sbIrExpr *list = compile_ast_list(ck, node->seq.left);
     return list;
+  } else if (node->type == AST_VAL_HASH) {
+    sbIrExpr *hash = compile_ast_hash(ck, node->seq.left);
+    return hash;
   } else if (node->type == AST_NODE_OP) {
     sbIrExpr *left = NULL, *right = NULL;
     if (node->op.left != NO_NODE) {
@@ -765,6 +795,8 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     return expr_value(ck, &HVINT(node->i));
   } else if (node->type == AST_VAL_STRING) {
     return expr_value(ck, &HVSTR(node->str));
+  } else if (node->type == AST_VAL_SYMBOL) {
+    return expr_value(ck, &HVSYM(node->symb));
   } else if (node->type == AST_NODE_NAME) {
     /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
     sbIrVariable *var = compile_ast_var(ck, node);

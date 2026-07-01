@@ -192,6 +192,21 @@ void compile_list(sbVmCompiler *cm, sbIrExpr *expr) {
   EARG(count); /* calling convention: store argument count on stack */
 }
 
+void compile_hash(sbVmCompiler *cm, sbIrExpr *expr) {
+  sbIrExpr *considering = expr;
+  usize count = 0;
+  while (considering) {
+    count ++;
+    /* alternate keys and values on stack. push keys first,
+     * then values */
+    compile_expr(cm, considering->list.this->list.this);
+    compile_expr(cm, considering->list.this->list.next);
+    considering = considering->list.next;
+  }
+  EMIT(BC_LD_IMM);
+  EARG(count); /* calling convention: store argument count on stack */
+}
+
 void compile_op(sbVmCompiler *cm, sbAstOp op);
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
   switch(expr->type) {
@@ -219,6 +234,10 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
     case IR_E_LIST:
       compile_list(cm, expr);
       EMIT(BC_LIST_GATHER);
+      break;
+    case IR_E_HASH:
+      compile_hash(cm, expr);
+      EMIT(BC_HASH_GATHER);
       break;
     case IR_E_VALUE:
       if (expr->value.type == IT_NIL) {
@@ -254,6 +273,7 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_LE: EMIT(BC_OP_LE); break;
     case AST_OP_GE: EMIT(BC_OP_LT, BC_OP_NOT); break;
     case AST_OP_INDEX: EMIT(BC_OP_INDEX); break;
+    case AST_OP_SCOPE: EMIT(BC_OP_SCOPE); break;
     default:
       debug("unknown operation!\n");
   }

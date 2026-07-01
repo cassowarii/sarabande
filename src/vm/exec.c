@@ -174,7 +174,7 @@ void execute_instruction(hVm vm) {
   sbOpcode op = get_opcode(vm);
   if (vm->debugmode) debug("op %02X ", op);
   u64 param;
-  hV *v, *w, res;
+  hV *v, *w, *x, res;
 
   switch (op) {
     case BC_NOP:
@@ -364,6 +364,13 @@ void execute_instruction(hVm vm) {
       npop_stack(vm, 2);
       push_stack(vm, &res);
       break;
+    case BC_OP_SCOPE:
+      v = peek_stack(vm, 1);
+      w = peek_stack(vm, 0);
+      res = sbV_scope_get(v, w);
+      npop_stack(vm, 2);
+      push_stack(vm, &res);
+      break;
     case BC_OP_DEREF:
       PANIC("todo");
     case BC_ALLOC_VARS:
@@ -392,7 +399,23 @@ void execute_instruction(hVm vm) {
       push_stack(vm, &res);
       break;
     case BC_HASH_GATHER:
-      PANIC("todo");
+      v = pop_stack(vm);
+      if (v->type != IT_INTEGER) {
+        /* internal error! this should be generated correctly */
+        PANIC("internal violation: HASH_GATHER should receive an integer on top of stack");
+      }
+      param = v->integer;
+      res = sbV_empty_hash(param * 3 / 2);
+      while (param > 0) {
+        /* values come first, then keys, because of execution order */
+        x = pop_stack(vm);
+        w = pop_stack(vm);
+        sbV_scope_set(&res, w, x);
+        param --;
+      }
+      push_stack(vm, &res);
+      break;
+      break;
     case BC_LONG_NUM:
     case BC_VLONG_NUM:
       PANIC("illegal opcode $%02X at position $%016zX", op, (usize)vm->ip);

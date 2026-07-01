@@ -43,6 +43,7 @@ typedef enum sbOpcode {
   BC_OP_LT,             // less than
   BC_OP_LE,             // less than or equal to
   BC_OP_INDEX,          // index []
+  BC_OP_SCOPE,          // index ::
   BC_ALLOC_VARS,        // create space in rstack for local variables
   BC_LIST_GATHER,       // create list from count + list of values on stack
   BC_HASH_GATHER,       // create hash from count + list of pairs of keys/values on stack

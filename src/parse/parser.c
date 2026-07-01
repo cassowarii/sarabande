@@ -462,11 +462,6 @@ static sbAst parse_name_as_sym(hParser pr) {
 }
 
 static sbAst parse_hash_key(hParser pr) {
-  sbLexToken t = peek_ahead(pr, 0);
-  if (t.type == T_IDENTIFIER) {
-    return parse_name(pr);
-  }
-
   sbAst literal = parse_literal(pr);
   if (literal != NO_NODE) {
     return literal;
@@ -475,7 +470,7 @@ static sbAst parse_hash_key(hParser pr) {
     if (!expect(pr, ']')) return syntax_error(pr);
     return key;
   } else {
-    return NO_NODE;
+    return parse_name_as_sym(pr);
   }
 }
 

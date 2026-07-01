@@ -66,6 +66,13 @@ hV sbV_empty_list(usize capacity) {
   };
 }
 
+hV sbV_empty_hash(usize capacity) {
+  return (hV) {
+    .type = IT_HASH,
+    .hash = sbHash_create(capacity),
+  };
+}
+
 flag sbV_c_eq(const hV *a, const hV *b) {
   if (a->type != b->type) return FALSE;
   if (a->type == ITX_TOMBSTONE || b->type == ITX_TOMBSTONE) return FALSE;

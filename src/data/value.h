@@ -5,10 +5,12 @@
 
 #define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = s })
+#define HVSYM(s) ((hV) { .type = IT_SYMBOL, .symbol = s })
 #define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
 #define HVFUNC(i) ((hV) { .type = IT_FUNCTION, .data = i })
 #define HVLIST(l) ((hV) { .type = IT_LIST, .list = l })
 #define HVNIL ((hV) { .type = IT_NIL })
+#define HVNOTHING ((hV) {0})
 
 typedef u64 hHash;
 typedef u64 hString;
@@ -55,6 +57,7 @@ hV sbV_int(hInteger i);
 hV sbV_boolean(flag b);
 hV sbV_function(u64 id);
 hV sbV_empty_list(usize capacity);
+hV sbV_empty_hash(usize capacity);
 
 flag sbV_c_eq(const hV *a, const hV *b);
 flag sbV_c_falsy(const hV *a);

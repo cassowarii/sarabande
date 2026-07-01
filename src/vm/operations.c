@@ -2,6 +2,7 @@
 
 #include "data/integer.h"
 #include "data/list.h"
+#include "data/hashtable.h"
 
 hV sbV_add(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
@@ -97,5 +98,21 @@ hV sbV_index(hV *a, hV *b) {
     return sbList_index(a->list, b->integer);
   } else {
     PANIC("todo %lld %lld", a->type, b->type);
+  }
+}
+
+hV sbV_scope_get(hV *obj, hV *key) {
+  if (obj->type == IT_HASH) {
+    return sbHash_find(obj->hash, key);
+  } else {
+    PANIC("todo %lld", obj->type);
+  }
+}
+
+void sbV_scope_set(hV *obj, hV *key, hV *value) {
+  if (obj->type == IT_HASH) {
+    sbHash_insert(obj->hash, key, value);
+  } else {
+    PANIC("todo %lld", obj->type);
   }
 }

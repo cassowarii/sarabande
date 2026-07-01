@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -g -DDEBUG -fsanitize=undefined
+CFLAGS=-Wall -g -Og -DDEBUG -fsanitize=undefined
 #CFLAGS=-Wall -O3 -flto
 LIBS=
 

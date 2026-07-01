@@ -33,7 +33,7 @@ hSymbol sbSymbol_from_bytes(const char *text, usize length) {
     /* return already existing symbol */
     return result.symbol;
   } else {
-    PANIC("Only symbol values are allowed in the symbol table!");
+    PANIC("Only symbol values are allowed in the symbol table! (%lld)", result.type);
   }
 }
 
