@@ -7,6 +7,12 @@
  * You can use sbBuffer to read in data you don't know the size of, then request a chunk
  * of that size from sbArena and copy it to there for long-term storage. */
 
+#define BUFFER_ITER(buf, type, var) \
+  for (type *var = (type*)((buf).data); (var) < ((type*)(buf).data + (buf).size / sizeof(type)); var ++)
+#define BUFFER_ITER_FROM(buf, type, var, from) \
+  for (type *var = (type*)((buf).data + (from * sizeof(type))); (var) < ((type*)(buf).data + (buf).size / sizeof(type)); var ++)
+#define BUFFER_INDEX(buf, type, index) (((type*)((buf).data))[index])
+
 typedef struct sbBuffer {
     usize size;
     usize capacity;

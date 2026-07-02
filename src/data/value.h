@@ -7,16 +7,19 @@
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = s })
 #define HVSYM(s) ((hV) { .type = IT_SYMBOL, .symbol = s })
 #define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
-#define HVFUNC(i) ((hV) { .type = IT_FUNCTION, .data = i })
 #define HVLIST(l) ((hV) { .type = IT_LIST, .list = l })
+#define HVREF(r) ((hV) { .type = IT_REF, .ref = r })
 #define HVNIL ((hV) { .type = IT_NIL })
 #define HVNOTHING ((hV) {0})
+#define HVFUNC(i, c) ((hV) { .type = i, .closure = c })
 
 typedef u64 hHash;
 typedef u64 hString;
 typedef u64 hSymbol;
 typedef i64 hInteger;
 typedef u64 hList;
+typedef u64 hRef;
+typedef u64 hClosure;
 
 enum intrinsic_type {
   IT_NOTHING,          // sentinel for "no value here"
@@ -35,13 +38,15 @@ enum intrinsic_type {
 };
 
 typedef struct hV {
-  u64 type;
+  i64 type;
   union {
     hString string;
     hSymbol symbol;
     hHash hash;
     hList list;
     hInteger integer;
+    hClosure closure;
+    hRef ref;
     u64 boolean;
     double float_val;
     u64 data;

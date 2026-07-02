@@ -47,6 +47,7 @@ typedef struct sbVmStackFrame {
   struct sbVmStackFrame *last_fp;
   u8 *last_rp;
   const sbVmBlock *block;
+  hClosure closure;
   usize num_locals;
   hV locals[];
 } sbVmStackFrame;

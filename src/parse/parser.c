@@ -777,9 +777,11 @@ static sbAst parse_stmt(hParser pr) {
     /* def a b, c { ... } */
     next_token(pr);
     sbAst name = parse_name(pr);
-    if (!expect(pr, T_LPAREN)) return syntax_error(pr);
-    sbAst params = parse_comma_exprs(pr, NULL);
-    if (!expect(pr, T_RPAREN)) return syntax_error(pr);
+    sbAst params = NO_NODE;
+    if (expect(pr, T_LPAREN)) {
+      params = parse_comma_exprs(pr, NULL);
+      if (!expect(pr, T_RPAREN)) return syntax_error(pr);
+    }
     sbAst body = parse_block(pr);
     sbAst func_node = seq_node(pr, AST_VAL_FUNC, params, body);
     return seq_node(pr, AST_NODE_DEF, name, func_node);

@@ -48,7 +48,11 @@ void sbIrProgram_print(hIrProgram ir) {
 
   for (usize i = 0; i < nchunks; i++) {
     sbIrChunk *ck = ((sbIrChunk**)ir->chunks.data)[i];
-    debug("\nCHUNK %d with %d variables\n", ck->id, ck->variable_count);
+    debug("\nCHUNK %d with %d variables", ck->id, ck->variable_count);
+    if (ck->num_upvalues > 0) {
+      debug(" and %d upvalues", ck->num_upvalues);
+    }
+    debug("\n");
 
     usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
     for (usize j = 0; j < nstmts; j++) {
@@ -96,6 +100,7 @@ static sbIrChunk *new_chunk(hIrProgram ir) {
   usize nchunks = ir->chunks.size / sizeof(sbIrChunk*);
   sbIrChunk *chunk = sbArena_alloc(&ir->arena, sizeof(sbIrChunk));
   sbBuffer_initialize(&chunk->stmts, 1024);
+  sbBuffer_initialize(&chunk->closed_vars, 256);
   chunk->id = nchunks;
   chunk->program = ir;
 
@@ -114,18 +119,126 @@ static void chunk_deinitialize(hIrChunk ck) {
   sbBuffer_deinitialize(&ck->stmts);
 }
 
+/* find variables that already exist */
+static sbIrVariable *existing_var(hIrChunk ck, const char *name, usize name_len, usize *index_out) {
+  usize index = 0;
+  BUFFER_ITER(ck->program->varmapping, varmapentry, entry) {
+    if (sbstrncmp(name, entry->name, name_len) == 0) {
+      if (index_out) *index_out = index;
+      return entry->var;
+    }
+    index ++;
+  }
+  return NO_VAR;
+}
+
+/* Create an 'upvalue' variable that refers to a normal variable from an outer scope. */
+static sbIrVariable *create_upvalue(sbIrChunk *ck, sbIrVariable *v, usize slot_id) {
+  sbIrVariable *new_var = sbArena_alloc(&ck->program->arena, sizeof(sbIrVariable));
+  new_var->is_upvalue = TRUE;
+
+  /* Upvalues have their own series of sequential IDs distinct from normal variables. */
+  new_var->slot_id = slot_id;
+
+  /* We always assume closed-over variables are initialized. (We should detect this and
+   * fail if not.) */
+  new_var->initialized = TRUE;
+
+  /* Upvalues actually can be closed over, but when initially created they won't be. */
+  new_var->closed_over = FALSE;
+
+  /* This tells us where in the sequence of nested scopes this variable exists. */
+  new_var->mapping_index = v->mapping_index;
+
+  return new_var;
+}
+
+/* inside a function, when we find a variable from outer scope, we need to (A) mark the
+ * variable to say it needs to be stored on the heap / indirectly in a reference, and
+ * (B) we need to write down that our *function* closes over this variable so that at
+ * the place where the function is constructed we can tell the program to save the function
+ * value with that variable's value */
+static sbIrVariable *register_upvalue(hIrChunk ck, usize variable_index) {
+  varmapentry *e = &BUFFER_INDEX(ck->program->varmapping, varmapentry, variable_index);
+  debug("%s is an upvalue! (because %zu < %d)\n", e->name, variable_index, ck->lowest_var_id);
+  e->var->closed_over = TRUE;
+
+  sbIrVariable *existing_upvalue = NULL;
+  BUFFER_ITER(ck->closed_vars, sbIrVariable*, var) {
+    if ((*var)->mapping_index == variable_index) {
+      existing_upvalue = *var;
+      break;
+    }
+  }
+
+  if (!existing_upvalue) {
+    /* Record that we close over this index so that the outer function knows to record
+     * it when creating our closure. (It might, itself, need to close over stuff as
+     * well...) */
+    sbIrVariable *upvalue_var = create_upvalue(ck, e->var, ck->num_upvalues);
+    sbBuffer_append(&ck->closed_vars, &upvalue_var, sizeof(sbIrVariable*));
+    ck->num_upvalues ++;
+    return upvalue_var;
+  } else {
+    return existing_upvalue;
+  }
+}
+
+/* When we have compiled a chunk and are inserting its ID into the code, we need
+ * to mark which variables are being bound into its closure -- ok, fine, but we
+ * also need to check if those variables are external *to us* also so that we can
+ * know whether we need to pull them from *our* upvalues or our normal variables
+ * (and also so that our outer function knows to close over them for us when it
+ * is creating us, even if we ourselves don't actually use them) */
+static sbIrVariable *bind_upvalue(hIrChunk ck, usize variable_index) {
+  if (variable_index >= ck->lowest_var_id) {
+    /* inner function wants one of our normal variables */
+    return BUFFER_INDEX(ck->program->varmapping, varmapentry, variable_index).var;
+  } else {
+    /* need to close over this from *our* outer scope as well... */
+    return register_upvalue(ck, variable_index);
+  }
+}
+
+/* to look up a variable name in source code */
+static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
+  usize index;
+  sbIrVariable *v = existing_var(ck, name, name_len, &index);
+
+  if (v == NO_VAR) {
+    /* TODO do a different thing here */
+    chunk_error(ck, "unknown variable name! '%s'\n", name);
+  }
+
+  if (index >= ck->lowest_var_id) {
+    /* normal variable in inner function scope */
+    return v;
+  } else {
+    /* closed over variable from outer scope */
+    return register_upvalue(ck, index);
+  }
+}
+
 /* we can introduce new variables into a scope using LET */
 static sbIrVariable *create_var(hIrChunk ck, const char *name, usize name_len) {
   sbIrVariable *new_var = sbArena_alloc(&ck->program->arena, sizeof(sbIrVariable));
 
+  sbIrVariable *already_existing = existing_var(ck, name, name_len, NULL);
+  if (already_existing != NO_VAR) {
+    // TODO this should probably just be a warning
+    chunk_error(ck, "redeclaration of variable '%s'!\n", name);
+    return NO_VAR;
+  }
+
   usize nvars = ck->program->varmapping.size / sizeof(varmapentry);
 
   *new_var = (sbIrVariable) {0};
-  new_var->slot_id = nvars - ck->lowest_var_id + 1;
-  if (new_var->slot_id > ck->variable_count) {
+  new_var->slot_id = nvars - ck->lowest_var_id;
+  new_var->mapping_index = nvars;
+  if (new_var->slot_id + 1 > ck->variable_count) {
     /* store max variable slot count used so we know how many
      * need to be allocated for our chunk */
-    ck->variable_count = new_var->slot_id;
+    ck->variable_count = new_var->slot_id + 1;
   }
 
   sbBuffer_append(&ck->program->varmapping, &(varmapentry) {
@@ -135,21 +248,6 @@ static sbIrVariable *create_var(hIrChunk ck, const char *name, usize name_len) {
   }, sizeof(varmapentry));
 
   return new_var;
-}
-
-/* find variables that already exist */
-static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
-  usize nvars = ck->program->varmapping.size / sizeof(varmapentry);
-  for (usize i = ck->lowest_var_id; i < nvars; i++) {
-    varmapentry *entry = &((varmapentry*)ck->program->varmapping.data)[i];
-    if (sbstrncmp(name, entry->name, name_len) == 0) {
-      return entry->var;
-    }
-  }
-
-  /* TODO do a different thing here */
-  chunk_error(ck, "unknown variable name! '%s'\n", name);
-  return NO_VAR;
 }
 
 static sbIrLabel *new_label(hIrChunk ck) {
@@ -180,9 +278,25 @@ static sbIrExpr *expr_value(hIrChunk ck, hV *value) {
 }
 
 static sbIrExpr *expr_func(hIrChunk ck, sbIrChunk *func) {
+  /* when creating a 'literal' of a function 'func' inside another chunk 'ck',
+   * 'func' tells us which variables it closes over from the outer scope. we need
+   * to convert these into references to variables in ck's scope so that it knows
+   * which of its variables to save for this particular function. (it also knows
+   * to heap-allocate those variables as sbRef because their closed_over flag is
+   * set, but if we have multiple functions closing over different variables we
+   * need to know which is which, and also these closed variables might be upvalues
+   * to ck as well. */
+  sbBuffer bound;
+  sbBuffer_initialize(&bound, 256);
+  BUFFER_ITER(func->closed_vars, sbIrVariable*, var) {
+    sbIrVariable *outer_ref = bind_upvalue(ck, (*var)->mapping_index);
+    sbBuffer_append(&bound, &outer_ref, sizeof(sbIrVariable*));
+  }
+
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_FUNC,
-    .func = func,
+    .func.chunk = func,
+    .func.bound = bound,
   });
 }
 
@@ -609,12 +723,16 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       if (node->seq.left->type != AST_NODE_NAME) PANIC("expected name for function in def!");
       if (node->seq.right->type != AST_VAL_FUNC) PANIC("expected function body for function in def!");
       sbAst func_node = node->seq.right;
-      if (func_node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival as function params!");
-      if (func_node->seq.right->type != AST_NODE_SEQ) PANIC("expected SEQ node as function body!");
+      sbAst params = func_node->seq.left;
+      sbAst body = func_node->seq.right;
+      if (params != NO_NODE && params->type != AST_NODE_MULTIVAL) {
+        PANIC("expected multival as function params!");
+      }
+      if (body->type != AST_NODE_SEQ) PANIC("expected SEQ node as function body!");
 
       const char *vname = sbSymbol_name(node->seq.left->symb);
       V1 = create_var(ck, vname, strlen(vname));
-      C1 = compile_ast_function(ck->program, func_node->seq.left, func_node->seq.right);
+      C1 = compile_ast_function(ck->program, params, body);
       E1 = expr_func(ck, C1);
       put_assign(ck, V1, E1);
       break;
@@ -811,14 +929,34 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
   }
 }
 
+static void print_var(sbIrVariable *v) {
+  if (v->closed_over) {
+    debug("special ");
+  }
+
+  if (v->is_upvalue) {
+    debug("upvalue %zu", v->slot_id);
+  } else {
+    debug("variable %zu", v->slot_id);
+  }
+}
+
 static void print_expr(sbIrExpr *e) {
   debug("(");
   switch(e->type) {
     case IR_E_VAR:
-      debug("variable %zu", e->var->slot_id);
+      print_var(e->var);
       break;
     case IR_E_FUNC:
-      debug("{ chunk %d }", e->func->id);
+      debug("{ chunk %d ", e->func.chunk->id);
+      if (e->func.bound.size > 0) {
+        debug("closing over ");
+        BUFFER_ITER(e->func.bound, sbIrVariable*, var) {
+          print_var(*var);
+          debug(", ");
+        }
+      }
+      debug("}");
       break;
     case IR_E_VALUE:
       if (e->value.type == IT_NIL) {
@@ -856,7 +994,9 @@ static void print_expr(sbIrExpr *e) {
 static void print_stmt(sbIrStmt *s) {
   switch (s->type) {
     case IR_S_ARG:
-      debug("  bind function argument to variable %zu\n", s->arg.var->slot_id);
+      debug("  bind function argument to ");
+      print_var(s->arg.var);
+      debug("\n");
       if (s->arg.last) {
         debug("  (no function arguments left on the stack now)\n");
       }
@@ -891,7 +1031,9 @@ static void print_stmt(sbIrStmt *s) {
       debug("\n");
       break;
     case IR_S_ASSIGN:
-      debug("  variable %zu = ", s->assign.var->slot_id);
+      debug("  ");
+      print_var(s->assign.var);
+      debug(" = ");
       print_expr(s->assign.expr);
       debug("\n");
       break;

@@ -1,8 +1,10 @@
 #include "vm/exec.h"
 
 #include "vm/operations.h"
+#include "data/reference.h"
+#include "data/closure.h"
 
-void call_block(hVm vm, usize block_id);
+void call_block(hVm vm, usize block_id, hClosure closure);
 void execute_instruction(hVm vm);
 
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
@@ -31,7 +33,7 @@ sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm) {
 
   /* Let's start at the very beginning.
    * A very good place to start. */
-  call_block(vm, 0);
+  call_block(vm, 0, 0);
 
   while (vm->running) {
     execute_instruction(vm);
@@ -49,7 +51,7 @@ sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm) {
 
 /* --- */
 
-void call_block(hVm vm, usize block_id) {
+void call_block(hVm vm, usize block_id, hClosure closure) {
   sbVmBlock *blk = &vm->program->blocks[block_id];
 
   sbVmStackFrame frame = {
@@ -57,6 +59,7 @@ void call_block(hVm vm, usize block_id) {
     .last_fp = vm->fp,
     .last_rp = vm->rp,
     .block = blk,
+    .closure = closure,
   };
   *(sbVmStackFrame*)vm->rp = frame;
   vm->fp = (sbVmStackFrame*)vm->rp;
@@ -198,10 +201,27 @@ void execute_instruction(hVm vm) {
       break;
     case BC_LD_UPVAL:
       /* Hey, was there upval in there? */
-      PANIC("todo");
+      param = get_param(vm);
+      v = sbClosure_get_var(vm->fp->closure, param);
+      push_stack(vm, v);
+      break;
+    case BC_LD_UPREF:
+      param = get_param(vm);
+      res = sbClosure_get_ref(vm->fp->closure, param);
+      push_stack(vm, &res);
+      break;
     case BC_LD_BLK:
       param = get_param(vm);
-      push_stack(vm, &HVFUNC(param));
+      push_stack(vm, &HVFUNC(param, 0));
+      break;
+    case BC_LD_IND:
+      param = get_param(vm);
+      v = &vm->fp->locals[param];
+      if (v->type != IT_REF) {
+        CHECK("indirect variables should be of type reference! (%lld)", v->type);
+      }
+      w = sbRef_deref(v->ref);
+      push_stack(vm, w);
       break;
     case BC_LD_NIL:
       push_stack(vm, &HVNIL);
@@ -213,13 +233,29 @@ void execute_instruction(hVm vm) {
       pop_stack(vm);
       break;
     case BC_ST_UPVAL:
-      PANIC("todo");
+      param = get_param(vm);
+      sbClosure_set_var(vm->fp->closure, param, pop_stack(vm));
+      break;
+    case BC_ST_IND:
+      param = get_param(vm);
+      v = &vm->fp->locals[param];
+      w = peek_stack(vm, 0);
+      if (v->type == IT_NOTHING) {
+        hRef new_ref = sbRef_create(w);
+        store_local(vm, param, &HVREF(new_ref));
+      } else if (v->type == IT_REF) {
+        sbRef_set_ref(v->ref, w);
+      } else {
+        CHECK("indirect variables should be of type reference! (%lld)", v->type);
+      }
+      pop_stack(vm);
+      break;
     case BC_ST_ARG:
       param = get_param(vm);
       v = pop_stack(vm); /* argument count */
       if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
-        PANIC("calling convention violation: number of args should be an integer");
+        CHECK("calling convention violation: number of args should be an integer");
       }
       w = pop_stack(vm); /* argument value */
       store_local(vm, param, w);
@@ -228,6 +264,31 @@ void execute_instruction(hVm vm) {
       if (v->integer > 0) {
         /* if last integer, don't put the 0 count back on the stack */
         push_stack(vm, v);
+      }
+      break;
+    case BC_ST_ARG_IND:
+      param = get_param(vm);
+      x = pop_stack(vm); /* argument count */
+      if (x->type != IT_INTEGER) {
+        /* internal error! this should be generated correctly */
+        CHECK("calling convention violation: number of args should be an integer");
+      }
+
+      v = &vm->fp->locals[param];
+      w = peek_stack(vm, 0); /* argument value */
+      if (v->type == IT_NOTHING) {
+        hRef new_ref = sbRef_create(w);
+        store_local(vm, param, &HVREF(new_ref));
+      } else if (v->type == IT_REF) {
+        sbRef_set_ref(v->ref, w);
+      } else {
+        CHECK("indirect variables should be of type reference! (%lld)", v->type);
+      }
+      pop_stack(vm);
+      x->integer --;
+      if (x->integer > 0) {
+        /* if last integer, don't put the 0 count back on the stack */
+        push_stack(vm, x);
       }
       break;
     case BC_POP:
@@ -239,25 +300,28 @@ void execute_instruction(hVm vm) {
       break;
     case BC_CALL:
       v = pop_stack(vm);
-      if (v->type != IT_FUNCTION) {
+      if (v->type <= 0) {
         /* We need to figure out exception support or some such.
          * User error should not panic. */
         PANIC("attempt to call a non-function value");
       }
-      call_block(vm, v->data);
+      call_block(vm, v->type, v->closure);
       break;
     case BC_NUMARG:
       param = get_param(vm);
       v = pop_stack(vm);
       if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
-        PANIC("calling convention violation: number of args should be an integer");
+        CHECK("calling convention violation: number of args should be an integer");
       }
       if (v->integer != param) {
         /* This should be an exception. */
         PANIC("wrong number of arguments passed to function.");
       }
-      push_stack(vm, v);
+      if (v->integer > 0) {
+        /* when 0 arguments, leave this off */
+        push_stack(vm, v);
+      }
       break;
     case BC_JMP:
       param = get_param(vm);
@@ -383,11 +447,32 @@ void execute_instruction(hVm vm) {
       vm->rp += (param + 1) * sizeof(hV);
       vm->fp->num_locals += param;
       break;
+    case BC_CLOSURE:
+      param = get_param(vm);
+      hClosure c = sbClosure_create(param);
+      v = pop_stack(vm); /* function to close with */
+      if (v->type <= 0) {
+        CHECK("internal violation: a function is required to create a closure!");
+      }
+      while (param > 0) {
+        param --;
+        /* set_ref: the things on the stack should be the reference variables that
+         * have previously been being manipulated using the IND instructions */
+        w = peek_stack(vm, 0);
+        if (w->type != IT_REF) {
+          CHECK("internal violation: closure should receive a set of reference variables (got %lld)", w->type);
+        }
+        sbClosure_set_ref(c, param, w);
+        pop_stack(vm);
+      }
+      v->closure = c;
+      push_stack(vm, v);
+      break;
     case BC_LIST_GATHER:
       v = pop_stack(vm);
       if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
-        PANIC("internal violation: LIST_GATHER should receive an integer on top of stack");
+        CHECK("internal violation: LIST_GATHER should receive an integer on top of stack");
       }
       param = v->integer;
       res = sbV_empty_list(param);
@@ -402,7 +487,7 @@ void execute_instruction(hVm vm) {
       v = pop_stack(vm);
       if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
-        PANIC("internal violation: HASH_GATHER should receive an integer on top of stack");
+        CHECK("internal violation: HASH_GATHER should receive an integer on top of stack");
       }
       param = v->integer;
       res = sbV_empty_hash(param * 3 / 2);

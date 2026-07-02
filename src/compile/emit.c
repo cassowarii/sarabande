@@ -162,11 +162,21 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       break;
     case IR_S_ASSIGN:
       compile_expr(cm, stmt->assign.expr);
-      EMIT(BC_ST_VAR);
+      if (stmt->assign.var->is_upvalue) {
+        EMIT(BC_ST_UPVAL);
+      } else if (stmt->assign.var->closed_over) {
+        EMIT(BC_ST_IND);
+      } else {
+        EMIT(BC_ST_VAR);
+      }
       EARG(stmt->assign.var->slot_id);
       break;
     case IR_S_ARG:
-      EMIT(BC_ST_ARG);
+      if (stmt->arg.var->closed_over) {
+        EMIT(BC_ST_ARG_IND);
+      } else {
+        EMIT(BC_ST_ARG);
+      }
       EARG(stmt->arg.var->slot_id);
       break;
     case IR_S_RETURN:
@@ -224,12 +234,45 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       EMIT(BC_CALL);
       break;
     case IR_E_VAR:
-      EMIT(BC_LD_VAR);
+      if (expr->var->is_upvalue) {
+        EMIT(BC_LD_UPVAL);
+      } else if (expr->var->closed_over) {
+        EMIT(BC_LD_IND);
+      } else {
+        EMIT(BC_LD_VAR);
+      }
       EARG(expr->var->slot_id);
       break;
     case IR_E_FUNC:
+      if (expr->func.bound.size > 0) {
+        BUFFER_ITER(expr->func.bound, sbIrVariable*, var) {
+          if ((*var)->is_upvalue) {
+            /* the closure-generator expects a series of values
+             * of type reference to close over. BC_LD_UPVAL normally
+             * pushes whatever is *behind* the reference, which we
+             * don't want. UPREF will push the reference value
+             * itself from the closure so we can close over it
+             * a second time */
+            EMIT(BC_LD_UPREF);
+          } else if ((*var)->closed_over) {
+            /* note: BC_LD_VAR here, not BC_LD_IND! this will push
+             * the pointer value, not the variable itself, because
+             * we want to put the pointer (well, the sbRef) inside
+             * the closure, not the value */
+            EMIT(BC_LD_VAR);
+          } else {
+            PANIC("cannot have a direct variable in closure!");
+          }
+          EARG((*var)->slot_id);
+        }
+      }
       EMIT(BC_LD_BLK);
-      EARG(expr->func->id);
+      EARG(expr->func.chunk->id);
+      if (expr->func.bound.size > 0) {
+        EMIT(BC_CLOSURE);
+        /* record number of variables we are closing over */
+        EARG(expr->func.bound.size / sizeof(sbIrVariable*));
+      }
       break;
     case IR_E_LIST:
       compile_list(cm, expr);
@@ -250,6 +293,7 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
         EMIT(BC_LD_IMM);
         EARG(expr->value.integer);
       } else {
+        /* TODO Deduplicate constants */
         u32 constant_index = sbVmCompiler_add_constant(cm, &expr->value);
         EMIT(BC_LD_CONST);
         EARG(constant_index);

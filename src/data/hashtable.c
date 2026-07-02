@@ -56,15 +56,17 @@ sbHashValue sbHash_hash_bytes(const char *bytes, usize length) {
   return result;
 }
 
+flag is_flatly_hashable(hV *obj) {
+  return obj->type == IT_NIL
+      || obj->type == IT_BOOLEAN
+      || obj->type == IT_INTEGER /* todo: wrong for bigints */
+      || obj->type == IT_REF
+      || obj->type == IT_SYMBOL;
+}
+
 sbHashValue sbHash_hash_obj(hV *obj) {
-  if (obj->type == IT_NIL) {
-    char zero = 0;
-    return sbHash_hash_bytes(&zero, 1);
-  } else if (obj->type == IT_SYMBOL) {
-    return sbHash_hash_bytes((char*)&obj->symbol, sizeof(obj->symbol));
-  } else if (obj->type == IT_INTEGER) {
-    /* TODO bigint should be different i think */
-    return sbHash_hash_bytes((char*)&obj->integer, sizeof(obj->integer));
+  if (is_flatly_hashable(obj)) {
+    return sbHash_hash_bytes((char*)obj, sizeof(*obj));
   } else if (obj->type == IT_STRING) {
     char scratch[8];
     usize length;

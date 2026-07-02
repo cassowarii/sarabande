@@ -60,9 +60,9 @@ typedef struct sbIrLabel {
 typedef struct sbIrVariable {
   usize slot_id;
   flag initialized;
-  usize first_appearance;
-  usize last_appearance;
-  usize assigned_index;
+  flag closed_over;
+  flag is_upvalue;
+  usize mapping_index;
 } sbIrVariable;
 
 typedef struct sbIrJump {
@@ -75,8 +75,11 @@ typedef struct sbIrExpr {
   sbIrExprType type;
   union {
     hV value;
-    struct sbIrChunk *func;
     sbIrVariable *var;
+    struct {
+      struct sbIrChunk *chunk;
+      sbBuffer bound;
+    } func;
     struct {
       sbAstOp type;
       struct sbIrExpr *left;
@@ -119,10 +122,12 @@ typedef struct sbIrChunk {
   struct sbIrProgram *program;
   i32 id;
   i16 num_args;
+  i16 num_upvalues;
   flag variadic;
   i32 label_count;
   i32 variable_count;
   i32 lowest_var_id;
+  sbBuffer closed_vars;
   sbBuffer stmts;
 } sbIrChunk;
 
