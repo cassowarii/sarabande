@@ -9,6 +9,7 @@ typedef enum sbOpcode {
   BC_LD_CONST,          // push constants[index] to stack
   BC_LD_CTX,            // look up key in context object and push result
   BC_LD_VAR,            // push value onto stack from variable
+  BC_LD_REF,            // push reference value onto stack from variable
   BC_LD_UPVAL,          // push value onto stack from closure
   BC_LD_UPREF,          // push pointer to closure value onto stack (to close over again)
   BC_LD_BLK,            // push reference to function onto stack

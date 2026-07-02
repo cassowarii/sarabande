@@ -255,11 +255,17 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
              * a second time */
             EMIT(BC_LD_UPREF);
           } else if ((*var)->closed_over) {
-            /* note: BC_LD_VAR here, not BC_LD_IND! this will push
+            /* note: BC_LD_REF here, not BC_LD_IND! this will push
              * the pointer value, not the variable itself, because
              * we want to put the pointer (well, the sbRef) inside
              * the closure, not the value */
-            EMIT(BC_LD_VAR);
+            /* BC_LD_REF is actually almost the same as BC_LD_VAR,
+             * except that if a variable hasn't been initialized
+             * it will create a new reference to nil. (this is
+             * necessary for mutually calling functions, who want to
+             * close over each other before all of them have been
+             * defined.) */
+            EMIT(BC_LD_REF);
           } else {
             PANIC("cannot have a direct variable in closure!");
           }

@@ -199,6 +199,16 @@ void execute_instruction(hVm vm) {
       param = get_param(vm);
       push_stack(vm, &vm->fp->locals[param]);
       break;
+    case BC_LD_REF:
+      param = get_param(vm);
+      w = &vm->fp->locals[param];
+      if (w->type == IT_NOTHING) {
+        /* create new ref */
+        store_local(vm, param, &HVREF(sbRef_create(&HVNIL)));
+        w = &vm->fp->locals[param];
+      }
+      push_stack(vm, w);
+      break;
     case BC_LD_UPVAL:
       /* Hey, was there upval in there? */
       param = get_param(vm);

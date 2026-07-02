@@ -16,7 +16,6 @@ typedef struct varmapentry {
 static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst params, sbAst seqast);
 static sbIrChunk *new_chunk(hIrProgram ir);
 static void chunk_deinitialize(hIrChunk ck);
-static void print_stmt(sbIrStmt *s);
 
 void sbIrProgram_initialize(hIrProgram ir, usize initial_arena_size) {
   *ir = (sbIrProgram) {0};
@@ -41,27 +40,6 @@ void sbIrProgram_compile_ast(hIrProgram ir, sbAst ast) {
   /* compile a full program as like the body of a function
    * with no parameters */
   compile_ast_function(ir, NO_NODE, ast);
-}
-
-void sbIrProgram_print(hIrProgram ir) {
-  usize nchunks = ir->chunks.size / sizeof(sbIrChunk*);
-
-  for (usize i = 0; i < nchunks; i++) {
-    sbIrChunk *ck = ((sbIrChunk**)ir->chunks.data)[i];
-    debug("\nCHUNK %d with %d variables", ck->id, ck->variable_count);
-    if (ck->num_upvalues > 0) {
-      debug(" and %d upvalues", ck->num_upvalues);
-    }
-    debug("\n");
-
-    usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
-    for (usize j = 0; j < nstmts; j++) {
-      sbIrStmt *s = ((sbIrStmt**)ck->stmts.data)[j];
-      print_stmt(s);
-    }
-
-    debug("\n");
-  }
 }
 
 /* --- */
@@ -446,7 +424,6 @@ static void put_expr(hIrChunk ck, sbIrExpr *expr) {
   });
 }
 
-static void print_expr(sbIrExpr *e);
 static void put_assign(hIrChunk ck, sbIrVariable *assign_to, sbIrExpr *expr) {
   assign_to->initialized = TRUE;
   put_ir_stmt(ck, &(sbIrStmt) {
@@ -534,6 +511,19 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
   usize lowest_var = ck->program->varmapping.size / sizeof(varmapentry);
 
   sbAst considering = seqast;
+  while (considering != NO_NODE) {
+    sbAst node = considering->seq.left;
+    if (considering->seq.left->type == AST_NODE_DEF) {
+      /* DEF is guaranteed to have a value bound to it always. to allow functions
+       * to call each other forward and backward, we'll scan each scope for DEF nodes
+       * and make sure those names are available through the whole scope. */
+      const char *vname = sbSymbol_name(node->seq.left->symb);
+      create_var(ck, vname, strlen(vname));
+    }
+    considering = considering->seq.right;
+  }
+
+  considering = seqast;
   while (considering != NO_NODE) {
     /* walk down the tree a line at a time */
     if (considering->type != AST_NODE_SEQ) {
@@ -731,7 +721,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       if (body->type != AST_NODE_SEQ) PANIC("expected SEQ node as function body!");
 
       const char *vname = sbSymbol_name(node->seq.left->symb);
-      V1 = create_var(ck, vname, strlen(vname));
+      V1 = var_name(ck, vname, strlen(vname));
       C1 = compile_ast_function(ck->program, params, body);
       E1 = expr_func(ck, C1);
       put_assign(ck, V1, E1);
@@ -926,118 +916,5 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     }
   } else {
     PANIC("expr todo! (%d)", node->type);
-  }
-}
-
-static void print_var(sbIrVariable *v) {
-  if (v->closed_over) {
-    debug("special ");
-  }
-
-  if (v->is_upvalue) {
-    debug("upvalue %zu", v->slot_id);
-  } else {
-    debug("variable %zu", v->slot_id);
-  }
-}
-
-static void print_expr(sbIrExpr *e) {
-  debug("(");
-  switch(e->type) {
-    case IR_E_VAR:
-      print_var(e->var);
-      break;
-    case IR_E_FUNC:
-      debug("{ chunk %d ", e->func.chunk->id);
-      if (e->func.bound.size > 0) {
-        debug("closing over ");
-        BUFFER_ITER(e->func.bound, sbIrVariable*, var) {
-          print_var(*var);
-          debug(", ");
-        }
-      }
-      debug("}");
-      break;
-    case IR_E_VALUE:
-      if (e->value.type == IT_NIL) {
-        debug("nil");
-      } else if (e->value.type == IT_INTEGER) {
-        debug("%lld", e->value.integer);
-      } else {
-        debug("some value");
-      }
-      break;
-    case IR_E_OP:
-      print_expr(e->op.left);
-      debug(" %c ", e->op.type);
-      if (e->op.right) {
-        print_expr(e->op.right);
-      }
-      break;
-    case IR_E_CALL:
-      debug("CALL: ");
-      print_expr(e->call.func);
-      debug(" with params ");
-      sbIrExpr *param = e->call.param;
-      while (param) {
-        print_expr(param->list.this);
-        debug(",");
-        param = param->list.next;
-      }
-      break;
-    default:
-      debug("something");
-  }
-  debug(")");
-}
-
-static void print_stmt(sbIrStmt *s) {
-  switch (s->type) {
-    case IR_S_ARG:
-      debug("  bind function argument to ");
-      print_var(s->arg.var);
-      debug("\n");
-      if (s->arg.last) {
-        debug("  (no function arguments left on the stack now)\n");
-      }
-      break;
-    case IR_S_LABEL:
-      debug("label %zu:\n", s->label->id);
-      break;
-    case IR_S_JUMP:
-      debug("  jump to label %zu", s->jump.label->id);
-      if (s->jump.condition) {
-        if (s->jump.inverted) {
-          debug(" unless ");
-        } else {
-          debug(" if ");
-        }
-        print_expr(s->jump.condition);
-      }
-      debug("\n");
-      break;
-    case IR_S_RETURN:
-      debug("  return ");
-      if (s->expr) {
-        print_expr(s->expr);
-      } else {
-        debug("NOTHING");
-      }
-      debug("\n");
-      break;
-    case IR_S_EXPR:
-      debug("  ");
-      print_expr(s->expr);
-      debug("\n");
-      break;
-    case IR_S_ASSIGN:
-      debug("  ");
-      print_var(s->assign.var);
-      debug(" = ");
-      print_expr(s->assign.expr);
-      debug("\n");
-      break;
-    default:
-      debug("  (do something)\n");
   }
 }
