@@ -129,7 +129,8 @@ static flag is_literal(sbTokenType type) {
         || type == T_FLOAT
         || type == T_SYMBOL
         || type == T_rTRUE
-        || type == T_rFALSE;
+        || type == T_rFALSE
+        || type == T_rNIL;
 }
 
 static flag insert_semicolon_after(sbTokenType type) {

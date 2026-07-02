@@ -7,6 +7,10 @@
 
 #include <stdarg.h>
 
+#define BY_LET 1
+#define BY_DEF 2
+#define BY_PARAM 3
+
 typedef struct varmapentry {
   const char *name;
   usize name_len;
@@ -118,9 +122,9 @@ static sbIrVariable *create_upvalue(sbIrChunk *ck, sbIrVariable *v, usize slot_i
   /* Upvalues have their own series of sequential IDs distinct from normal variables. */
   new_var->slot_id = slot_id;
 
-  /* We always assume closed-over variables are initialized. (We should detect this and
-   * fail if not.) */
-  new_var->initialized = TRUE;
+  /* We can close over a variable if it has been assigned a value somewhere in our
+   * scope. */
+  new_var->initialized = v->initialized;
 
   /* Upvalues actually can be closed over, but when initially created they won't be. */
   new_var->closed_over = FALSE;
@@ -138,7 +142,6 @@ static sbIrVariable *create_upvalue(sbIrChunk *ck, sbIrVariable *v, usize slot_i
  * value with that variable's value */
 static sbIrVariable *register_upvalue(hIrChunk ck, usize variable_index) {
   varmapentry *e = &BUFFER_INDEX(ck->program->varmapping, varmapentry, variable_index);
-  debug("%s is an upvalue! (because %zu < %d)\n", e->name, variable_index, ck->lowest_var_id);
   e->var->closed_over = TRUE;
 
   sbIrVariable *existing_upvalue = NULL;
@@ -425,7 +428,6 @@ static void put_expr(hIrChunk ck, sbIrExpr *expr) {
 }
 
 static void put_assign(hIrChunk ck, sbIrVariable *assign_to, sbIrExpr *expr) {
-  assign_to->initialized = TRUE;
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_ASSIGN,
     .assign.var = assign_to,
@@ -485,7 +487,7 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
     const char *vname = sbSymbol_name(param_comma->seq.left->symb);
     sbIrVariable *v1 = create_var(ck, vname, strlen(vname));
     sbBuffer_append(&arg_vars, &v1, sizeof(sbIrVariable*));
-    v1->initialized = TRUE;
+    v1->initialized = BY_PARAM;
     param_comma = param_comma->seq.right;
     ck->num_args ++;
   }
@@ -513,14 +515,65 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
   sbAst considering = seqast;
   while (considering != NO_NODE) {
     sbAst node = considering->seq.left;
-    if (considering->seq.left->type == AST_NODE_DEF) {
-      /* DEF is guaranteed to have a value bound to it always. to allow functions
-       * to call each other forward and backward, we'll scan each scope for DEF nodes
-       * and make sure those names are available through the whole scope. */
+    /* make sure all DEF names are available through the whole scope, so code can
+     * call functions defined later in the program. however, LET won't receive a value / be
+     * allowed to be used until the actual line of the declaration */
+    if (node->type == AST_NODE_DEF) {
       const char *vname = sbSymbol_name(node->seq.left->symb);
-      create_var(ck, vname, strlen(vname));
+      sbIrVariable *V1 = create_var(ck, vname, strlen(vname));
+      /* if something was declared with DEF, it must be initialized, because DEF requires
+       * you to provide a value. so we can close over DEF's that are defined later in the
+       * scope. */
+      V1->initialized = BY_DEF;
     }
     considering = considering->seq.right;
+  }
+
+  considering = seqast;
+  while (considering != NO_NODE) {
+    sbAst node = considering->seq.left;
+    /* now, we actually go through and compile all the functions with assignments, so that
+     * they will be available to call through the whole scope. */
+    if (node->type == AST_NODE_DEF) {
+      if (node->seq.left->type != AST_NODE_NAME) PANIC("expected name for function in def!");
+      if (node->seq.right->type != AST_VAL_FUNC) PANIC("expected function body for function in def!");
+      sbAst func_node = node->seq.right;
+      sbAst params = func_node->seq.left;
+      sbAst body = func_node->seq.right;
+      if (params != NO_NODE && params->type != AST_NODE_MULTIVAL) {
+        PANIC("expected multival as function params!");
+      }
+      if (body->type != AST_NODE_SEQ) PANIC("expected SEQ node as function body!");
+
+      const char *vname = sbSymbol_name(node->seq.left->symb);
+      sbIrVariable *V1 = var_name(ck, vname, strlen(vname));
+      sbIrChunk *C1 = compile_ast_function(ck->program, params, body);
+      sbIrExpr *E1 = expr_func(ck, C1);
+      put_assign(ck, V1, E1);
+    }
+
+    if (node->type == AST_NODE_LET) {
+      sbAst N1 = node->seq.left;  /* things to bind to */
+      while (N1 != NO_NODE) {
+        if (N1->seq.left->type != AST_NODE_NAME) {
+          chunk_error(ck, "Only variable names are permitted after 'let'!");
+          break;
+        }
+        const char *vname = sbSymbol_name(N1->seq.left->symb);
+        sbIrVariable *V1 = create_var(ck, vname, strlen(vname));
+        V1->initialized = BY_LET;
+        N1 = N1->seq.right;
+      }
+    }
+    considering = considering->seq.right;
+  }
+
+  /* now reset the 'initialized' flag of anything that was initialized by LET so
+   * that we can't refer to them earlier than they are declared */
+  BUFFER_ITER(ck->program->varmapping, varmapentry, entry) {
+    if (entry->var->initialized == BY_LET) {
+      entry->var->initialized = FALSE;
+    }
   }
 
   considering = seqast;
@@ -584,7 +637,6 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
   sbIrExpr *E1;
   sbIrLabel *L1, *L2;
   sbIrVariable *V1;
-  sbIrChunk *C1;
   sbAst N1, N2;
   switch (node->type) {
     case AST_NODE_RETURN:
@@ -609,55 +661,30 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
        *    LET a = 3
        * linearizes to:
        *    LET a
+       *    ...
        *    a = 3
        *
        *    LET a, b = 5, 6
        * linearizes to:
        *    LET a, b
+       *    ...
        *    a = 5
        *    b = 6
        *
-       * "LET a" doesn't actually appear in the output IR code,
-       * but it allows us to interpret the name "a" inside the
-       * current block to refer to a consistent variable slot.
+       * The LET part actually gets moved to the top of the enclosing block along with
+       * any DEFs. So we only care about encountering a LET node in this context if it
+       * is an assignment.
        */
-      if (node->seq.right == NO_NODE) {
-        /* let ... */
-        if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of let!");
-        N1 = node->seq.left;  /* things to bind to */
-        while (N1 != NO_NODE) {
-          if (N1->seq.left->type != AST_NODE_NAME) {
-            chunk_error(ck, "Only variable names are permitted after 'let'!");
-            break;
-          }
-          const char *vname = sbSymbol_name(N1->seq.left->symb);
-          V1 = create_var(ck, vname, strlen(vname));
-          N1 = N1->seq.right;
-        }
-      } else {
+      if (node->seq.right != NO_NODE) {
         /* let ... = ... */
         if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of let!");
-        N1 = node->seq.left;  /* things to bind to */
-        while (N1 != NO_NODE) {
-          /* create all variables first, then initialize them.
-           * we can write something like "let q, r = 5, q + 1", but if we write something
-           * like "let q, r = r + 1, 5", we should fail with "r is not initialized," not
-           * "i don't know what r means". */
-          if (N1->seq.left->type != AST_NODE_NAME) {
-            chunk_error(ck, "Only variable names are permitted on the left side of 'let'!");
-            break;
-          }
-          const char *vname = sbSymbol_name(N1->seq.left->symb);
-          V1 = create_var(ck, vname, strlen(vname));
-          N1 = N1->seq.right;
-        }
-
         N1 = node->seq.left;  /* things to bind to */
         N2 = node->seq.right; /* values to assign */
         while (N1 != NO_NODE && N2 != NO_NODE) {
           /* now assign to all the variables we just created */
           const char *vname = sbSymbol_name(N1->seq.left->symb);
           V1 = var_name(ck, vname, strlen(vname));
+          V1->initialized = BY_LET;
           E1 = compile_ast_expr(ck, N2->seq.left);
           put_assign(ck, V1, E1);
           N1 = N1->seq.right;
@@ -707,24 +734,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       break;
 
     case AST_NODE_DEF:
-      /* DEF is like LET, except we are assigning a function value.
-       * TODO: I still need to think about how to handle function
-       * calling conventions / parameters with this variable system. */
-      if (node->seq.left->type != AST_NODE_NAME) PANIC("expected name for function in def!");
-      if (node->seq.right->type != AST_VAL_FUNC) PANIC("expected function body for function in def!");
-      sbAst func_node = node->seq.right;
-      sbAst params = func_node->seq.left;
-      sbAst body = func_node->seq.right;
-      if (params != NO_NODE && params->type != AST_NODE_MULTIVAL) {
-        PANIC("expected multival as function params!");
-      }
-      if (body->type != AST_NODE_SEQ) PANIC("expected SEQ node as function body!");
-
-      const char *vname = sbSymbol_name(node->seq.left->symb);
-      V1 = var_name(ck, vname, strlen(vname));
-      C1 = compile_ast_function(ck->program, params, body);
-      E1 = expr_func(ck, C1);
-      put_assign(ck, V1, E1);
+      /* DEF should already have been compiled at the beginning of the block. */
       break;
 
     case AST_NODE_WHILE:
@@ -905,13 +915,15 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     return expr_value(ck, &HVSTR(node->str));
   } else if (node->type == AST_VAL_SYMBOL) {
     return expr_value(ck, &HVSYM(node->symb));
+  } else if (node->type == AST_VAL_NIL) {
+    return expr_value(ck, &HVNIL);
   } else if (node->type == AST_NODE_NAME) {
     /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
     sbIrVariable *var = compile_ast_var(ck, node);
     if (var->initialized) {
       return expr_var(ck, var);
     } else {
-      chunk_error(ck, "Variable '%s' has not yet been initialized here!\n", sbSymbol_name(node->symb));
+      chunk_error(ck, "Variable '%s' has not been declared here!\n", sbSymbol_name(node->symb));
       return NULL;
     }
   } else {
