@@ -24,6 +24,7 @@ typedef enum sbOpcode {
   BC_ST_ARG_IND,        // decrement TOS and store NOS in variable indirectly
   BC_POP,               // pop value from stack
   BC_NPOP,              // pop N values from stack given by top number
+  BC_SWAP,              // swap top two values on stack
   BC_CALL,              // push return address and jump to new block
   BC_RET,               // return to calling block
   BC_NUMARG,            // check number of function arguments = this
@@ -53,6 +54,7 @@ typedef enum sbOpcode {
   BC_CLOSURE,           // create closure from top elements of stack
   BC_LIST_GATHER,       // create list from count + list of values on stack
   BC_HASH_GATHER,       // create hash from count + list of pairs of keys/values on stack
+  BC_LIST_SPILL,        // splat a list into a context with a count
   BC_LONG_NUM   = 0xFC, // next two bytes are a 16-bit number
   BC_VLONG_NUM  = 0xFD, // next four bytes are a 32-bit number
   BC_VVLONG_NUM = 0xFE, // next four bytes are a 32-bit number

@@ -1,6 +1,7 @@
 #include "vm/exec.h"
 
 #include "vm/operations.h"
+#include "data/list.h"
 #include "data/reference.h"
 #include "data/closure.h"
 
@@ -101,10 +102,10 @@ void push_stack(hVm vm, const hV *value) {
   vm->sp += sizeof(hV);
 }
 
-hV *pop_stack(hVm vm) {
+hV pop_stack(hVm vm) {
   vm->sp -= sizeof(hV);
   sbV_release((hV*)vm->sp);
-  return (hV*)vm->sp;
+  return *(hV*)vm->sp;
 }
 
 hV *npop_stack(hVm vm, usize count) {
@@ -177,7 +178,9 @@ void execute_instruction(hVm vm) {
   sbOpcode op = get_opcode(vm);
   if (vm->debugmode) debug("op %02X ", op);
   u64 param;
+  usize count;
   hV *v, *w, *x, res;
+  hV vv, ww, xx;
 
   switch (op) {
     case BC_NOP:
@@ -244,7 +247,8 @@ void execute_instruction(hVm vm) {
       break;
     case BC_ST_UPVAL:
       param = get_param(vm);
-      sbClosure_set_var(vm->fp->closure, param, pop_stack(vm));
+      vv = pop_stack(vm);
+      sbClosure_set_var(vm->fp->closure, param, &vv);
       break;
     case BC_ST_IND:
       param = get_param(vm);
@@ -262,24 +266,24 @@ void execute_instruction(hVm vm) {
       break;
     case BC_ST_ARG:
       param = get_param(vm);
-      v = pop_stack(vm); /* argument count */
-      if (v->type != IT_INTEGER) {
+      vv = pop_stack(vm); /* argument count */
+      if (vv.type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("calling convention violation: number of args should be an integer");
       }
-      w = pop_stack(vm); /* argument value */
-      store_local(vm, param, w);
+      ww = pop_stack(vm); /* argument value */
+      store_local(vm, param, &ww);
       /* we track the number of arguments remaining, for variadic functions later */
-      v->integer --;
-      if (v->integer > 0) {
+      vv.integer --;
+      if (vv.integer > 0) {
         /* if last integer, don't put the 0 count back on the stack */
-        push_stack(vm, v);
+        push_stack(vm, &vv);
       }
       break;
     case BC_ST_ARG_IND:
       param = get_param(vm);
-      x = pop_stack(vm); /* argument count */
-      if (x->type != IT_INTEGER) {
+      xx = pop_stack(vm); /* argument count */
+      if (xx.type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("calling convention violation: number of args should be an integer");
       }
@@ -295,42 +299,48 @@ void execute_instruction(hVm vm) {
         CHECK("indirect variables should be of type reference! (%lld)", v->type);
       }
       pop_stack(vm);
-      x->integer --;
-      if (x->integer > 0) {
+      xx.integer --;
+      if (xx.integer > 0) {
         /* if last integer, don't put the 0 count back on the stack */
-        push_stack(vm, x);
+        push_stack(vm, &xx);
       }
       break;
     case BC_POP:
-      v = pop_stack(vm);
+      pop_stack(vm);
       break;
     case BC_NPOP:
       param = get_param(vm);
       npop_stack(vm, param);
       break;
+    case BC_SWAP:
+      vv = pop_stack(vm);
+      ww = pop_stack(vm);
+      push_stack(vm, &vv);
+      push_stack(vm, &ww);
+      break;
     case BC_CALL:
-      v = pop_stack(vm);
-      if (v->type <= 0) {
+      vv = pop_stack(vm);
+      if (vv.type <= 0) {
         /* We need to figure out exception support or some such.
          * User error should not panic. */
         PANIC("attempt to call a non-function value");
       }
-      call_block(vm, v->type, v->closure);
+      call_block(vm, vv.type, vv.closure);
       break;
     case BC_NUMARG:
       param = get_param(vm);
-      v = pop_stack(vm);
-      if (v->type != IT_INTEGER) {
+      vv = pop_stack(vm);
+      if (vv.type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("calling convention violation: number of args should be an integer");
       }
-      if (v->integer != param) {
+      if (vv.integer != param) {
         /* This should be an exception. */
         PANIC("wrong number of arguments passed to function.");
       }
-      if (v->integer > 0) {
+      if (vv.integer > 0) {
         /* when 0 arguments, leave this off */
-        push_stack(vm, v);
+        push_stack(vm, &vv);
       }
       break;
     case BC_JMP:
@@ -339,15 +349,15 @@ void execute_instruction(hVm vm) {
       break;
     case BC_JT:
       param = get_param(vm);
-      v = pop_stack(vm);
-      if (!sbV_c_falsy(v)) {
+      vv = pop_stack(vm);
+      if (!sbV_c_falsy(&vv)) {
         vm->ip = &vm->fp->block->bytecode[param];
       }
       break;
     case BC_JF:
       param = get_param(vm);
-      v = pop_stack(vm);
-      if (sbV_c_falsy(v)) {
+      vv = pop_stack(vm);
+      if (sbV_c_falsy(&vv)) {
         vm->ip = &vm->fp->block->bytecode[param];
       }
       break;
@@ -364,8 +374,8 @@ void execute_instruction(hVm vm) {
       push_stack(vm, &res);
       break;
     case BC_OP_NOT:
-      v = pop_stack(vm);
-      if (sbV_c_falsy(v)) {
+      vv = pop_stack(vm);
+      if (sbV_c_falsy(&vv)) {
         push_stack(vm, &HVBOOL(TRUE));
       } else {
         push_stack(vm, &HVBOOL(FALSE));
@@ -460,8 +470,8 @@ void execute_instruction(hVm vm) {
     case BC_CLOSURE:
       param = get_param(vm);
       hClosure c = sbClosure_create(param);
-      v = pop_stack(vm); /* function to close with */
-      if (v->type <= 0) {
+      vv = pop_stack(vm); /* function to close with */
+      if (vv.type <= 0) {
         CHECK("internal violation: a function is required to create a closure!");
       }
       while (param > 0) {
@@ -475,41 +485,62 @@ void execute_instruction(hVm vm) {
         sbClosure_set_ref(c, param, w);
         pop_stack(vm);
       }
-      v->closure = c;
-      push_stack(vm, v);
+      vv.closure = c;
+      push_stack(vm, &vv);
       break;
     case BC_LIST_GATHER:
-      v = pop_stack(vm);
-      if (v->type != IT_INTEGER) {
+      vv = pop_stack(vm);
+      if (vv.type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("internal violation: LIST_GATHER should receive an integer on top of stack");
       }
-      param = v->integer;
+      param = vv.integer;
+      count = param;
       res = sbV_empty_list(param);
-      while (param > 0) {
-        w = pop_stack(vm);
+      while (count > 0) {
+        /* list gets built from bottom up, because first thing pushed is lower
+         * on the stack */
+        w = peek_stack(vm, count - 1);
         sbV_append(&res, w);
-        param --;
+        count --;
       }
+      npop_stack(vm, param);
       push_stack(vm, &res);
       break;
     case BC_HASH_GATHER:
-      v = pop_stack(vm);
-      if (v->type != IT_INTEGER) {
+      vv = pop_stack(vm);
+      if (vv.type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("internal violation: HASH_GATHER should receive an integer on top of stack");
       }
-      param = v->integer;
-      res = sbV_empty_hash(param * 3 / 2);
-      while (param > 0) {
+      count = vv.integer;
+      res = sbV_empty_hash(count * 3 / 2);
+      while (count > 0) {
         /* values come first, then keys, because of execution order */
-        x = pop_stack(vm);
-        w = pop_stack(vm);
-        sbV_scope_set(&res, w, x);
-        param --;
+        xx = pop_stack(vm);
+        ww = pop_stack(vm);
+        sbV_scope_set(&res, &ww, &xx);
+        count --;
       }
       push_stack(vm, &res);
       break;
+    case BC_LIST_SPILL:
+      vv = pop_stack(vm); /* list to spill */
+      if (vv.type != IT_LIST) {
+        /* user error */
+        PANIC("cannot use '...' operator on something that isn't a list");
+      }
+      ww = pop_stack(vm); /* current count */
+      if (ww.type != IT_INTEGER) {
+        /* internal error! this should be generated correctly */
+        CHECK("internal violation: LIST_SPILL should receive an integer on top of stack");
+      }
+      x = sbList_get_value(vv.list, &count);
+      for (usize i = 0; i < count; i++) {
+        push_stack(vm, &x[i]);
+      }
+      ww.integer += count;
+      push_stack(vm, &ww);
       break;
     case BC_LONG_NUM:
     case BC_VLONG_NUM:

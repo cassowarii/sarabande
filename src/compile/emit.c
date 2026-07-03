@@ -193,13 +193,44 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
 void compile_list(sbVmCompiler *cm, sbIrExpr *expr) {
   sbIrExpr *considering = expr;
   usize count = 0;
+  flag was_splat = FALSE;
   while (considering) {
+    sbIrExpr *elem = considering->list.this;
+    if (elem->type == IR_E_OP && elem->op.type == AST_OP_SPLAT) {
+      if (!was_splat) {
+        /* first splatted thing in list: emit non-splat argument count,
+         * then spill list onto it (LIST_SPILL takes a list and a number,
+         * and unpacks the list onto the stack, then adds the length of
+         * the list to the number) */
+        was_splat = TRUE;
+        EMIT(BC_LD_IMM);
+        EARG(count);
+      }
+      /* compile whatever's behind the splat, and splat it */
+      compile_expr(cm, elem->op.left);
+      EMIT(BC_LIST_SPILL);
+    } else if (was_splat) {
+      /* if was splat (but not this one), we can no longer rely on the
+       * number of commas in the list to say how many arguments (or
+       * whatever) we are passing. so we have to start counting one
+       * by one */
+      compile_expr(cm, elem);
+      /* swap to put the number on top, then increment */
+      EMIT(BC_SWAP, BC_OP_INCR);
+    } else {
+      /* blissfully unaware of the splat */
+      compile_expr(cm, elem);
+    }
     count ++;
-    compile_expr(cm, considering->list.this);
     considering = considering->list.next;
   }
-  EMIT(BC_LD_IMM);
-  EARG(count); /* calling convention: store argument count on stack */
+
+  if (!was_splat) {
+    /* if no splat, just put the total count here. if there was a splat,
+     * we counted them already manually */
+    EMIT(BC_LD_IMM);
+    EARG(count);
+  }
 }
 
 void compile_hash(sbVmCompiler *cm, sbIrExpr *expr) {

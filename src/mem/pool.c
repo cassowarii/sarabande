@@ -78,6 +78,9 @@ void *sbPool_alloc(hPool pl, usize *id_out) {
 void *sbPool_get_entry(hPool pl, usize index) {
   usize block_id = index / pl->block_size;
   usize elem_id = index % pl->block_size;
+  if (!BLOCK_ALLOCATION_FLAGS(pl, block_id)[elem_id]) {
+    PANIC("attempt to get unallocated index from pool");
+  }
   return &BLOCK_ALLOCATED_DATA(pl, block_id)[elem_id * pl->elem_size];
 }
 

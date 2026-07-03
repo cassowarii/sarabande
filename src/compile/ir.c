@@ -466,7 +466,7 @@ static void put_implicit_return(hIrChunk ck) {
 
 static void compile_ast_stmt(hIrChunk ck, sbAst stmtast, flag implicit_return);
 static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return);
-static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst exprast);
+static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst exprast, flag list_context);
 static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node);
 
 static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seqast) {
@@ -651,7 +651,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
         E1 = NULL;
       } else {
         /* TODO handle multival here */
-        E1 = compile_ast_expr(ck, node->seq.left->seq.left);
+        E1 = compile_ast_expr(ck, node->seq.left->seq.left, FALSE);
       }
       put_return(ck, E1);
       break;
@@ -685,7 +685,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
           const char *vname = sbSymbol_name(N1->seq.left->symb);
           V1 = var_name(ck, vname, strlen(vname));
           V1->initialized = BY_LET;
-          E1 = compile_ast_expr(ck, N2->seq.left);
+          E1 = compile_ast_expr(ck, N2->seq.left, TRUE);
           put_assign(ck, V1, E1);
           N1 = N1->seq.right;
           N2 = N2->seq.right;
@@ -720,7 +720,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       N2 = node->seq.right; /* values to assign */
       while (N1 != NO_NODE && N2 != NO_NODE) {
         V1 = compile_ast_var(ck, N1->seq.left);
-        E1 = compile_ast_expr(ck, N2->seq.left);
+        E1 = compile_ast_expr(ck, N2->seq.left, TRUE);
         put_assign(ck, V1, E1);
         N1 = N1->seq.right;
         N2 = N2->seq.right;
@@ -758,7 +758,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
        * context" struct that captures all of these. */
       L1 = new_label(ck);
       L2 = new_label(ck);
-      E1 = compile_ast_expr(ck, node->seq.left);
+      E1 = compile_ast_expr(ck, node->seq.left, FALSE);
       put_jump_unconditional(ck, L2);
       put_label(ck, L1);
       compile_ast_stmtseq(ck, node->seq.right, FALSE);
@@ -787,14 +787,14 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
        */
       if (node->tri.right == NO_NODE) {
         /* no else branch */
-        E1 = compile_ast_expr(ck, node->tri.left);
+        E1 = compile_ast_expr(ck, node->tri.left, FALSE);
         L1 = new_label(ck);
         put_jump_if_no(ck, E1, L1);
         compile_ast_stmtseq(ck, node->tri.center, implicit_return);
         put_label(ck, L1);
       } else {
         /* yes else branch */
-        E1 = compile_ast_expr(ck, node->tri.left);
+        E1 = compile_ast_expr(ck, node->tri.left, FALSE);
         L1 = new_label(ck);
         L2 = new_label(ck);
         put_jump_if_no(ck, E1, L1);
@@ -825,7 +825,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
        */
       L1 = new_label(ck);
       if (node->seq.right) {
-        E1 = compile_ast_expr(ck, node->seq.right);
+        E1 = compile_ast_expr(ck, node->seq.right, FALSE);
         put_label(ck, L1);
         compile_ast_stmtseq(ck, node->seq.left, FALSE);
         put_jump_if_yes(ck, E1, L1);
@@ -838,7 +838,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
 
     default:
       /* probably an expr node */
-      put_expr(ck, compile_ast_expr(ck, node));
+      put_expr(ck, compile_ast_expr(ck, node, FALSE));
   }
 }
 
@@ -857,7 +857,7 @@ static sbIrExpr *compile_ast_list(hIrChunk ck, sbAst node) {
   sbIrExpr *list = NULL;
   sbIrExpr **place_here = &list;
   while (considering != NO_NODE) {
-    *place_here = expr_list(ck, compile_ast_expr(ck, considering->seq.left));
+    *place_here = expr_list(ck, compile_ast_expr(ck, considering->seq.left, TRUE));
     place_here = &(*place_here)->list.next;
     considering = considering->seq.right;
   }
@@ -874,8 +874,8 @@ static sbIrExpr *compile_ast_hash(hIrChunk ck, sbAst node) {
     if (hash_entry->type != AST_NODE_HASHENTRY) {
       PANIC("Hash table literals should only contain hashentries (%d)", hash_entry->type);
     }
-    sbIrExpr *compiled_entry = expr_list(ck, compile_ast_expr(ck, hash_entry->seq.left)); // key
-    compiled_entry->list.next = compile_ast_expr(ck, hash_entry->seq.right); // value
+    sbIrExpr *compiled_entry = expr_list(ck, compile_ast_expr(ck, hash_entry->seq.left, FALSE)); // key
+    compiled_entry->list.next = compile_ast_expr(ck, hash_entry->seq.right, FALSE); // value
 
     *place_here = expr_hash(ck, compiled_entry);
     place_here = &(*place_here)->list.next;
@@ -884,11 +884,11 @@ static sbIrExpr *compile_ast_hash(hIrChunk ck, sbAst node) {
   return list;
 }
 
-static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
+static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
   if (node == NO_NODE) return NULL;
 
   if (node->type == AST_NODE_FUNCCALL) {
-    sbIrExpr *called = compile_ast_expr(ck, node->seq.left);
+    sbIrExpr *called = compile_ast_expr(ck, node->seq.left, FALSE);
     sbIrExpr *params = compile_ast_list(ck, node->seq.right);
     return expr_call(ck, called, params);
   } else if (node->type == AST_VAL_FUNC) {
@@ -901,14 +901,23 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node) {
     sbIrExpr *hash = compile_ast_hash(ck, node->seq.left);
     return hash;
   } else if (node->type == AST_NODE_OP) {
-    sbIrExpr *left = NULL, *right = NULL;
-    if (node->op.left != NO_NODE) {
-      left = compile_ast_expr(ck, node->op.left);
+    if (node->op.type == AST_OP_SPLAT) {
+      if (!list_context) {
+        chunk_error(ck, "'...' not allowed outside a list");
+        return NULL;
+      } else {
+        return expr_op(ck, AST_OP_SPLAT, compile_ast_expr(ck, node->op.left, FALSE), NULL);
+      }
+    } else {
+      sbIrExpr *left = NULL, *right = NULL;
+      if (node->op.left != NO_NODE) {
+        left = compile_ast_expr(ck, node->op.left, FALSE);
+      }
+      if (node->op.right != NO_NODE) {
+        right = compile_ast_expr(ck, node->op.right, FALSE);
+      }
+      return expr_op(ck, node->op.type, left, right);
     }
-    if (node->op.right != NO_NODE) {
-      right = compile_ast_expr(ck, node->op.right);
-    }
-    return expr_op(ck, node->op.type, left, right);
   } else if (node->type == AST_VAL_INT) {
     return expr_value(ck, &HVINT(node->i));
   } else if (node->type == AST_VAL_STRING) {
