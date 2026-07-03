@@ -64,13 +64,6 @@ static void vprogram_error(hIrProgram ir, const char *error, va_list args) {
   vfprintf(stderr, error, args);
 }
 
-static void program_error(hIrProgram ir, const char *error, ...) {
-  va_list args;
-  va_start(args, error);
-  vprogram_error(ir, error, args);
-  va_end(args);
-}
-
 static void chunk_error(hIrChunk ck, const char *error, ...) {
   va_list args;
   va_start(args, error);
@@ -124,7 +117,7 @@ static sbIrVariable *create_upvalue(sbIrChunk *ck, sbIrVariable *v, usize slot_i
 
   /* We can close over a variable if it has been assigned a value somewhere in our
    * scope. */
-  new_var->initialized = v->initialized;
+  new_var->introduced = v->introduced;
 
   /* Upvalues actually can be closed over, but when initially created they won't be. */
   new_var->closed_over = FALSE;
@@ -236,6 +229,16 @@ static sbIrLabel *new_label(hIrChunk ck) {
   ck->label_count ++;
   l->id = ck->label_count;
   return l;
+}
+
+static sbIrBindList *new_bind_list(hIrChunk ck, sbIrExpr *value, usize pre_splat_count) {
+  sbIrBindList bl = {
+    .this = value,
+    .pre_splat_count = pre_splat_count,
+  };
+  sbIrBindList *where_to_put = sbArena_alloc(&ck->program->arena, sizeof(sbIrBindList));
+  memcpy(where_to_put, &bl, sizeof(sbIrBindList));
+  return where_to_put;
 }
 
 static sbIrExpr *new_expr(hIrChunk ck, sbIrExpr *expr) {
@@ -427,19 +430,19 @@ static void put_expr(hIrChunk ck, sbIrExpr *expr) {
   });
 }
 
-static void put_assign(hIrChunk ck, sbIrVariable *assign_to, sbIrExpr *expr) {
+static void put_assign(hIrChunk ck, sbIrVariable *var, sbIrExpr *expr) {
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_ASSIGN,
-    .assign.var = assign_to,
+    .assign.var = var,
     .assign.expr = expr,
   });
 }
 
-static void put_argument(hIrChunk ck, sbIrVariable *v, flag last) {
+static void put_bind(hIrChunk ck, sbIrBindList *vars, sbIrExpr *values) {
   put_ir_stmt(ck, &(sbIrStmt) {
-    .type = IR_S_ARG,
-    .arg.last = last,
-    .arg.var = v,
+    .type = IR_S_BIND,
+    .bind.vars = vars,
+    .bind.values = values,
   });
 }
 
@@ -468,6 +471,28 @@ static void compile_ast_stmt(hIrChunk ck, sbAst stmtast, flag implicit_return);
 static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return);
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst exprast, flag list_context);
 static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node);
+static sbIrBindList *compile_ast_bind_list(hIrChunk ck, sbAst node, flag create_vars, sbIrNameIntroduceType type);
+static sbIrExpr *compile_ast_list(hIrChunk ck, sbAst node);
+
+static sbIrVariable *lookup_node_var(hIrChunk ck, sbAst node) {
+  if (node->type != AST_NODE_NAME) {
+    PANIC("wrong node type passed to lookup_node_var (%d)", node->type);
+  }
+  const char *vname = sbSymbol_name(node->symb);
+  /* TODO I don't love strlen here. Is there something better we can do to
+   * handle symbols in general? */
+  return var_name(ck, vname, strlen(vname));
+}
+
+static sbIrVariable *create_node_var(hIrChunk ck, sbAst node) {
+  if (node->type != AST_NODE_NAME) {
+    PANIC("wrong node type passed to create_node_var (%d)", node->type);
+  }
+  const char *vname = sbSymbol_name(node->symb);
+  /* TODO I don't love strlen here. Is there something better we can do to
+   * handle symbols in general? */
+  return create_var(ck, vname, strlen(vname));
+}
 
 static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seqast) {
   sbIrChunk *ck = new_chunk(ir);
@@ -475,29 +500,10 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
   /* create new scope to hold function parameters */
   usize parameter_scope_level = ck->program->varmapping.size / sizeof(varmapentry);
 
-  sbBuffer arg_vars;
-  sbBuffer_initialize(&arg_vars, 1024);
-  sbAst param_comma = paramsAst;
-  while (param_comma != NO_NODE) {
-    if (param_comma->seq.left->type != AST_NODE_NAME) {
-      /* TODO: Actually... */
-      program_error(ir, "Only variable names are permitted as function parameters!");
-      break;
-    }
-    const char *vname = sbSymbol_name(param_comma->seq.left->symb);
-    sbIrVariable *v1 = create_var(ck, vname, strlen(vname));
-    sbBuffer_append(&arg_vars, &v1, sizeof(sbIrVariable*));
-    v1->initialized = BY_PARAM;
-    param_comma = param_comma->seq.right;
-    ck->num_args ++;
-  }
-
-  while (arg_vars.size > 0) {
-    /* We need to bind function arguments in reverse order that they are passed,
-     * because arguments are going to be passed on a stack, and we want to evaluate
-     * function arguments left-to-right. */
-    sbIrVariable *var = *(sbIrVariable**)sbBuffer_shrink(&arg_vars, sizeof(sbIrVariable*));
-    put_argument(ck, var, arg_vars.size == 0);
+  /* compile parameters */
+  sbIrBindList *arg_binding = compile_ast_bind_list(ck, paramsAst, TRUE, BY_PARAM);
+  if (arg_binding) {
+    put_bind(ck, arg_binding, NULL);
   }
 
   compile_ast_stmtseq(ck, seqast, TRUE);
@@ -519,12 +525,11 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
      * call functions defined later in the program. however, LET won't receive a value / be
      * allowed to be used until the actual line of the declaration */
     if (node->type == AST_NODE_DEF) {
-      const char *vname = sbSymbol_name(node->seq.left->symb);
-      sbIrVariable *V1 = create_var(ck, vname, strlen(vname));
-      /* if something was declared with DEF, it must be initialized, because DEF requires
+      /* if something was declared with DEF, it must be introduced, because DEF requires
        * you to provide a value. so we can close over DEF's that are defined later in the
        * scope. */
-      V1->initialized = BY_DEF;
+      sbIrVariable *V1 = create_node_var(ck, node->seq.left);
+      V1->introduced = BY_DEF;
     }
     considering = considering->seq.right;
   }
@@ -545,8 +550,7 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
       }
       if (body->type != AST_NODE_SEQ) PANIC("expected SEQ node as function body!");
 
-      const char *vname = sbSymbol_name(node->seq.left->symb);
-      sbIrVariable *V1 = var_name(ck, vname, strlen(vname));
+      sbIrVariable *V1 = lookup_node_var(ck, node->seq.left);
       sbIrChunk *C1 = compile_ast_function(ck->program, params, body);
       sbIrExpr *E1 = expr_func(ck, C1);
       put_assign(ck, V1, E1);
@@ -554,25 +558,16 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
 
     if (node->type == AST_NODE_LET) {
       sbAst N1 = node->seq.left;  /* things to bind to */
-      while (N1 != NO_NODE) {
-        if (N1->seq.left->type != AST_NODE_NAME) {
-          chunk_error(ck, "Only variable names are permitted after 'let'!");
-          break;
-        }
-        const char *vname = sbSymbol_name(N1->seq.left->symb);
-        sbIrVariable *V1 = create_var(ck, vname, strlen(vname));
-        V1->initialized = BY_LET;
-        N1 = N1->seq.right;
-      }
+      compile_ast_bind_list(ck, N1, TRUE, BY_LET);
     }
     considering = considering->seq.right;
   }
 
-  /* now reset the 'initialized' flag of anything that was initialized by LET so
+  /* now reset the 'introduced' flag of anything that was introduced by LET so
    * that we can't refer to them earlier than they are declared */
-  BUFFER_ITER(ck->program->varmapping, varmapentry, entry) {
-    if (entry->var->initialized == BY_LET) {
-      entry->var->initialized = FALSE;
+  BUFFER_ITER_FROM(ck->program->varmapping, varmapentry, entry, ck->lowest_var_id) {
+    if (entry->var->introduced == BY_LET) {
+      entry->var->introduced = NOT_INTRODUCED;
     }
   }
 
@@ -657,45 +652,23 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       break;
 
     case AST_NODE_LET:
-      /*
-       *    LET a = 3
-       * linearizes to:
-       *    LET a
-       *    ...
-       *    a = 3
-       *
-       *    LET a, b = 5, 6
-       * linearizes to:
-       *    LET a, b
-       *    ...
-       *    a = 5
-       *    b = 6
-       *
-       * The LET part actually gets moved to the top of the enclosing block along with
+      /* The LET part actually gets moved to the top of the enclosing block along with
        * any DEFs. So we only care about encountering a LET node in this context if it
        * is an assignment.
-       */
+       *
+       * Then the assignment part basically gets turned into the equivalent of something
+       * like
+       *        ...[a, b, c] = ...[1, 2, 3]
+       *
+       * We destructure some multi-value that we're assigning to onto the stack along
+       * with a count, and then we use the argument-binding instructions to assign
+       * those pieces to variables.  */
       if (node->seq.right != NO_NODE) {
-        /* let ... = ... */
+        if (node->seq.left->type != AST_NODE_MULTIVAL) PANIC("expected multival on left side of let!");
         if (node->seq.right->type != AST_NODE_MULTIVAL) PANIC("expected multival on right side of let!");
-        N1 = node->seq.left;  /* things to bind to */
-        N2 = node->seq.right; /* values to assign */
-        while (N1 != NO_NODE && N2 != NO_NODE) {
-          /* now assign to all the variables we just created */
-          const char *vname = sbSymbol_name(N1->seq.left->symb);
-          V1 = var_name(ck, vname, strlen(vname));
-          V1->initialized = BY_LET;
-          E1 = compile_ast_expr(ck, N2->seq.left, TRUE);
-          put_assign(ck, V1, E1);
-          N1 = N1->seq.right;
-          N2 = N2->seq.right;
-        }
-
-        if (N1 != NO_NODE) {
-          chunk_error(ck, "too many bindings on left side of assignment!");
-        } else if (N2 != NO_NODE) {
-          chunk_error(ck, "too many values on right side of assignment!");
-        }
+        sbIrBindList *variables = compile_ast_bind_list(ck, node->seq.left, FALSE, BY_LET); /* things being assigned to */
+        sbIrExpr *assigned = compile_ast_list(ck, node->seq.right); /* values to assign */
+        put_bind(ck, variables, assigned);
       }
       break;
 
@@ -884,6 +857,71 @@ static sbIrExpr *compile_ast_hash(hIrChunk ck, sbAst node) {
   return list;
 }
 
+/* compile one individual element to bind to: might be a bare variable name,
+ * or might be "...name", or might be some other expression, in which case
+ * we bind by matching it exactly? (TODO) */
+static sbIrExpr *compile_ast_binding(hIrChunk ck, sbAst node, flag should_create_var, sbIrNameIntroduceType type) {
+  if (node->type == AST_NODE_NAME) {
+    sbIrVariable *V1;
+    if (should_create_var) {
+      V1 = create_node_var(ck, node);
+    } else {
+      V1 = lookup_node_var(ck, node);
+    }
+    V1->introduced = type;
+    return expr_var(ck, V1);
+  } else if (node->type == AST_NODE_OP) {
+    sbIrExpr *left = NULL, *right = NULL;
+    if (node->op.left != NO_NODE) {
+      left = compile_ast_binding(ck, node->op.left, should_create_var, type);
+    }
+    if (node->op.right != NO_NODE) {
+      right = compile_ast_binding(ck, node->op.right, should_create_var, type);
+    }
+    return expr_op(ck, node->op.type, left, right);
+  } else {
+    /* assume it's a literal value (TODO allow destructuring of list and
+     * hash via this) */
+    return compile_ast_expr(ck, node, FALSE);
+  }
+}
+
+/* compile a list of names to bind to: on the left side of a 'let' expression,
+ * for function parameters, and at the top of a 'match' expression. */
+static sbIrBindList *compile_ast_bind_list(hIrChunk ck, sbAst node, flag create_vars, sbIrNameIntroduceType type) {
+  sbAst considering = node;
+  sbIrBindList *list = NULL;
+  flag was_splat = FALSE;
+  usize pre_splat_count = 0;
+  while (considering != NO_NODE) {
+    /* bind list needs to be reversed, because we're going to bind to some stack
+     * that was built bottom-to-top. so we build it in the reverse order from a
+     * value list. */
+    sbAst elem = considering->seq.left;
+    if (elem->type == AST_NODE_OP && elem->op.type == AST_OP_SPLAT) {
+      if (!was_splat) {
+        was_splat = TRUE;
+      } else {
+        chunk_error(ck, "Multiple '...' assignments are not permitted!\n");
+        return NULL;
+      }
+    } else if (!was_splat) {
+      /* keep track of how many variables existed *before* we ran into a "...a"
+       * type expression, so we know how many to leave on the stack when binding
+       * a "..." */
+      pre_splat_count ++;
+    }
+    sbIrBindList *new_list = new_bind_list(
+        ck, compile_ast_binding(ck, considering->seq.left, create_vars, type), pre_splat_count
+    );
+    new_list->next = list;
+    list = new_list;
+    considering = considering->seq.right;
+  }
+
+  return list;
+}
+
 static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
   if (node == NO_NODE) return NULL;
 
@@ -929,7 +967,7 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
   } else if (node->type == AST_NODE_NAME) {
     /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
     sbIrVariable *var = compile_ast_var(ck, node);
-    if (var->initialized) {
+    if (var->introduced) {
       return expr_var(ck, var);
     } else {
       chunk_error(ck, "Variable '%s' has not been declared here!\n", sbSymbol_name(node->symb));

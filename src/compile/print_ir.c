@@ -38,7 +38,6 @@ static void print_var(sbIrVariable *v) {
 }
 
 static void print_expr(sbIrExpr *e) {
-  debug("(");
   switch(e->type) {
     case IR_E_VAR:
       print_var(e->var);
@@ -64,11 +63,13 @@ static void print_expr(sbIrExpr *e) {
       }
       break;
     case IR_E_OP:
+      debug("(");
       print_expr(e->op.left);
       debug(" %c ", e->op.type);
       if (e->op.right) {
         print_expr(e->op.right);
       }
+      debug(")");
       break;
     case IR_E_CALL:
       debug("CALL: ");
@@ -81,21 +82,39 @@ static void print_expr(sbIrExpr *e) {
         param = param->list.next;
       }
       break;
+    case IR_E_LIST:
+      print_expr(e->list.this);
+      if (e->list.next) {
+        debug(", ");
+        print_expr(e->list.next);
+      }
+      break;
     default:
-      debug("something");
+      debug("something %d", e->type);
   }
-  debug(")");
+}
+
+static void print_bind_list(sbIrBindList *e) {
+  if (e->next) {
+    /* print in reverse order */
+    print_bind_list(e->next);
+    debug(", ");
+  }
+  print_expr(e->this);
 }
 
 static void print_stmt(sbIrStmt *s) {
   switch (s->type) {
-    case IR_S_ARG:
-      debug("  bind function argument to ");
-      print_var(s->arg.var);
-      debug("\n");
-      if (s->arg.last) {
-        debug("  (no function arguments left on the stack now)\n");
+    case IR_S_BIND:
+      debug("  bind [");
+      print_bind_list(s->bind.vars);
+      debug("] to [");
+      if (s->bind.values) {
+        print_expr(s->bind.values);
+      } else {
+        debug(" ~~~ ");
       }
+      debug("]\n");
       break;
     case IR_S_LABEL:
       debug("label %zu:\n", s->label->id);

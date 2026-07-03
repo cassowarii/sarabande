@@ -81,8 +81,9 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
     /* don't check args for initial block
      * (note: when we have modules or whatever, this might
      * be an incorrect way to do this) */
-    EMIT(BC_NUMARG);
-    EARG(chunk->num_args);
+    /* TODO re-add checking this */
+    //EMIT(BC_NUMARG);
+    //EARG(chunk->num_args);
   }
 
   if (chunk->variable_count > 0) {
@@ -124,6 +125,8 @@ void record_labelpos(sbVmCompiler *cm, sbIrLabel *label, u32 offset) {
   sbBuffer_append(&cm->label_positions, &lp, sizeof(struct labelpos));
 }
 
+void compile_list(sbVmCompiler *cm, sbIrExpr *expr);
+void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list);
 void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
   debug("%3zu ", sbVmCompiler_get_position(cm));
   switch (stmt->type) {
@@ -171,13 +174,11 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       }
       EARG(stmt->assign.var->slot_id);
       break;
-    case IR_S_ARG:
-      if (stmt->arg.var->closed_over) {
-        EMIT(BC_ST_ARG_IND);
-      } else {
-        EMIT(BC_ST_ARG);
+    case IR_S_BIND:
+      if (stmt->bind.values) {
+        compile_list(cm, stmt->bind.values);
       }
-      EARG(stmt->arg.var->slot_id);
+      compile_bind_list(cm, stmt->bind.vars);
       break;
     case IR_S_RETURN:
       if (stmt->expr) {
@@ -190,6 +191,14 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
   }
 }
 
+/* compile... this isn't actually really for lists only, it's compile a
+ * "multival": the value type of list that is a bunch of things separated
+ * by commas, that, e.g. things can be splatted into. this also handles
+ * function arguments and such. leaves its elements bottom-to-top on the
+ * stack, with the top of the stack being the number of elements. this
+ * can then be passed to a function using BC_CALL, or converted to a list
+ * using BC_LIST_GATHER, or destructured as arguments using BC_ST_ARG and
+ * friends. */
 void compile_list(sbVmCompiler *cm, sbIrExpr *expr) {
   sbIrExpr *considering = expr;
   usize count = 0;
@@ -246,6 +255,56 @@ void compile_hash(sbVmCompiler *cm, sbIrExpr *expr) {
   }
   EMIT(BC_LD_IMM);
   EARG(count); /* calling convention: store argument count on stack */
+}
+
+/* destructuring assignment, basically. take the output of compile_list,
+ * and assign it to various variables (or (TODO) fail in some mysterious
+ * way (exception?) if there is the wrong amount of stuff) */
+void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
+  for (sbIrBindList *considering = list; considering; considering = considering->next) {
+    sbIrExpr *elem = considering->this;
+    if (elem->type == IR_E_OP && elem->op.type == AST_OP_SPLAT) {
+      /* okay. we want to leave some number of elements on the stack
+       * for whatever other arguments there are. currently we have the
+       * total count on top of the stack. so, we'll reduce the count
+       * by the number we want to save, gather into a list, and assign
+       * to that, then replace the count we wanted to keep on the stack */
+      if (list->pre_splat_count > 0) {
+        EMIT(BC_LD_IMM);
+        EARG(list->pre_splat_count);
+        EMIT(BC_OP_SUB);
+      }
+      /* create list of this length and store in thing */
+      EMIT(BC_LIST_GATHER);
+      /* TODO actually, vv THIS vv should be a recursive call. otherwise,
+       * we don't actually check that it's a variable that the "..." is
+       * attached to, and we may fail in weird cases like "...2". but we
+       * need to restructure the BindList data structure. */
+      if (elem->op.left->var->closed_over) {
+        EMIT(BC_ST_IND);
+      } else {
+        EMIT(BC_ST_VAR);
+      }
+      EARG(elem->op.left->var->slot_id);
+      if (list->pre_splat_count > 0) {
+        /* put pre splat count back if we need it, to bind the rest of
+         * the variables */
+        EMIT(BC_LD_IMM);
+        EARG(list->pre_splat_count);
+      }
+    } else if (elem->type == IR_E_VAR) {
+      /* normal sequence, no splat (so far): top thing goes in this
+       * variable using ST_ARG */
+      if (elem->var->closed_over) {
+        EMIT(BC_ST_ARG_IND);
+      } else {
+        EMIT(BC_ST_ARG);
+      }
+      EARG(elem->var->slot_id);
+    } else {
+      PANIC("bind todo!");
+    }
+  }
 }
 
 void compile_op(sbVmCompiler *cm, sbAstOp op);
@@ -356,6 +415,6 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_INDEX: EMIT(BC_OP_INDEX); break;
     case AST_OP_SCOPE: EMIT(BC_OP_SCOPE); break;
     default:
-      debug("unknown operation!\n");
+      PANIC("unknown operation!\n");
   }
 }

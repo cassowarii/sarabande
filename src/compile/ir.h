@@ -35,7 +35,7 @@ typedef enum sbIrStmtType {
   IR_S_EXPR,
   IR_S_ASSIGN,
   IR_S_JUMP,
-  IR_S_ARG,
+  IR_S_BIND,
   IR_S_RETURN,
 } sbIrStmtType;
 
@@ -50,6 +50,13 @@ typedef enum sbIrExprType {
   IR_E_HASH,
 } sbIrExprType;
 
+typedef enum sbIrNameIntroduceType {
+  NOT_INTRODUCED,
+  BY_DEF,
+  BY_LET,
+  BY_PARAM,
+} sbIrNameIntroduceType;
+
 typedef struct sbIrLabel {
   flag found_yet;
   struct sbIrLabel *aliased_to;
@@ -59,7 +66,7 @@ typedef struct sbIrLabel {
 
 typedef struct sbIrVariable {
   usize slot_id;
-  flag initialized;
+  sbIrNameIntroduceType introduced;
   flag closed_over;
   flag is_upvalue;
   usize mapping_index;
@@ -101,6 +108,12 @@ typedef struct sbIrAssign {
   sbIrExpr *expr;
 } sbIrAssign;
 
+typedef struct sbIrBindList {
+  usize pre_splat_count;
+  sbIrExpr *this;
+  struct sbIrBindList *next;
+} sbIrBindList;
+
 typedef struct sbIrStmt {
   i32 position;
   sbIrStmtType type;
@@ -110,9 +123,9 @@ typedef struct sbIrStmt {
     sbIrAssign assign;
     sbIrJump jump;
     struct {
-      flag last;
-      sbIrVariable *var;
-    } arg;
+      sbIrBindList *vars;
+      sbIrExpr *values;
+    } bind;
   };
 } sbIrStmt;
 
