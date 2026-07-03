@@ -340,6 +340,14 @@ static sbIrExpr *expr_call(hIrChunk ck, sbIrExpr *to_call, sbIrExpr *param) {
   });
 }
 
+static sbIrExpr *expr_send(hIrChunk ck, sbIrExpr *target, sbIrExpr *message) {
+  return new_expr(ck, &(sbIrExpr) {
+    .type = IR_E_SEND,
+    .send.target = target,
+    .send.message = message,
+  });
+}
+
 static sbIrExpr *expr_list(hIrChunk ck, sbIrExpr *value) {
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_LIST,
@@ -929,6 +937,10 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
     sbIrExpr *called = compile_ast_expr(ck, node->seq.left, FALSE);
     sbIrExpr *params = compile_ast_list(ck, node->seq.right);
     return expr_call(ck, called, params);
+  } else if (node->type == AST_NODE_METHODCALL) {
+    sbIrExpr *target = compile_ast_expr(ck, node->seq.left, FALSE);
+    sbIrExpr *message = compile_ast_list(ck, node->seq.right);
+    return expr_send(ck, target, message);
   } else if (node->type == AST_VAL_FUNC) {
     sbIrChunk *func = compile_ast_function(ck->program, node->seq.left, node->seq.right);
     return expr_func(ck, func);

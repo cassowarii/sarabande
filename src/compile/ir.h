@@ -46,6 +46,7 @@ typedef enum sbIrExprType {
   IR_E_VAR,
   IR_E_FUNC,
   IR_E_CALL,
+  IR_E_SEND,
   IR_E_LIST,
   IR_E_HASH,
 } sbIrExprType;
@@ -100,6 +101,10 @@ typedef struct sbIrExpr {
       struct sbIrExpr *this;
       struct sbIrExpr *next;
     } list;
+    struct {
+      struct sbIrExpr *target;
+      struct sbIrExpr *message;
+    } send;
   };
 } sbIrExpr;
 

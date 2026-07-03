@@ -323,6 +323,11 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       compile_expr(cm, expr->call.func);
       EMIT(BC_CALL);
       break;
+    case IR_E_SEND:
+      compile_list(cm, expr->send.message);
+      compile_expr(cm, expr->send.target);
+      EMIT(BC_SEND);
+      break;
     case IR_E_VAR:
       if (expr->var->is_upvalue) {
         EMIT(BC_LD_UPVAL);

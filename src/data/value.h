@@ -3,6 +3,8 @@
 
 #include "common.h"
 
+#define FLAG_SQUIGGLY (1ULL << 62)
+
 #define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = s })
 #define HVSYM(s) ((hV) { .type = IT_SYMBOL, .symbol = s })
@@ -12,6 +14,7 @@
 #define HVNIL ((hV) { .type = IT_NIL })
 #define HVNOTHING ((hV) {0})
 #define HVFUNC(i, c) ((hV) { .type = i, .closure = c })
+#define HVFUNC2(i, c) ((hV) { .type = i | FLAG_SQUIGGLY, .closure = c })
 
 typedef u64 hHash;
 typedef u64 hString;

@@ -7,6 +7,10 @@
 
 void call_block(hVm vm, usize block_id, hClosure closure);
 void execute_instruction(hVm vm);
+void push_stack(hVm vm, const hV *value);
+hV pop_stack(hVm vm);
+hV *npop_stack(hVm vm, usize count);
+hV *peek_stack(hVm vm, usize offset);
 
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
   *vm = (sbVm) {0};
@@ -48,6 +52,22 @@ sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm) {
   }
 
   return VM_STAT_SUCCESS;
+}
+
+void sbVm_push(hVm vm, hV value) {
+  push_stack(vm, &value);
+}
+
+hV sbVm_pop(hVm vm) {
+  return pop_stack(vm);
+}
+
+hV *sbVm_peek(hVm vm, usize where) {
+  return peek_stack(vm, where);
+}
+
+void sbVm_call_func(hVm vm, hV func) {
+  call_block(vm, func.type, func.closure);
 }
 
 /* --- */
@@ -327,6 +347,9 @@ void execute_instruction(hVm vm) {
       }
       call_block(vm, vv.type, vv.closure);
       break;
+    case BC_SEND:
+      sbV_message_handler(vm);
+      break;
     case BC_NUMARG:
       param = get_param(vm);
       vv = pop_stack(vm);
@@ -364,8 +387,6 @@ void execute_instruction(hVm vm) {
     case BC_RET:
       return_from_block(vm);
       break;
-    case BC_SEND:
-      PANIC("todo");
     case BC_OP_EQ:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);

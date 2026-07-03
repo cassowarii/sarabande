@@ -74,13 +74,16 @@ static void print_expr(sbIrExpr *e) {
     case IR_E_CALL:
       debug("CALL: ");
       print_expr(e->call.func);
-      debug(" with params ");
-      sbIrExpr *param = e->call.param;
-      while (param) {
-        print_expr(param->list.this);
-        debug(",");
-        param = param->list.next;
-      }
+      debug(" with params (");
+      print_expr(e->call.param);
+      debug(")");
+      break;
+    case IR_E_SEND:
+      debug("SEND: ");
+      print_expr(e->send.target);
+      debug(" <~( ");
+      print_expr(e->send.message);
+      debug(" )");
       break;
     case IR_E_LIST:
       print_expr(e->list.this);

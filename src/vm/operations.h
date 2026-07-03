@@ -1,5 +1,7 @@
 #include "common.h"
 
+void sbV_message_handler(hVm vm);
+
 hV sbV_add(const hV *a, const hV *b);
 
 hV sbV_sub(const hV *a, const hV *b);

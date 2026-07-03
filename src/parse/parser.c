@@ -605,15 +605,17 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
         method_name = parse_name_as_sym(pr);
       }
       if (method_name == NO_NODE) return syntax_error(pr);
-      if (!expect(pr, T_LPAREN)) return syntax_error(pr);
-      sbAst params = parse_comma_exprs(pr, NULL);
-      if (!expect(pr, T_RPAREN)) return syntax_error(pr);
+      sbAst params = NO_NODE;
+      if (expect(pr, T_LPAREN)) {
+        params = parse_comma_exprs(pr, NULL);
+        if (!expect(pr, T_RPAREN)) return syntax_error(pr);
+      }
       ast_type = AST_NODE_METHODCALL;
       if (op.type == T_ARROW) {
         /* (whatever)->x is rewritten as (*whatever).x */
         lhs = unop_node(pr, AST_OP_DEREF, lhs);
       }
-      rhs = seq_node(pr, AST_NODE_NEXT, method_name, params);
+      rhs = seq_node(pr, AST_NODE_MULTIVAL, method_name, params);
     } else if (op.type == T_BACKSQUIGARROW) {
       /* a <~ b, c, d can have multiple comma things on the right side */
       if (!expect(pr, T_LPAREN)) return syntax_error(pr);

@@ -69,10 +69,16 @@ typedef struct sbVm {
   flag debugmode;
 } sbVm;
 
-typedef sbVm *hVm;
-
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode);
 
 void sbVm_deinitialize(hVm vm);
 
 sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm);
+
+void sbVm_push(hVm vm, hV value);
+
+hV sbVm_pop(hVm vm);
+
+hV *sbVm_peek(hVm vm, usize where);
+
+void sbVm_call_func(hVm vm, hV func);
