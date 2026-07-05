@@ -45,6 +45,8 @@ void sbPool_deinitialize(hPool pl) {
   for (usize i = 0; i < pl->num_blocks; i++) {
     free(pl->block_ptrs[i]);
   }
+  free(pl->block_ptrs);
+  free(pl->used_counts);
   *pl = (sbPool) {0};
 }
 
@@ -96,11 +98,13 @@ void alloc_new_block(hPool pl) {
   void *new_block = calloc(1, sizeof(Block) + pl->block_size + pl->elem_size * pl->block_size);
   if (pl->num_blocks >= pl->block_ptr_capacity) {
     usize new_capacity = pl->block_ptr_capacity * 2;
-    void **new_data = realloc(pl->block_ptrs, new_capacity);
-    if (!new_data) {
+    void **new_block_ptrs = realloc(pl->block_ptrs, new_capacity * sizeof(void*));
+    u16 *new_used_counts = realloc(pl->used_counts, new_capacity * sizeof(u16));
+    if (!new_block_ptrs || !new_used_counts) {
       PANIC("This should probably trigger the garbage collector or something!");
     }
-    pl->block_ptrs = new_data;
+    pl->block_ptrs = new_block_ptrs;
+    pl->used_counts = new_used_counts;
   }
 
   pl->block_ptrs[pl->num_blocks] = new_block;

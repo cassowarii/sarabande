@@ -84,6 +84,11 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
     /* TODO re-add checking this */
     //EMIT(BC_NUMARG);
     //EARG(chunk->num_args);
+
+    if (chunk->num_args == 0) {
+      /* if no arguments, pop the 0 off the stack. TODO we need to check it's the right amount */
+      EMIT(BC_POP);
+    }
   }
 
   if (chunk->variable_count > 0) {

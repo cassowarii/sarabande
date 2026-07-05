@@ -26,6 +26,7 @@ void sbIrProgram_initialize(hIrProgram ir, usize initial_arena_size) {
   sbArena_initialize(&ir->arena, initial_arena_size);
   sbBuffer_initialize(&ir->chunks, 4096);
   sbBuffer_initialize(&ir->varmapping, 4096);
+  sbBuffer_initialize(&ir->buffers, 4096);
 }
 
 void sbIrProgram_deinitialize(hIrProgram ir) {
@@ -35,8 +36,14 @@ void sbIrProgram_deinitialize(hIrProgram ir) {
     chunk_deinitialize(ck);
   }
 
-  sbArena_deinitialize(&ir->arena);
   sbBuffer_deinitialize(&ir->chunks);
+  sbBuffer_deinitialize(&ir->varmapping);
+  BUFFER_ITER(ir->buffers, sbBuffer*, buf) {
+    sbBuffer_deinitialize(*buf);
+  }
+  sbBuffer_deinitialize(&ir->buffers);
+  sbArena_deinitialize(&ir->arena);
+
   *ir = (sbIrProgram) {0};
 }
 
@@ -71,6 +78,11 @@ static void chunk_error(hIrChunk ck, const char *error, ...) {
   va_end(args);
 }
 
+static void init_buffer(hIrProgram ir, sbBuffer *b, usize capacity) {
+  sbBuffer_initialize(b, capacity);
+  sbBuffer_append(&ir->buffers, &b, sizeof(sbBuffer*));
+}
+
 static sbIrChunk *new_chunk(hIrProgram ir) {
   usize nchunks = ir->chunks.size / sizeof(sbIrChunk*);
   sbIrChunk *chunk = sbArena_alloc(&ir->arena, sizeof(sbIrChunk));
@@ -92,6 +104,7 @@ static sbIrChunk *new_chunk(hIrProgram ir) {
 
 static void chunk_deinitialize(hIrChunk ck) {
   sbBuffer_deinitialize(&ck->stmts);
+  sbBuffer_deinitialize(&ck->closed_vars);
 }
 
 /* find variables that already exist */
@@ -270,18 +283,18 @@ static sbIrExpr *expr_func(hIrChunk ck, sbIrChunk *func) {
    * set, but if we have multiple functions closing over different variables we
    * need to know which is which, and also these closed variables might be upvalues
    * to ck as well. */
-  sbBuffer bound;
-  sbBuffer_initialize(&bound, 256);
-  BUFFER_ITER(func->closed_vars, sbIrVariable*, var) {
-    sbIrVariable *outer_ref = bind_upvalue(ck, (*var)->mapping_index);
-    sbBuffer_append(&bound, &outer_ref, sizeof(sbIrVariable*));
-  }
-
-  return new_expr(ck, &(sbIrExpr) {
+  sbIrExpr *e = new_expr(ck, &(sbIrExpr) {
     .type = IR_E_FUNC,
     .func.chunk = func,
-    .func.bound = bound,
   });
+
+  init_buffer(ck->program, &e->func.bound, 256);
+  BUFFER_ITER(func->closed_vars, sbIrVariable*, var) {
+    sbIrVariable *outer_ref = bind_upvalue(ck, (*var)->mapping_index);
+    sbBuffer_append(&e->func.bound, &outer_ref, sizeof(sbIrVariable*));
+  }
+
+  return e;
 }
 
 static flag int_constant_fold(sbAstOp op, hInteger left, hInteger right, hInteger *result) {

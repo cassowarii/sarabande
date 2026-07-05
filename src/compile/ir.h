@@ -153,6 +153,7 @@ typedef struct sbIrProgram {
   sbArena arena;
   sbBuffer varmapping;
   sbBuffer chunks;
+  sbBuffer buffers;
   i32 error_count;
 } sbIrProgram;
 

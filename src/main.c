@@ -32,10 +32,10 @@ int main(int argc, char **argv) {
 
     if (parse_result == NULL) {
       fprintf(stderr, "fatal error: Could not open script '%s'\n", filename);
-      return -2;
+      return -1;
     } else if (parse_result->type == AST_ERROR) {
       fprintf(stderr, "fatal error: Could not run '%s' due to syntax errors.\n", filename);
-      return -1;
+      return -2;
     }
 
     /* syntax is valid, now try to compile */

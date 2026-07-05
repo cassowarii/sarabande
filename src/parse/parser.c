@@ -488,6 +488,9 @@ static sbAst parse_inside_hash(hParser pr) {
     put_here = &(*put_here)->seq.right;
   } while (expect(pr, ','));
 
+  /* errant semicolon ok at the end of a hash because the ASI may insert it here */
+  expect(pr, ';');
+
   return result;
 }
 
