@@ -73,7 +73,7 @@ sbHashValue sbHash_hash_obj(hV *obj) {
     const char *strval = sbString_get_value(obj->string, scratch, &length);
     return sbHash_hash_bytes(strval, length);
   } else {
-    PANIC("don't know how to hash object of type %lld", obj->type);
+    PANIC("don't know how to hash object of type %lld", (long long)obj->type);
   }
 }
 

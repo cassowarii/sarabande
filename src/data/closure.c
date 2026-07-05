@@ -85,5 +85,5 @@ hV sbClosure_get_ref(hClosure which, usize index) {
 
 static sbClosure *find_closure_by_handle(hRef handle) {
   if (!(handle & FLAG_REAL)) PANIC("null closure");
-  return sbPool_get_entry(&g_closure_pool, handle);
+  return sbPool_get_entry(&g_closure_pool, handle & ~FLAG_REAL);
 }

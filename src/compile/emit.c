@@ -33,7 +33,7 @@ void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir) {
 /* --- */
 
 void emit_arg(sbVmCompiler *cm, i64 actual_number) {
-  debug("    arg %lld\n", actual_number);
+  debug("    arg %lld\n", (long long)actual_number);
   u8 buf[9];
   u64 number = actual_number;
   if (0 <= actual_number && actual_number < 253) {

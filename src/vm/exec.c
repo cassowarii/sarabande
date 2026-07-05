@@ -6,6 +6,7 @@
 #include "data/closure.h"
 
 void call_block(hVm vm, usize block_id, hClosure closure);
+void return_from_block(hVm vm);
 void execute_instruction(hVm vm);
 void push_stack(hVm vm, const hV *value);
 hV pop_stack(hVm vm);
@@ -70,6 +71,34 @@ void sbVm_call_func(hVm vm, hV func) {
   call_block(vm, func.type, func.closure);
 }
 
+void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
+  sbVmStackFrame frame = {
+    .return_addr = vm->ip,
+    .last_fp = vm->fp,
+    .last_rp = vm->rp,
+    .is_c_func = TRUE,
+    .c_func = func,
+  };
+  *(sbVmStackFrame*)vm->rp = frame;
+  vm->fp = (sbVmStackFrame*)vm->rp;
+  vm->rp += sizeof(sbVmStackFrame);
+
+  func(vm, TRUE);
+
+  if (vm->fp->is_c_func) {
+    /* if c_func didn't call another callback, return from it */
+    return_from_block(vm);
+  }
+}
+
+void sbVm_request_var_space(hVm vm, usize amount) {
+  /* have to set new rstack space to 0 so we don't accidentally decrement
+   * the ref count of variables from a previous stack frame (or of just garbage)  */
+  memset(vm->rp, 0, amount * sizeof(hV));
+  vm->rp += amount * sizeof(hV);
+  vm->fp->num_locals += amount;
+}
+
 /* --- */
 
 void call_block(hVm vm, usize block_id, hClosure closure) {
@@ -79,8 +108,8 @@ void call_block(hVm vm, usize block_id, hClosure closure) {
     .return_addr = vm->ip,
     .last_fp = vm->fp,
     .last_rp = vm->rp,
-    .block = blk,
-    .closure = closure,
+    .block_func.block = blk,
+    .block_func.closure = closure,
   };
   *(sbVmStackFrame*)vm->rp = frame;
   vm->fp = (sbVmStackFrame*)vm->rp;
@@ -102,11 +131,21 @@ void return_from_block(hVm vm) {
     vm->fp = frame->last_fp;
     vm->rp = frame->last_rp;
     vm->ip = frame->return_addr;
+
+    if (vm->fp->is_c_func) {
+      /* if we returned into a c-function call frame, go back to the c-function */
+      vm->fp->c_func(vm, FALSE);
+
+      if (vm->fp->is_c_func) {
+        /* c-function didn't make a callback, so is done */
+        return_from_block(vm);
+      }
+    }
   }
 }
 
 void debug_print_hv(const hV *value) {
-  debug("%016llx %016llx\n", *(u64*)value, *((u64*)value+1));
+  debug("%016llx %016llx\n", *(long long*)value, *((long long*)value+1));
 }
 
 void store_local(hVm vm, usize local_index, const hV *value) {
@@ -141,7 +180,7 @@ hV *peek_stack(hVm vm, usize offset) {
 }
 
 sbOpcode get_opcode(hVm vm) {
-  if (vm->ip >= vm->fp->block->bytecode_end) PANIC("execution outside defined code area");
+  if (vm->ip >= vm->fp->block_func.block->bytecode_end) PANIC("execution outside defined code area");
   return *(vm->ip++);
 }
 
@@ -160,7 +199,7 @@ void next_byte(hVm vm, u64 *result) {
  * in big-endian format */
 i64 get_param(hVm vm) {
   u64 result = *((u8*)vm->ip++);
-  if (vm->debugmode) debug("%02llX ", result);
+  if (vm->debugmode) debug("%02llX ", (long long)result);
   i64 signed_result = result;
 
   if (result == BC_LONG_NUM) {
@@ -214,7 +253,7 @@ void execute_instruction(hVm vm) {
       break;
     case BC_LD_CONST:
       param = get_param(vm);
-      push_stack(vm, &vm->fp->block->constants[param]);
+      push_stack(vm, &vm->fp->block_func.block->constants[param]);
       break;
     case BC_LD_CTX:
       PANIC("todo");
@@ -235,12 +274,12 @@ void execute_instruction(hVm vm) {
     case BC_LD_UPVAL:
       /* Hey, was there upval in there? */
       param = get_param(vm);
-      v = sbClosure_get_var(vm->fp->closure, param);
+      v = sbClosure_get_var(vm->fp->block_func.closure, param);
       push_stack(vm, v);
       break;
     case BC_LD_UPREF:
       param = get_param(vm);
-      res = sbClosure_get_ref(vm->fp->closure, param);
+      res = sbClosure_get_ref(vm->fp->block_func.closure, param);
       push_stack(vm, &res);
       break;
     case BC_LD_BLK:
@@ -251,7 +290,7 @@ void execute_instruction(hVm vm) {
       param = get_param(vm);
       v = &vm->fp->locals[param];
       if (v->type != IT_REF) {
-        CHECK("indirect variables should be of type reference! (%lld)", v->type);
+        CHECK("indirect variables should be of type reference! (%lld)", (long long)v->type);
       }
       w = sbRef_deref(v->ref);
       push_stack(vm, w);
@@ -268,7 +307,7 @@ void execute_instruction(hVm vm) {
     case BC_ST_UPVAL:
       param = get_param(vm);
       vv = pop_stack(vm);
-      sbClosure_set_var(vm->fp->closure, param, &vv);
+      sbClosure_set_var(vm->fp->block_func.closure, param, &vv);
       break;
     case BC_ST_IND:
       param = get_param(vm);
@@ -280,7 +319,7 @@ void execute_instruction(hVm vm) {
       } else if (v->type == IT_REF) {
         sbRef_set_ref(v->ref, w);
       } else {
-        CHECK("indirect variables should be of type reference! (%lld)", v->type);
+        CHECK("indirect variables should be of type reference! (%lld)", (long long)v->type);
       }
       pop_stack(vm);
       break;
@@ -316,7 +355,7 @@ void execute_instruction(hVm vm) {
       } else if (v->type == IT_REF) {
         sbRef_set_ref(v->ref, w);
       } else {
-        CHECK("indirect variables should be of type reference! (%lld)", v->type);
+        CHECK("indirect variables should be of type reference! (%lld)", (long long)v->type);
       }
       pop_stack(vm);
       xx.integer --;
@@ -368,20 +407,20 @@ void execute_instruction(hVm vm) {
       break;
     case BC_JMP:
       param = get_param(vm);
-      vm->ip = &vm->fp->block->bytecode[param];
+      vm->ip = &vm->fp->block_func.block->bytecode[param];
       break;
     case BC_JT:
       param = get_param(vm);
       vv = pop_stack(vm);
       if (!sbV_c_falsy(&vv)) {
-        vm->ip = &vm->fp->block->bytecode[param];
+        vm->ip = &vm->fp->block_func.block->bytecode[param];
       }
       break;
     case BC_JF:
       param = get_param(vm);
       vv = pop_stack(vm);
       if (sbV_c_falsy(&vv)) {
-        vm->ip = &vm->fp->block->bytecode[param];
+        vm->ip = &vm->fp->block_func.block->bytecode[param];
       }
       break;
     case BC_RET:
@@ -481,12 +520,7 @@ void execute_instruction(hVm vm) {
     case BC_ALLOC_VARS:
       /* TODO check for overflow */
       param = get_param(vm);
-      /* have to set new rstack space to 0 so we don't accidentally decrement
-       * the ref count of variables from a previous stack frame (or of just garbage)  */
-      memset(vm->rp, 0, param * sizeof(hV));
-      /* we allocate one more variable at 0 for internal use */
-      vm->rp += (param + 1) * sizeof(hV);
-      vm->fp->num_locals += param;
+      sbVm_request_var_space(vm, param);
       break;
     case BC_CLOSURE:
       param = get_param(vm);
@@ -501,7 +535,7 @@ void execute_instruction(hVm vm) {
          * have previously been being manipulated using the IND instructions */
         w = peek_stack(vm, 0);
         if (w->type != IT_REF) {
-          CHECK("internal violation: closure should receive a set of reference variables (got %lld)", w->type);
+          CHECK("internal violation: closure should receive a set of reference variables (got %lld)", (long long)w->type);
         }
         sbClosure_set_ref(c, param, w);
         pop_stack(vm);

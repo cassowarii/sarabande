@@ -325,13 +325,13 @@ static char *get_mutable_ptr_of_entry(strentry *e, usize length, hString *handle
 static void tinystr_into_buffer(char *buffer, hString handle, usize max_length) {
   /* we have max_length because we may need to cut off early in some corner cases,
    * like getting a mutable ptr of length 3 for a tinystr of length 6 */
-  if (!is_tinystr(handle)) PANIC("%llx is not a tinystr! can't parse!", handle);
+  if (!is_tinystr(handle)) PANIC("%llx is not a tinystr! can't parse!", (long long)handle);
 
   usize index = 0;
   usize tinylength = tinystr_length(handle);
   hString handle_to_eat = handle;
 
-  if (tinylength >= REQ_ALLOC_LENGTH) PANIC("%llx has improper tinylength %zu", handle, tinylength);
+  if (tinylength >= REQ_ALLOC_LENGTH) PANIC("%llx has improper tinylength %zu", (long long)handle, tinylength);
 
   /* string is stored backwards because it's easiest to just get the low byte */
   while (index < tinylength && index < max_length) {

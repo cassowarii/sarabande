@@ -31,7 +31,7 @@ hV sbV_add(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     return sbV_int(sbInteger_sum(a->integer, b->integer));
   } else {
-    PANIC("todo (add type %llu and type %llu)", a->type, b->type);
+    PANIC("todo (add type %llu and type %llu)", (long long)a->type, (long long)b->type);
   }
 }
 
@@ -39,7 +39,7 @@ hV sbV_sub(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     return sbV_int(sbInteger_diff(a->integer, b->integer));
   } else {
-    PANIC("todo (subtract type %llu minus %llu)", a->type, b->type);
+    PANIC("todo (subtract type %llu minus %llu)", (long long)a->type, (long long)b->type);
   }
 }
 
@@ -120,7 +120,7 @@ hV sbV_index(hV *a, hV *b) {
   if (a->type == IT_LIST && b->type == IT_INTEGER) {
     return sbList_index(a->list, b->integer);
   } else {
-    PANIC("todo %lld %lld", a->type, b->type);
+    PANIC("todo %lld %lld", (long long)a->type, (long long)b->type);
   }
 }
 
@@ -128,7 +128,7 @@ hV sbV_scope_get(hV *obj, hV *key) {
   if (obj->type == IT_HASH) {
     return sbHash_find(obj->hash, key);
   } else {
-    PANIC("todo %lld", obj->type);
+    PANIC("todo %lld", (long long)obj->type);
   }
 }
 
@@ -136,6 +136,6 @@ void sbV_scope_set(hV *obj, hV *key, hV *value) {
   if (obj->type == IT_HASH) {
     sbHash_insert(obj->hash, key, value);
   } else {
-    PANIC("todo %lld", obj->type);
+    PANIC("todo %lld", (long long)obj->type);
   }
 }

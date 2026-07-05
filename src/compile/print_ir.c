@@ -57,7 +57,7 @@ static void print_expr(sbIrExpr *e) {
       if (e->value.type == IT_NIL) {
         debug("nil");
       } else if (e->value.type == IT_INTEGER) {
-        debug("%lld", e->value.integer);
+        debug("%lld", (long long)e->value.integer);
       } else {
         debug("some value");
       }

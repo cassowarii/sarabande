@@ -36,6 +36,8 @@
 
 /* Also these stacks grow upwards in memory, from low to high addresses. */
 
+typedef void (*sbRuntimeCFunc)(hVm, flag init);
+
 typedef enum sbVmStatus {
   VM_STAT_UNKNOWN,
   VM_STAT_SUCCESS,
@@ -46,8 +48,14 @@ typedef struct sbVmStackFrame {
   const u8 *return_addr;
   struct sbVmStackFrame *last_fp;
   u8 *last_rp;
-  const sbVmBlock *block;
-  hClosure closure;
+  flag is_c_func;
+  union {
+    struct {
+      const sbVmBlock *block;
+      hClosure closure;
+    } block_func;
+    sbRuntimeCFunc c_func;
+  };
   usize num_locals;
   hV locals[];
 } sbVmStackFrame;
@@ -82,3 +90,7 @@ hV sbVm_pop(hVm vm);
 hV *sbVm_peek(hVm vm, usize where);
 
 void sbVm_call_func(hVm vm, hV func);
+
+void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func);
+
+void sbVm_request_var_space(hVm vm, usize amount);
