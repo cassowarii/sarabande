@@ -587,7 +587,7 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
 
   /* now reset the 'introduced' flag of anything that was introduced by LET so
    * that we can't refer to them earlier than they are declared */
-  BUFFER_ITER_FROM(ck->program->varmapping, varmapentry, entry, ck->lowest_var_id) {
+  BUFFER_ITER_FROM(ck->program->varmapping, varmapentry, entry, lowest_var) {
     if (entry->var->introduced == BY_LET) {
       entry->var->introduced = NOT_INTRODUCED;
     }

@@ -31,7 +31,7 @@ void sbList_method(hVm vm) {
       sbVm_call_c_func(vm, list_each_cfunc);
     }
   } else {
-    PANIC("method name to list is not symbol! (%ld)", method_name_val->type);
+    PANIC("method name to list is not symbol! (%lld)", (long long)method_name_val->type);
   }
 }
 

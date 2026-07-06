@@ -12,7 +12,7 @@ void push_stack(hVm vm, hV *value);
 void push_stack_immediate(hVm vm, const hV *value);
 hV *pop_stack(hVm vm);
 hV *npop_stack(hVm vm, usize count);
-hV *peek_stack(hVm vm, usize offset);
+hV *peek_stack(hVm vm, isize offset);
 void print_stack(hVm vm);
 
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
@@ -215,7 +215,7 @@ void swap_stack_top(hVm vm) {
   *second_x = xtmp;
 }
 
-hV *peek_stack(hVm vm, usize offset) {
+hV *peek_stack(hVm vm, isize offset) {
   return ((hV**)(vm->vsp))[-offset - 1];
 }
 
