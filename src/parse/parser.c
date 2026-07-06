@@ -168,7 +168,7 @@ static binop binops[] = {
   { T_ARROW, 90, 91, AST_OP_NULL },
   { T_LPAREN, 90, 91, AST_OP_NULL },
   { T_LBRACKET, 90, 91, AST_OP_INDEX },
-  { T_PAAMAYIM_NEKUDOTAYIM, 90, 91, AST_OP_SCOPE },
+  { T_PAAMAYIM_NEKUDOTAYIM, 90, 91, AST_OP_INDEX },
 };
 
 static unop unops[] = {

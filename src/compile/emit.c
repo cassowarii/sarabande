@@ -423,7 +423,6 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_LE: EMIT(BC_OP_LE); break;
     case AST_OP_GE: EMIT(BC_OP_LT, BC_OP_NOT); break;
     case AST_OP_INDEX: EMIT(BC_OP_INDEX); break;
-    case AST_OP_SCOPE: EMIT(BC_OP_SCOPE); break;
     default:
       PANIC("unknown operation!\n");
   }

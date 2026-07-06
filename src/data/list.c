@@ -42,11 +42,10 @@ hV *sbList_get_value(hList list, usize *length) {
   return (hV*)l->items.data;
 }
 
-hV sbList_index(hList list, usize index) {
+hV *sbList_index(hList list, usize index) {
   sbList *l = get_list_by_handle(list);
   hV *item = &((hV*)l->items.data)[index];
-  sbV_retain(item);
-  return *item;
+  return item;
 }
 
 /* --- */

@@ -22,8 +22,6 @@ hV sbV_le(const hV *a, const hV *b);
 
 hV sbV_append(hV *a, hV *b);
 
-hV sbV_index(hV *a, hV *b);
+hV *sbV_index(hV *a, hV *b);
 
-hV sbV_scope_get(hV *hash, hV *key);
-
-void sbV_scope_set(hV *hash, hV *key, hV *value);
+void sbV_index_set(hV *obj, hV *key, hV *value);

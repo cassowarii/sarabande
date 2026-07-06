@@ -18,9 +18,9 @@ hSymbol sbSymbol_from_bytes(const char *text, usize length) {
     .string = sbString_new(text, length),
   };
 
-  hV result = sbHash_find(symbol_table, &symkey);
+  hV *result = sbHash_find(symbol_table, &symkey);
 
-  if (result.type == IT_NOTHING) {
+  if (result == NULL) {
     /* add new symbol */
     hV symval = {
       .type = IT_SYMBOL,
@@ -29,11 +29,11 @@ hSymbol sbSymbol_from_bytes(const char *text, usize length) {
 
     sbHash_insert(symbol_table, &symkey, &symval);
     return symval.symbol;
-  } else if (result.type == IT_SYMBOL) {
+  } else if (result->type == IT_SYMBOL) {
     /* return already existing symbol */
-    return result.symbol;
+    return result->symbol;
   } else {
-    PANIC("Only symbol values are allowed in the symbol table! (%lld)", (long long)result.type);
+    PANIC("Only symbol values are allowed in the symbol table! (%lld)", (long long)result->type);
   }
 }
 

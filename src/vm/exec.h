@@ -61,13 +61,15 @@ typedef struct sbVmStackFrame {
 } sbVmStackFrame;
 
 typedef struct sbVm {
-  u8 *stack;          /* for calculations */
+  u8 *vstack;         /* for calculations */
+  u8 *xstack;         /* parallel to vstack, holds immediate values that are pointed to */
   u8 *rstack;         /* for locals and return addresses, like FORTH */
 
   const u8 *ip;       /* instruction pointer */
   sbVmStackFrame *fp; /* frame pointer */
-  u8 *sp;             /* stack pointer */
-  u8 *rp;             /* rstack pointer */
+  u8 *vsp;            /* stack pointer */
+  u8 *xsp;            /* rstack pointer */
+  u8 *rsp;            /* rstack pointer */
 
   usize stacksize;    /* to detect overflow, save these */
   usize rstacksize;   /* ^^ */
@@ -83,13 +85,15 @@ void sbVm_deinitialize(hVm vm);
 
 sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm);
 
-void sbVm_push(hVm vm, hV value);
+void sbVm_push(hVm vm, hV *value);
 
-hV sbVm_pop(hVm vm);
+void sbVm_push_immediate(hVm vm, hV *value);
+
+hV *sbVm_pop(hVm vm);
 
 hV *sbVm_peek(hVm vm, usize where);
 
-void sbVm_call_func(hVm vm, hV func);
+void sbVm_call_func(hVm vm, hV *func);
 
 void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func);
 

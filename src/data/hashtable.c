@@ -87,19 +87,19 @@ void sbHash_insert(hHash h, hV *key, hV *value) {
   set_key(t, key, value);
 }
 
-hV sbHash_find(hHash h, hV *key) {
+hV *sbHash_find(hHash h, hV *key) {
   hashtbl *t = find_tbl_for_handle(h);
   usize index = find_index_by_key(t, key);
   hV *keys, *values;
   get_ptrs_for_tbl(t, &keys, &values);
   if (keys[index].type == IT_NOTHING) {
-    return HVNOTHING;
+    return NULL;
   } else {
-    return values[index];
+    return &values[index];
   }
 }
 
-hV sbHash_find_or_insert(hHash h, hV *key, hV *value) {
+hV *sbHash_find_or_insert(hHash h, hV *key, hV *value) {
   hashtbl *t = find_tbl_for_handle(h);
   usize index = find_index_by_key(t, key);
   hV *keys, *values;
@@ -107,7 +107,7 @@ hV sbHash_find_or_insert(hHash h, hV *key, hV *value) {
   if (keys[index].type == IT_NOTHING) {
     values[index] = *value;
   }
-  return values[index];
+  return &values[index];
 }
 
 void sbHash_delete(hHash h, hV *key, hV *value) {

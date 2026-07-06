@@ -48,8 +48,7 @@ typedef enum sbOpcode {
   BC_OP_DEREF,          // dereference pointer
   BC_OP_LT,             // less than
   BC_OP_LE,             // less than or equal to
-  BC_OP_INDEX,          // index []
-  BC_OP_SCOPE,          // index ::
+  BC_OP_INDEX,          // index [] or ::
   BC_ALLOC_VARS,        // create space in rstack for local variables
   BC_CLOSURE,           // create closure from top elements of stack
   BC_LIST_GATHER,       // create list from count + list of values on stack

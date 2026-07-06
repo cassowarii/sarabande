@@ -8,27 +8,32 @@
 void call_block(hVm vm, usize block_id, hClosure closure);
 void return_from_block(hVm vm);
 void execute_instruction(hVm vm);
-void push_stack(hVm vm, const hV *value);
-hV pop_stack(hVm vm);
+void push_stack(hVm vm, hV *value);
+void push_stack_immediate(hVm vm, const hV *value);
+hV *pop_stack(hVm vm);
 hV *npop_stack(hVm vm, usize count);
 hV *peek_stack(hVm vm, usize offset);
+void print_stack(hVm vm);
 
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
   *vm = (sbVm) {0};
-  vm->stack = malloc(stacksize);
+  vm->vstack = malloc(stacksize);
+  vm->xstack = malloc(stacksize);
   vm->stacksize = stacksize;
   vm->rstack = malloc(rstacksize);
   vm->rstacksize = rstacksize;
 
-  vm->sp = vm->stack;
+  vm->vsp = vm->vstack;
+  vm->xsp = vm->xstack;
+  vm->rsp = vm->rstack;
   vm->fp = (sbVmStackFrame*)vm->rstack;
-  vm->rp = vm->rstack;
 
   vm->debugmode = debugmode;
 }
 
 void sbVm_deinitialize(hVm vm) {
-  free(vm->stack);
+  free(vm->vstack);
+  free(vm->xstack);
   free(vm->rstack);
   *vm = (sbVm) {0};
 }
@@ -44,22 +49,22 @@ sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm) {
   while (vm->running) {
     execute_instruction(vm);
     if (vm->debugmode) {
-      debug("Stack: ");
-      for (u8 *p = vm->stack; p < vm->sp; p++) {
-        debug("%02X ", *p);
-      }
-      debug("\n");
+      print_stack(vm);
     }
   }
 
   return VM_STAT_SUCCESS;
 }
 
-void sbVm_push(hVm vm, hV value) {
-  push_stack(vm, &value);
+void sbVm_push(hVm vm, hV *value) {
+  push_stack(vm, value);
 }
 
-hV sbVm_pop(hVm vm) {
+void sbVm_push_immediate(hVm vm, hV *value) {
+  push_stack_immediate(vm, value);
+}
+
+hV *sbVm_pop(hVm vm) {
   return pop_stack(vm);
 }
 
@@ -67,21 +72,21 @@ hV *sbVm_peek(hVm vm, usize where) {
   return peek_stack(vm, where);
 }
 
-void sbVm_call_func(hVm vm, hV func) {
-  call_block(vm, func.type, func.closure);
+void sbVm_call_func(hVm vm, hV *func) {
+  call_block(vm, func->type, func->closure);
 }
 
 void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
   sbVmStackFrame frame = {
     .return_addr = vm->ip,
     .last_fp = vm->fp,
-    .last_rp = vm->rp,
+    .last_rp = vm->rsp,
     .is_c_func = TRUE,
     .c_func = func,
   };
-  *(sbVmStackFrame*)vm->rp = frame;
-  vm->fp = (sbVmStackFrame*)vm->rp;
-  vm->rp += sizeof(sbVmStackFrame);
+  *(sbVmStackFrame*)vm->rsp = frame;
+  vm->fp = (sbVmStackFrame*)vm->rsp;
+  vm->rsp += sizeof(sbVmStackFrame);
 
   func(vm, TRUE);
 
@@ -94,12 +99,20 @@ void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
 void sbVm_request_var_space(hVm vm, usize amount) {
   /* have to set new rstack space to 0 so we don't accidentally decrement
    * the ref count of variables from a previous stack frame (or of just garbage)  */
-  memset(vm->rp, 0, amount * sizeof(hV));
-  vm->rp += amount * sizeof(hV);
+  memset(vm->rsp, 0, amount * sizeof(hV));
+  vm->rsp += amount * sizeof(hV);
   vm->fp->num_locals += amount;
 }
 
 /* --- */
+
+void print_stack(hVm vm) {
+  debug("Stack: ");
+  for (hV **p = (hV**)vm->vstack; p < (hV**)vm->vsp; p++) {
+    debug("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
+  }
+  debug("\n");
+}
 
 void call_block(hVm vm, usize block_id, hClosure closure) {
   sbVmBlock *blk = &vm->program->blocks[block_id];
@@ -107,13 +120,13 @@ void call_block(hVm vm, usize block_id, hClosure closure) {
   sbVmStackFrame frame = {
     .return_addr = vm->ip,
     .last_fp = vm->fp,
-    .last_rp = vm->rp,
+    .last_rp = vm->rsp,
     .block_func.block = blk,
     .block_func.closure = closure,
   };
-  *(sbVmStackFrame*)vm->rp = frame;
-  vm->fp = (sbVmStackFrame*)vm->rp;
-  vm->rp += sizeof(sbVmStackFrame);
+  *(sbVmStackFrame*)vm->rsp = frame;
+  vm->fp = (sbVmStackFrame*)vm->rsp;
+  vm->rsp += sizeof(sbVmStackFrame);
   vm->ip = &blk->bytecode[0];
 }
 
@@ -129,7 +142,7 @@ void return_from_block(hVm vm) {
     vm->running = FALSE;
   } else {
     vm->fp = frame->last_fp;
-    vm->rp = frame->last_rp;
+    vm->rsp = frame->last_rp;
     vm->ip = frame->return_addr;
 
     if (vm->fp->is_c_func) {
@@ -155,28 +168,55 @@ void store_local(hVm vm, usize local_index, const hV *value) {
   vm->fp->locals[local_index] = *value;
 }
 
-void push_stack(hVm vm, const hV *value) {
+void push_stack(hVm vm, hV *value) {
   sbV_retain(value);
-  *(hV*)vm->sp = *value;
-  vm->sp += sizeof(hV);
+  *(hV**)vm->vsp = value;
+  vm->vsp += sizeof(hV*);
+  vm->xsp += sizeof(hV);
 }
 
-hV pop_stack(hVm vm) {
-  vm->sp -= sizeof(hV);
-  sbV_release((hV*)vm->sp);
-  return *(hV*)vm->sp;
+void push_stack_immediate(hVm vm, const hV *value) {
+  /* save it on our own stack */
+  sbV_retain(value);
+  *(hV*)vm->xsp = *value;
+  *(hV**)vm->vsp = (hV*)vm->xsp;
+  vm->vsp += sizeof(hV*);
+  vm->xsp += sizeof(hV);
+}
+
+hV *pop_stack(hVm vm) {
+  vm->vsp -= sizeof(hV*);
+  vm->xsp -= sizeof(hV);
+  sbV_release(*(hV**)vm->vsp);
+  return *(hV**)vm->vsp;
 }
 
 hV *npop_stack(hVm vm, usize count) {
-  vm->sp -= count * sizeof(hV);
+  vm->vsp -= count * sizeof(hV*);
+  vm->xsp -= count * sizeof(hV);
   for (usize i = 0; i < count; i++) {
-    sbV_release(&((hV*)vm->sp)[i]);
+    sbV_release(((hV**)vm->vsp)[i]);
   }
-  return (hV*)vm->sp;
+  return *(hV**)vm->vsp;
+}
+
+void swap_stack_top(hVm vm) {
+  hV **first_v = &((hV**)vm->vsp)[-1];
+  hV **second_v = &((hV**)vm->vsp)[-2];
+  hV *first_x = &((hV*)vm->xsp)[-1];
+  hV *second_x = &((hV*)vm->xsp)[-2];
+
+  hV *vtmp = *first_v;
+  *first_v = *second_v;
+  *second_v = vtmp;
+
+  hV xtmp = *first_x;
+  *first_x = *second_x;
+  *second_x = xtmp;
 }
 
 hV *peek_stack(hVm vm, usize offset) {
-  return (hV*)(vm->sp - (offset + 1) * sizeof(hV));
+  return ((hV**)(vm->vsp))[-offset - 1];
 }
 
 sbOpcode get_opcode(hVm vm) {
@@ -239,7 +279,6 @@ void execute_instruction(hVm vm) {
   u64 param;
   usize count;
   hV *v, *w, *x, res;
-  hV vv, ww, xx;
 
   switch (op) {
     case BC_NOP:
@@ -249,11 +288,11 @@ void execute_instruction(hVm vm) {
       break;
     case BC_LD_IMM:
       param = get_param(vm);
-      push_stack(vm, &HVINT(param));
+      push_stack_immediate(vm, &HVINT(param));
       break;
     case BC_LD_CONST:
       param = get_param(vm);
-      push_stack(vm, &vm->fp->block_func.block->constants[param]);
+      push_stack_immediate(vm, &vm->fp->block_func.block->constants[param]);
       break;
     case BC_LD_CTX:
       PANIC("todo");
@@ -280,11 +319,11 @@ void execute_instruction(hVm vm) {
     case BC_LD_UPREF:
       param = get_param(vm);
       res = sbClosure_get_ref(vm->fp->block_func.closure, param);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_LD_BLK:
       param = get_param(vm);
-      push_stack(vm, &HVFUNC(param, 0));
+      push_stack_immediate(vm, &HVFUNC(param, 0));
       break;
     case BC_LD_IND:
       param = get_param(vm);
@@ -296,7 +335,7 @@ void execute_instruction(hVm vm) {
       push_stack(vm, w);
       break;
     case BC_LD_NIL:
-      push_stack(vm, &HVNIL);
+      push_stack_immediate(vm, &HVNIL);
       break;
     case BC_ST_VAR:
       param = get_param(vm);
@@ -306,8 +345,8 @@ void execute_instruction(hVm vm) {
       break;
     case BC_ST_UPVAL:
       param = get_param(vm);
-      vv = pop_stack(vm);
-      sbClosure_set_var(vm->fp->block_func.closure, param, &vv);
+      v = pop_stack(vm);
+      sbClosure_set_var(vm->fp->block_func.closure, param, v);
       break;
     case BC_ST_IND:
       param = get_param(vm);
@@ -325,24 +364,24 @@ void execute_instruction(hVm vm) {
       break;
     case BC_ST_ARG:
       param = get_param(vm);
-      vv = pop_stack(vm); /* argument count */
-      if (vv.type != IT_INTEGER) {
+      v = pop_stack(vm); /* argument count */
+      if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("calling convention violation: number of args should be an integer");
       }
-      ww = pop_stack(vm); /* argument value */
-      store_local(vm, param, &ww);
+      w = pop_stack(vm); /* argument value */
+      store_local(vm, param, w);
       /* we track the number of arguments remaining, for variadic functions later */
-      vv.integer --;
-      if (vv.integer > 0) {
+      v->integer --;
+      if (v->integer > 0) {
         /* if last integer, don't put the 0 count back on the stack */
-        push_stack(vm, &vv);
+        push_stack_immediate(vm, v);
       }
       break;
     case BC_ST_ARG_IND:
       param = get_param(vm);
-      xx = pop_stack(vm); /* argument count */
-      if (xx.type != IT_INTEGER) {
+      x = pop_stack(vm); /* argument count */
+      if (x->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("calling convention violation: number of args should be an integer");
       }
@@ -358,10 +397,10 @@ void execute_instruction(hVm vm) {
         CHECK("indirect variables should be of type reference! (%lld)", (long long)v->type);
       }
       pop_stack(vm);
-      xx.integer --;
-      if (xx.integer > 0) {
+      x->integer --;
+      if (x->integer > 0) {
         /* if last integer, don't put the 0 count back on the stack */
-        push_stack(vm, &xx);
+        push_stack(vm, x);
       }
       break;
     case BC_POP:
@@ -372,37 +411,34 @@ void execute_instruction(hVm vm) {
       npop_stack(vm, param);
       break;
     case BC_SWAP:
-      vv = pop_stack(vm);
-      ww = pop_stack(vm);
-      push_stack(vm, &vv);
-      push_stack(vm, &ww);
+      swap_stack_top(vm);
       break;
     case BC_CALL:
-      vv = pop_stack(vm);
-      if (vv.type <= 0) {
+      v = pop_stack(vm);
+      if (v->type <= 0) {
         /* We need to figure out exception support or some such.
          * User error should not panic. */
         PANIC("attempt to call a non-function value");
       }
-      call_block(vm, vv.type, vv.closure);
+      call_block(vm, v->type, v->closure);
       break;
     case BC_SEND:
       sbV_message_handler(vm);
       break;
     case BC_NUMARG:
       param = get_param(vm);
-      vv = pop_stack(vm);
-      if (vv.type != IT_INTEGER) {
+      v = pop_stack(vm);
+      if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("calling convention violation: number of args should be an integer");
       }
-      if (vv.integer != param) {
+      if (v->integer != param) {
         /* This should be an exception. */
         PANIC("wrong number of arguments passed to function.");
       }
-      if (vv.integer > 0) {
+      if (v->integer > 0) {
         /* when 0 arguments, leave this off */
-        push_stack(vm, &vv);
+        push_stack_immediate(vm, v);
       }
       break;
     case BC_JMP:
@@ -411,15 +447,15 @@ void execute_instruction(hVm vm) {
       break;
     case BC_JT:
       param = get_param(vm);
-      vv = pop_stack(vm);
-      if (!sbV_c_falsy(&vv)) {
+      v = pop_stack(vm);
+      if (!sbV_c_falsy(v)) {
         vm->ip = &vm->fp->block_func.block->bytecode[param];
       }
       break;
     case BC_JF:
       param = get_param(vm);
-      vv = pop_stack(vm);
-      if (sbV_c_falsy(&vv)) {
+      v = pop_stack(vm);
+      if (sbV_c_falsy(v)) {
         vm->ip = &vm->fp->block_func.block->bytecode[param];
       }
       break;
@@ -431,14 +467,14 @@ void execute_instruction(hVm vm) {
       w = peek_stack(vm, 0);
       res = sbV_eq(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_OP_NOT:
-      vv = pop_stack(vm);
-      if (sbV_c_falsy(&vv)) {
-        push_stack(vm, &HVBOOL(TRUE));
+      v = pop_stack(vm);
+      if (sbV_c_falsy(v)) {
+        push_stack_immediate(vm, &HVBOOL(TRUE));
       } else {
-        push_stack(vm, &HVBOOL(FALSE));
+        push_stack_immediate(vm, &HVBOOL(FALSE));
       }
       break;
     case BC_OP_LT:
@@ -446,35 +482,35 @@ void execute_instruction(hVm vm) {
       w = peek_stack(vm, 0);
       res = sbV_lt(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_OP_LE:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_le(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_OP_ADD:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_add(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_OP_SUB:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_sub(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_OP_MUL:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
       res = sbV_mul(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_OP_DIV:
       PANIC("todo");
@@ -483,7 +519,7 @@ void execute_instruction(hVm vm) {
       w = peek_stack(vm, 0);
       res = sbV_floordiv(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_OP_NEG:
     case BC_OP_MOD:
@@ -491,29 +527,18 @@ void execute_instruction(hVm vm) {
       PANIC("todo");
     case BC_OP_INCR:
       v = peek_stack(vm, 0);
-      res = sbV_incr(v);
-      pop_stack(vm);
-      push_stack(vm, &res);
+      sbV_incr(v);
       break;
     case BC_OP_DECR:
       v = peek_stack(vm, 0);
-      res = sbV_decr(v);
-      pop_stack(vm);
-      push_stack(vm, &res);
+      sbV_decr(v);
       break;
     case BC_OP_INDEX:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);
-      res = sbV_index(v, w);
+      x = sbV_index(v, w);
       npop_stack(vm, 2);
-      push_stack(vm, &res);
-      break;
-    case BC_OP_SCOPE:
-      v = peek_stack(vm, 1);
-      w = peek_stack(vm, 0);
-      res = sbV_scope_get(v, w);
-      npop_stack(vm, 2);
-      push_stack(vm, &res);
+      push_stack(vm, x);
       break;
     case BC_OP_DEREF:
       PANIC("todo");
@@ -525,8 +550,8 @@ void execute_instruction(hVm vm) {
     case BC_CLOSURE:
       param = get_param(vm);
       hClosure c = sbClosure_create(param);
-      vv = pop_stack(vm); /* function to close with */
-      if (vv.type <= 0) {
+      v = pop_stack(vm); /* function to close with */
+      if (v->type <= 0) {
         CHECK("internal violation: a function is required to create a closure!");
       }
       while (param > 0) {
@@ -540,16 +565,16 @@ void execute_instruction(hVm vm) {
         sbClosure_set_ref(c, param, w);
         pop_stack(vm);
       }
-      vv.closure = c;
-      push_stack(vm, &vv);
+      v->closure = c;
+      push_stack_immediate(vm, v);
       break;
     case BC_LIST_GATHER:
-      vv = pop_stack(vm);
-      if (vv.type != IT_INTEGER) {
+      v = pop_stack(vm);
+      if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("internal violation: LIST_GATHER should receive an integer on top of stack");
       }
-      param = vv.integer;
+      param = v->integer;
       count = param;
       res = sbV_empty_list(param);
       while (count > 0) {
@@ -560,42 +585,42 @@ void execute_instruction(hVm vm) {
         count --;
       }
       npop_stack(vm, param);
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_HASH_GATHER:
-      vv = pop_stack(vm);
-      if (vv.type != IT_INTEGER) {
+      v = pop_stack(vm);
+      if (v->type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("internal violation: HASH_GATHER should receive an integer on top of stack");
       }
-      count = vv.integer;
+      count = v->integer;
       res = sbV_empty_hash(count * 3 / 2);
       while (count > 0) {
         /* values come first, then keys, because of execution order */
-        xx = pop_stack(vm);
-        ww = pop_stack(vm);
-        sbV_scope_set(&res, &ww, &xx);
+        x = pop_stack(vm);
+        w = pop_stack(vm);
+        sbV_index_set(&res, w, x);
         count --;
       }
-      push_stack(vm, &res);
+      push_stack_immediate(vm, &res);
       break;
     case BC_LIST_SPILL:
-      vv = pop_stack(vm); /* list to spill */
-      if (vv.type != IT_LIST) {
+      v = pop_stack(vm); /* list to spill */
+      if (v->type != IT_LIST) {
         /* user error */
         PANIC("cannot use '...' operator on something that isn't a list");
       }
-      ww = pop_stack(vm); /* current count */
-      if (ww.type != IT_INTEGER) {
+      res = *pop_stack(vm); /* current count */
+      if (res.type != IT_INTEGER) {
         /* internal error! this should be generated correctly */
         CHECK("internal violation: LIST_SPILL should receive an integer on top of stack");
       }
-      x = sbList_get_value(vv.list, &count);
+      x = sbList_get_value(v->list, &count);
       for (usize i = 0; i < count; i++) {
         push_stack(vm, &x[i]);
       }
-      ww.integer += count;
-      push_stack(vm, &ww);
+      res.integer += count;
+      push_stack_immediate(vm, &res);
       break;
     case BC_LONG_NUM:
     case BC_VLONG_NUM:

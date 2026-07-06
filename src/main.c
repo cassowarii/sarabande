@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
       filename = argv[1];
     } else {
       printf("usage: %s [-D] <filename>\n", argv[0]);
-      printf("usage:    -D = bytecode debugger\n");
+      printf("usage:    -D = stack debugger\n");
       return 0;
     }
 
@@ -50,11 +50,13 @@ int main(int argc, char **argv) {
     sbParser_deinitialize(&pr);
 
     if (ir.error_count > 0) {
-      fprintf(stderr, "Could not run '%s' due to errors.\n", filename);
+      fprintf(stderr, "fatal error: Could not run '%s' due to errors.\n", filename);
       return -3;
     } else {
-      // print out program
-      sbIrProgram_print(&ir);
+      if (debugmode) {
+        // print out program
+        sbIrProgram_print(&ir);
+      }
     }
 
     sbVmProgram pm;
@@ -70,8 +72,8 @@ int main(int argc, char **argv) {
     sbVm_execute(&vm, &pm);
 
     printf("Stack result: ");
-    for (u8 *p = vm.stack; p < vm.sp; p++) {
-      printf("%02X ", *p);
+    for (hV **p = (hV**)vm.vstack; p < (hV**)vm.vsp; p++) {
+      printf("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
     }
     printf("\n");
 

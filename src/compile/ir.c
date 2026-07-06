@@ -524,6 +524,7 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
   /* compile parameters */
   sbIrBindList *arg_binding = compile_ast_bind_list(ck, paramsAst, TRUE, BY_PARAM);
   if (arg_binding) {
+    ck->num_args = 1;
     put_bind(ck, arg_binding, NULL);
   }
 
