@@ -26,6 +26,7 @@ void sbList_sys_deinit() {
 hList sbList_new(usize capacity) {
   usize index;
   sbList *l = sbPool_alloc(&g_list_pool, &index);
+  if (capacity < 4) capacity = 4;
   sbBuffer_initialize(&l->items, capacity * sizeof(hV));
   return index;
 }

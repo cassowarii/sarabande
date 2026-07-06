@@ -61,9 +61,11 @@ static sbIrExpr SENTINEL_NIL_EXPR = {
 };
 static sbIrStmt SENTINEL_NO_STMT = {0};
 static sbIrVariable SENTINEL_NO_VAR = {0};
+static sbIrExpr SENTINEL_EMPTY_LIST = { .type = IR_E_LIST };
 static sbIrExpr *NIL_EXPR = &SENTINEL_NIL_EXPR;
 static sbIrStmt *NO_STMT = &SENTINEL_NO_STMT;
 static sbIrVariable *NO_VAR = &SENTINEL_NO_VAR;
+sbIrExpr *IR_EMPTY_LIST = &SENTINEL_EMPTY_LIST;
 
 static void vprogram_error(hIrProgram ir, const char *error, va_list args) {
   ir->error_count ++;
@@ -365,6 +367,7 @@ static sbIrExpr *expr_list(hIrChunk ck, sbIrExpr *value) {
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_LIST,
     .list.this = value,
+    .list.next = IR_EMPTY_LIST,
   });
 }
 
@@ -849,7 +852,7 @@ static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node) {
 
 static sbIrExpr *compile_ast_list(hIrChunk ck, sbAst node) {
   sbAst considering = node;
-  sbIrExpr *list = NULL;
+  sbIrExpr *list = IR_EMPTY_LIST;
   sbIrExpr **place_here = &list;
   while (considering != NO_NODE) {
     *place_here = expr_list(ck, compile_ast_expr(ck, considering->seq.left, TRUE));

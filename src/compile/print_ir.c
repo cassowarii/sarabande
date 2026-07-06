@@ -88,7 +88,9 @@ static void print_expr(sbIrExpr *e) {
       debug(" )");
       break;
     case IR_E_LIST:
-      print_expr(e->list.this);
+      if (e->list.this) {
+        print_expr(e->list.this);
+      }
       if (e->list.next) {
         debug(", ");
         print_expr(e->list.next);

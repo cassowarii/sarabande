@@ -157,6 +157,8 @@ typedef struct sbIrProgram {
   i32 error_count;
 } sbIrProgram;
 
+extern sbIrExpr *IR_EMPTY_LIST;
+
 typedef struct sbIrProgram *hIrProgram;
 
 typedef struct sbIrChunk *hIrChunk;

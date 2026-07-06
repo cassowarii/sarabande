@@ -208,7 +208,7 @@ void compile_list(sbVmCompiler *cm, sbIrExpr *expr) {
   sbIrExpr *considering = expr;
   usize count = 0;
   flag was_splat = FALSE;
-  while (considering) {
+  while (considering != IR_EMPTY_LIST) {
     sbIrExpr *elem = considering->list.this;
     if (elem->type == IR_E_OP && elem->op.type == AST_OP_SPLAT) {
       if (!was_splat) {

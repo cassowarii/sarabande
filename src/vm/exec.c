@@ -104,6 +104,10 @@ void sbVm_request_var_space(hVm vm, usize amount) {
   vm->fp->num_locals += amount;
 }
 
+void sbVm_print_stack(hVm vm) {
+  print_stack(vm);
+}
+
 /* --- */
 
 void print_stack(hVm vm) {

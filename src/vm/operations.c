@@ -31,7 +31,7 @@ hV sbV_add(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     return sbV_int(sbInteger_sum(a->integer, b->integer));
   } else {
-    PANIC("todo (add type %llu and type %llu)", (long long)a->type, (long long)b->type);
+    PANIC("todo (add type %lld and type %lld)", (long long)a->type, (long long)b->type);
   }
 }
 

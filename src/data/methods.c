@@ -29,6 +29,24 @@ void sbList_method(hVm vm) {
       }
       sbVm_push_immediate(vm, list);
       sbVm_call_c_func(vm, list_each_cfunc);
+    } else {
+      if (METHOD_IS("length")) {
+        if (num_params != 0) {
+          PANIC("list#length takes no arguments!");
+        }
+        sbVm_pop(vm); /* remove method name */
+        usize length;
+        sbList_get_value(list->list, &length);
+        sbVm_push_immediate(vm, &HVINT(length));
+      } else if (METHOD_IS("push")) {
+        if (num_params != 1) {
+          PANIC("list#push expects 1 argument!");
+        }
+        hV *to_append = sbVm_pop(vm);
+        sbVm_pop(vm); /* remove method name */
+        sbList_append(list->list, to_append);
+        sbVm_push_immediate(vm, &HVNIL);
+      }
     }
   } else {
     PANIC("method name to list is not symbol! (%lld)", (long long)method_name_val->type);

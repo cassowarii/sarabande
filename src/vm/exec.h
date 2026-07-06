@@ -98,3 +98,5 @@ void sbVm_call_func(hVm vm, hV *func);
 void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func);
 
 void sbVm_request_var_space(hVm vm, usize amount);
+
+void sbVm_print_stack(hVm vm);
