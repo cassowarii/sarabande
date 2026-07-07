@@ -9,6 +9,8 @@
 void list_each_cfunc(hVm vm, flag init);
 void list_map_cfunc(hVm vm, flag init);
 void list_filter_cfunc(hVm vm, flag init);
+void list_any_cfunc(hVm vm, flag init);
+void list_all_cfunc(hVm vm, flag init);
 
 void sbList_method(hVm vm) {
   hV *list = sbVm_pop(vm);
@@ -25,25 +27,7 @@ void sbList_method(hVm vm) {
   if (method_name_val->type == IT_SYMBOL) {
     const char *method_name = sbSymbol_name(method_name_val->symbol);
     /* TODO: Need a better way of resolving these */
-    if (METHOD_IS("each")) {
-      if (num_params != 1) {
-        PANIC("wrong number of arguments passed to list#each!");
-      }
-      sbVm_push_immediate(vm, list);
-      sbVm_call_c_func(vm, list_each_cfunc);
-    } else if (METHOD_IS("map")) {
-      if (num_params != 1) {
-        PANIC("wrong number of arguments passed to list#map!");
-      }
-      sbVm_push_immediate(vm, list);
-      sbVm_call_c_func(vm, list_map_cfunc);
-    } else if (METHOD_IS("filter")) {
-      if (num_params != 1) {
-        PANIC("wrong number of arguments passed to list#filter!");
-      }
-      sbVm_push_immediate(vm, list);
-      sbVm_call_c_func(vm, list_filter_cfunc);
-    } else if (METHOD_IS("length")) {
+    if (METHOD_IS("length")) {
       if (num_params != 0) {
         PANIC("list#length takes no arguments!");
       }
@@ -59,6 +43,36 @@ void sbList_method(hVm vm) {
       sbVm_pop(vm); /* remove method name */
       sbList_append(list->list, to_append);
       sbVm_push_immediate(vm, &HVNIL);
+    } else if (METHOD_IS("each")) {
+      if (num_params != 1) {
+        PANIC("wrong number of arguments passed to list#each");
+      }
+      sbVm_push_immediate(vm, list);
+      sbVm_call_c_func(vm, list_each_cfunc);
+    } else if (METHOD_IS("map")) {
+      if (num_params != 1) {
+        PANIC("wrong number of arguments passed to list#map");
+      }
+      sbVm_push_immediate(vm, list);
+      sbVm_call_c_func(vm, list_map_cfunc);
+    } else if (METHOD_IS("filter")) {
+      if (num_params != 1) {
+        PANIC("wrong number of arguments passed to list#filter");
+      }
+      sbVm_push_immediate(vm, list);
+      sbVm_call_c_func(vm, list_filter_cfunc);
+    } else if (METHOD_IS("any?")) {
+      if (num_params != 1) {
+        PANIC("wrong number of arguments passed to list#any?");
+      }
+      sbVm_push_immediate(vm, list);
+      sbVm_call_c_func(vm, list_any_cfunc);
+    } else if (METHOD_IS("all?")) {
+      if (num_params != 1) {
+        PANIC("wrong number of arguments passed to list#any?");
+      }
+      sbVm_push_immediate(vm, list);
+      sbVm_call_c_func(vm, list_all_cfunc);
     }
   } else {
     PANIC("method name to list is not symbol! (%lld)", (long long)method_name_val->type);
@@ -166,5 +180,79 @@ void list_filter_cfunc(hVm vm, flag init) {
   } else {
     /* return result list */
     sbVm_push_immediate(vm, &vm->fp->locals[3]);
+  }
+}
+
+void list_any_cfunc(hVm vm, flag init) {
+  if (init) {
+    /* state: list being filtered, index, callback */
+    sbVm_request_var_space(vm, 3);
+    hV *iterating_list = sbVm_pop(vm);
+    hV *pred_func = sbVm_pop(vm);
+    sbVm_pop(vm); /* remove method name */
+    hV index = HVINT(0);
+
+    vm->fp->locals[0] = *iterating_list;
+    vm->fp->locals[1] = index;
+    vm->fp->locals[2] = *pred_func;
+  } else {
+    /* get result of predicate function */
+    hV *mapped = sbVm_pop(vm);
+    if (!sbV_c_falsy(mapped)) {
+      /* one was true! return true */
+      sbVm_push_immediate(vm, &HVBOOL(TRUE));
+      return;
+    }
+  }
+
+  /* haven't found any yet... */
+  usize current_index = vm->fp->locals[1].integer++;
+  usize length;
+  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  if (current_index < length) {
+    /* try next element */
+    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push_immediate(vm, &HVINT(1));
+    sbVm_call_func(vm, &vm->fp->locals[2]);
+  } else {
+    /* no result found */
+    sbVm_push_immediate(vm, &HVBOOL(FALSE));
+  }
+}
+
+void list_all_cfunc(hVm vm, flag init) {
+  if (init) {
+    /* state: list being filtered, index, callback */
+    sbVm_request_var_space(vm, 3);
+    hV *iterating_list = sbVm_pop(vm);
+    hV *pred_func = sbVm_pop(vm);
+    sbVm_pop(vm); /* remove method name */
+    hV index = HVINT(0);
+
+    vm->fp->locals[0] = *iterating_list;
+    vm->fp->locals[1] = index;
+    vm->fp->locals[2] = *pred_func;
+  } else {
+    /* get result of predicate function */
+    hV *mapped = sbVm_pop(vm);
+    if (sbV_c_falsy(mapped)) {
+      /* one was false; return false */
+      sbVm_push_immediate(vm, &HVBOOL(FALSE));
+      return;
+    }
+  }
+
+  /* all true so far */
+  usize current_index = vm->fp->locals[1].integer++;
+  usize length;
+  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  if (current_index < length) {
+    /* try next element */
+    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push_immediate(vm, &HVINT(1));
+    sbVm_call_func(vm, &vm->fp->locals[2]);
+  } else {
+    /* all passed */
+    sbVm_push_immediate(vm, &HVBOOL(TRUE));
   }
 }
