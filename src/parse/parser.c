@@ -684,10 +684,10 @@ static sbAst with_trailing_conditional(hParser pr, sbAst stmt) {
 
   if (expect(pr, T_rIF)) {
     sbAst condition = parse_expr(pr, 0);
-    result = tri_node(pr, AST_NODE_IF, condition, stmt, NO_NODE);
+    result = tri_node(pr, AST_NODE_IF, condition, seq_node(pr, AST_NODE_SEQ, stmt, NO_NODE), NO_NODE);
   } else if (expect(pr, T_rUNLESS)) {
     sbAst condition = parse_expr(pr, 0);
-    result = tri_node(pr, AST_NODE_IF, unop_node(pr, AST_OP_NOT, condition), stmt, NO_NODE);
+    result = tri_node(pr, AST_NODE_IF, unop_node(pr, AST_OP_NOT, condition), seq_node(pr, AST_NODE_SEQ, stmt, NO_NODE), NO_NODE);
   }
 
   return result;

@@ -668,7 +668,8 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
        * OK, this one's pretty simple.
        */
       if (node->seq.left == NO_NODE) {
-        E1 = NULL;
+        /* plain 'return' with no qualifier means 'return nil' */
+        E1 = NIL_EXPR;
       } else {
         /* TODO handle multival here */
         E1 = compile_ast_expr(ck, node->seq.left->seq.left, FALSE);

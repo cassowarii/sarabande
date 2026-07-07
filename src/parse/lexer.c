@@ -233,10 +233,12 @@ static flag block_header_can_end_after(sbTokenType type) {
 }
 
 /* these are operators that look weird if they get captured inside
- * of parentheses. */
+ * of parentheses, and also if and unless in postfix form */
 static flag close_invisible_parens_before(sbTokenType type) {
     return type == T_rAND
         || type == T_rOR
+        || type == T_rIF
+        || type == T_rUNLESS
         || type == T_DOUBLEEQUALS
         || type == T_NOTEQUALS
         || type == T_LESS
@@ -399,16 +401,16 @@ static void compute_next_token(hLexer lx) {
         brackets_stack_pop(lx); /* remove 'B' state from bracket stack */
     }
 
+    if (close_invisible_parens_before(token.type)) {
+        unstack_all_invisible_parentheses(lx);
+    }
+
     if (begins_brace_terminated_state(token.type)) {
         /* don't start brace-terminated state if we are directly after a '}' (otherwise it gets
          * confused by things like repeat..until */
         if (lx->last_token_seen.type != '}') {
             brackets_stack_push(lx, 'B');
         }
-    }
-
-    if (close_invisible_parens_before(token.type)) {
-        unstack_all_invisible_parentheses(lx);
     }
 
     /* --- HERE IS WHERE THE TOKEN ACTUALLY GETS OUTPUT TO THE STREAM --- */
@@ -536,6 +538,13 @@ static void compute_next_token(hLexer lx) {
                 };
                 enqueue_output_token(lx, invisible_semicolon);
                 lx->last_token_seen = invisible_semicolon;
+
+                if (brackets_stack_top(lx) == 'B') {
+                    /* if we're in brace-terminated state but encounter an end of line, it's
+                     * ok to leave brace-terminated state. this applies to postfix 'if' and
+                     * 'unless' in particular */
+                    brackets_stack_pop(lx);
+                }
             }
         }
     }
