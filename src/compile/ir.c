@@ -539,7 +539,9 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
   return ck;
 }
 
-static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return) {
+/* compile a sequence of statements, but don't close the scope yet (used so we can refer
+ * to inner variables in the condition of a repeat..while) */
+static usize compile_ast_stmtseq_open(hIrChunk ck, sbAst seqast, flag implicit_return) {
   /* create new scope to hold lexical block variables */
   usize lowest_var = ck->program->varmapping.size / sizeof(varmapentry);
 
@@ -609,7 +611,7 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
     considering = considering->seq.right;
 
     if (ck->program->error_count > 0) {
-      return;
+      return lowest_var;
     }
   }
 
@@ -617,6 +619,10 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
     put_implicit_return(ck);
   }
 
+  return lowest_var;
+}
+
+static void close_stmtseq_scope(hIrChunk ck, usize lowest_var) {
   /* remove extraneous statements, consolidate aliased labels */
   usize nstmts = ck->stmts.size / sizeof(sbIrStmt*);
   usize i = 0;
@@ -651,6 +657,11 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
 
   /* exit block lexical scope */
   sbBuffer_set_size(&ck->program->varmapping, lowest_var * sizeof(varmapentry));
+}
+
+static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return) {
+  usize lowest_var = compile_ast_stmtseq_open(ck, seqast, implicit_return);
+  close_stmtseq_scope(ck, lowest_var);
 }
 
 static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
@@ -824,10 +835,11 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
        */
       L1 = new_label(ck);
       if (node->seq.right) {
-        E1 = compile_ast_expr(ck, node->seq.right, FALSE);
         put_label(ck, L1);
-        compile_ast_stmtseq(ck, node->seq.left, FALSE);
+        usize lowest_var = compile_ast_stmtseq_open(ck, node->seq.left, FALSE);
+        E1 = compile_ast_expr(ck, node->seq.right, FALSE);
         put_jump_if_yes(ck, E1, L1);
+        close_stmtseq_scope(ck, lowest_var);
       } else {
         put_label(ck, L1);
         compile_ast_stmtseq(ck, node->seq.left, FALSE);
