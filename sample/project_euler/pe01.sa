@@ -17,5 +17,5 @@ def iota N {
 }
 
 sum iota(1000).filter => num {
-  [3, 5].any? => factor { num % factor == 0 }
+  [3, 5].any? => factor { num %% factor }
 }

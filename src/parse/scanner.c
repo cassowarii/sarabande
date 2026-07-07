@@ -357,6 +357,9 @@ static sbLexToken compute_next_token(hScanner sc) {
         if (ch == '=') {
             new_token.type = T_PERCENTEQUALS;
             NEXT;
+        } else if (ch == '%') {
+            new_token.type = T_DOUBLEPERCENT;
+            NEXT;
         } else {
             new_token.type = T_PERCENT;
         }
