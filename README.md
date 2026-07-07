@@ -2,6 +2,8 @@
 
 This is a little dynamically-typed programming language I've been working on.
 
+It supports lists, hash tables, anonymous functions, and lexical closures, and it compiles down to a bytecode that's interpreted by a virtual machine.
+
 It is still extremely a work in progress, but we can already do some little basic test math programs:
 
 ```
