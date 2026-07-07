@@ -59,17 +59,17 @@ hV sbV_floordiv(const hV *a, const hV *b) {
   }
 }
 
-hV sbV_incr(const hV *a) {
+void sbV_incr(hV *a) {
   if (a->type == IT_INTEGER) {
-    return sbV_int(a->integer + 1);
+    a->integer += 1;
   } else {
     PANIC("todo");
   }
 }
 
-hV sbV_decr(const hV *a) {
+void sbV_decr(hV *a) {
   if (a->type == IT_INTEGER) {
-    return sbV_int(a->integer - 1);
+    a->integer -= 1;
   } else {
     PANIC("todo");
   }

@@ -210,13 +210,20 @@ void swap_stack_top(hVm vm) {
   hV *first_x = &((hV*)vm->xsp)[-1];
   hV *second_x = &((hV*)vm->xsp)[-2];
 
+  hV xtmp = *first_x;
+  if (*first_v == first_x) {
+    *first_x = *second_x;
+    *first_v = second_x;
+  }
+
+  if (*second_v == second_x) {
+    *second_x = xtmp;
+    *second_v = first_x;
+  }
+
   hV *vtmp = *first_v;
   *first_v = *second_v;
   *second_v = vtmp;
-
-  hV xtmp = *first_x;
-  *first_x = *second_x;
-  *second_x = xtmp;
 }
 
 hV *peek_stack(hVm vm, isize offset) {
