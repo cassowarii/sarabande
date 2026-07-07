@@ -1,0 +1,21 @@
+def sum list {
+  let s = 0
+  list.each => elem {
+    s = s + elem
+  }
+  s
+}
+
+def iota N {
+  let L = []
+  let x = 1
+  while x < N {
+    L.push x
+    x = x + 1
+  }
+  L
+}
+
+sum iota(1000).filter => num {
+  [3, 5].any? => factor { num % factor == 0 }
+}
