@@ -416,6 +416,7 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_SUB: EMIT(BC_OP_SUB); break;
     case AST_OP_MUL: EMIT(BC_OP_MUL); break;
     case AST_OP_FLDIV: EMIT(BC_OP_FLDIV); break;
+    case AST_OP_MOD: EMIT(BC_OP_MOD); break;
     case AST_OP_EQ: EMIT(BC_OP_EQ); break;
     case AST_OP_NE: EMIT(BC_OP_EQ, BC_OP_NOT); break;
     case AST_OP_LT: EMIT(BC_OP_LT); break;

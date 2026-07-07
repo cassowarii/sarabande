@@ -59,6 +59,14 @@ hV sbV_floordiv(const hV *a, const hV *b) {
   }
 }
 
+hV sbV_mod(const hV *a, const hV *b) {
+  if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
+    return sbV_int(a->integer % b->integer);
+  } else {
+    PANIC("todo");
+  }
+}
+
 void sbV_incr(hV *a) {
   if (a->type == IT_INTEGER) {
     a->integer += 1;

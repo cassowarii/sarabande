@@ -345,6 +345,12 @@ void execute_instruction(hVm vm) {
       w = sbRef_deref(v->ref);
       push_stack(vm, w);
       break;
+    case BC_LD_TRUE:
+      push_stack_immediate(vm, &HVBOOL(1));
+      break;
+    case BC_LD_FALSE:
+      push_stack_immediate(vm, &HVBOOL(0));
+      break;
     case BC_LD_NIL:
       push_stack_immediate(vm, &HVNIL);
       break;
@@ -532,8 +538,14 @@ void execute_instruction(hVm vm) {
       npop_stack(vm, 2);
       push_stack_immediate(vm, &res);
       break;
-    case BC_OP_NEG:
     case BC_OP_MOD:
+      v = peek_stack(vm, 1);
+      w = peek_stack(vm, 0);
+      res = sbV_mod(v, w);
+      npop_stack(vm, 2);
+      push_stack_immediate(vm, &res);
+      break;
+    case BC_OP_NEG:
     case BC_OP_POW:
       PANIC("todo");
     case BC_OP_INCR:

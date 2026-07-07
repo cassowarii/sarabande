@@ -991,6 +991,8 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
     return expr_value(ck, &HVSTR(node->str));
   } else if (node->type == AST_VAL_SYMBOL) {
     return expr_value(ck, &HVSYM(node->symb));
+  } else if (node->type == AST_VAL_BOOLEAN) {
+    return expr_value(ck, &HVBOOL(node->i));
   } else if (node->type == AST_VAL_NIL) {
     return expr_value(ck, &HVNIL);
   } else if (node->type == AST_NODE_NAME) {

@@ -10,6 +10,8 @@ hV sbV_mul(const hV *a, const hV *b);
 
 hV sbV_floordiv(const hV *a, const hV *b);
 
+hV sbV_mod(const hV *a, const hV *b);
+
 void sbV_incr(hV *a);
 
 void sbV_decr(hV *a);
