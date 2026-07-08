@@ -105,8 +105,11 @@ void alloc_new_block(hPool pl) {
     }
     pl->block_ptrs = new_block_ptrs;
     pl->used_counts = new_used_counts;
+    pl->block_ptr_capacity = new_capacity;
+    pl->next_block_id = pl->num_blocks;
   }
 
   pl->block_ptrs[pl->num_blocks] = new_block;
+  pl->used_counts[pl->num_blocks] = 0;
   pl->num_blocks ++;
 }

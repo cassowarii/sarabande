@@ -508,6 +508,20 @@ void execute_instruction(hVm vm) {
       npop_stack(vm, 2);
       push_stack_immediate(vm, &res);
       break;
+    case BC_OP_AND:
+      v = peek_stack(vm, 1);
+      w = peek_stack(vm, 0);
+      res = HVBOOL(!(sbV_c_falsy(v) || sbV_c_falsy(w)));
+      npop_stack(vm, 2);
+      push_stack_immediate(vm, &res);
+      break;
+    case BC_OP_OR:
+      v = peek_stack(vm, 1);
+      w = peek_stack(vm, 0);
+      res = HVBOOL(!(sbV_c_falsy(v) && sbV_c_falsy(w)));
+      npop_stack(vm, 2);
+      push_stack_immediate(vm, &res);
+      break;
     case BC_OP_ADD:
       v = peek_stack(vm, 1);
       w = peek_stack(vm, 0);

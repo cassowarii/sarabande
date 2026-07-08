@@ -423,6 +423,8 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_GT: EMIT(BC_OP_LE, BC_OP_NOT); break;
     case AST_OP_LE: EMIT(BC_OP_LE); break;
     case AST_OP_GE: EMIT(BC_OP_LT, BC_OP_NOT); break;
+    case AST_OP_AND: EMIT(BC_OP_AND); break;
+    case AST_OP_OR: EMIT(BC_OP_OR); break;
     case AST_OP_INDEX: EMIT(BC_OP_INDEX); break;
     case AST_OP_DIVBY: EMIT(BC_OP_MOD, BC_LD_IMM); EARG(0); EMIT(BC_OP_EQ); break;
     default:
