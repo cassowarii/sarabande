@@ -1,5 +1,11 @@
 #include "integer.h"
 
+#include "vm/exec.h"
+#include "data/symbol.h"
+#include "data/string.h"
+
+#define METHOD_IS(name) (!sbstrncmp(method_name, name, sizeof(name)))
+
 /* reserve high bit for sign bit.
  * second-highest bit marks this as a handle to a bigint, which
  * means normally integers have to be less than +/- 2^62. */
@@ -95,6 +101,45 @@ hInteger sbInteger_floordiv(hInteger a, hInteger b) {
     return sbInteger_new(a / b);
   }
   PANIC("I haven't implemented this yet!");
+}
+
+void sbInteger_method(hVm vm) {
+  hV *target = sbVm_pop(vm);
+  if (target->type != IT_INTEGER) {
+    CHECK("can't call sbInteger_method on something that isn't an integer");
+  }
+  hV *argc = sbVm_pop(vm);
+  if (argc->type != IT_INTEGER) {
+    CHECK("argc of send should be integer!");
+  }
+
+  /* subtract 1 because the method name is itself a param */
+  usize num_params = argc->integer - 1;
+  hV *method_name_val = sbVm_peek(vm, num_params);
+  if (method_name_val->type != IT_SYMBOL) {
+    /* TODO this may become not true */
+    PANIC("method name for list must be symbol!");
+  }
+
+  const char *method_name = sbSymbol_name(method_name_val->symbol);
+  /* TODO: Need a better way of resolving these */
+  /* also TODO shouldn't be 'to_string' */
+  if (METHOD_IS("to_string")) {
+    sbVm_pop(vm); /* remove method name */
+    char stackbuf[1024];
+    char *buf = stackbuf;
+    usize length = snprintf(buf, 1024, "%lld", (long long)target->integer);
+    if (length + 1 >= sizeof(stackbuf)) {
+      buf = malloc(length + 1);
+      snprintf(buf, length, "%lld", (long long)target->integer);
+    }
+    sbVm_push_immediate(vm, &HVSTR(sbString_new(buf, length)));
+    if (buf != stackbuf) {
+      free(buf);
+    }
+  } else {
+    PANIC("unknown method name for integer");
+  }
 }
 
 /* --- */

@@ -73,5 +73,7 @@ int sbString_eq(hString a, hString b);
 int sbString_cmp(hString a, hString b);
 hString sbString_concat(hString a, hString b);
 
+void sbString_method(hVm vm);
+
 void sbString_sys_init();
 void sbString_sys_deinit();

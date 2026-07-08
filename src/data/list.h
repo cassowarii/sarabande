@@ -11,3 +11,5 @@ void sbList_append(hList list, hV *item);
 hV *sbList_get_value(hList list, usize *length);
 
 hV *sbList_index(hList list, usize index);
+
+void sbList_method(hVm vm);

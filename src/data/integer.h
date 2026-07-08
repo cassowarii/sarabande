@@ -16,3 +16,5 @@ hInteger sbInteger_diff(hInteger a, hInteger b);
 hInteger sbInteger_mul(hInteger a, hInteger b);
 
 hInteger sbInteger_floordiv(hInteger a, hInteger b);
+
+void sbInteger_method(hVm vm);

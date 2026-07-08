@@ -4,13 +4,19 @@
 #include "data/integer.h"
 #include "data/list.h"
 #include "data/hashtable.h"
-#include "data/methods.h"
+#include "data/string.h"
 
 void sbV_message_handler(hVm vm) {
   hV *target = sbVm_peek(vm, 0);
   switch(target->type) {
     case IT_LIST:
       sbList_method(vm);
+      break;
+    case IT_INTEGER:
+      sbInteger_method(vm);
+      break;
+    case IT_STRING:
+      sbString_method(vm);
       break;
     default:
       if (target->type < 0) {

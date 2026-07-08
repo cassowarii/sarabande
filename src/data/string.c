@@ -2,9 +2,13 @@
 
 #include "gc/gcinfo.h"
 #include "gc/rc.h"
+#include "vm/exec.h"
+#include "data/list.h"
+#include "data/symbol.h"
 
 #define INLINE_BUFFER_SIZE 256
 #define STRINGS_PER_BLOCK 256
+#define METHOD_IS(name) (!sbstrncmp(method_name, name, sizeof(name)))
 
 /* highest bit unset on handle value means it is a tinystr. this is
  * so that 0x0000_0000_0000_0000 represents an empty string */
@@ -228,6 +232,38 @@ usize sbString_get_length(hString handle) {
   } else {
     /* length is top byte except high bit */
     return (handle >> (8 * 7)) & 0x7F;
+  }
+}
+
+void sbString_method(hVm vm) {
+  hV *target = sbVm_pop(vm);
+  if (target->type != IT_STRING) {
+    CHECK("can't call sbString_method on something that isn't a string");
+  }
+  hV *argc = sbVm_pop(vm);
+  if (argc->type != IT_INTEGER) {
+    CHECK("argc of send should be integer!");
+  }
+  /* subtract 1 because the method name is itself a param */
+  usize num_params = argc->integer - 1;
+  hV *method_name_val = sbVm_peek(vm, num_params);
+  if (method_name_val->type != IT_SYMBOL) {
+    /* TODO this may become not true */
+    PANIC("method name for string must be symbol!");
+  }
+
+  const char *method_name = sbSymbol_name(method_name_val->symbol);
+  /* TODO: Need a better way of resolving these */
+  if (METHOD_IS("split")) {
+    sbVm_pop(vm); /* remove method name */
+    usize length;
+    char scratch[8];
+    const char *buf = sbString_get_value(target->string, scratch, &length);
+    hList l = sbList_new(length);
+    for (usize i = 0; i < length; i++) {
+      sbList_append(l, &HVSTR(sbString_new(&buf[i], 1)));
+    }
+    sbVm_push_immediate(vm, &HVLIST(l));
   }
 }
 
