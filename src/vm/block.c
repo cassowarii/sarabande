@@ -2,8 +2,9 @@
 
 #define INITIAL_PROGRAM_BLOCK_SIZE 32
 
-sbVmCompiler sbVmCompiler_create(usize initial_bytecode_size, usize initial_constant_size) {
+sbVmCompiler sbVmCompiler_create(usize initial_bytecode_size, usize initial_constant_size, flag debugmode) {
   sbVmCompiler cm = {0};
+  cm.debugmode = debugmode;
   sbBuffer_initialize(&cm.bytecode, initial_bytecode_size);
   sbBuffer_initialize(&cm.constants, initial_constant_size);
   sbBuffer_initialize(&cm.label_positions, 1024);

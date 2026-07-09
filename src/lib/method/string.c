@@ -25,6 +25,17 @@ static void split(hVm vm, hV *target, usize num_params) {
   sbVm_push_immediate(vm, &HVLIST(l));
 }
 
+static void to_string(hVm vm, hV *target, usize num_params) {
+  if (num_params != 0) {
+    PANIC("to_string takes no parameters");
+  }
+  sbVm_pop(vm); /* remove method name */
+
+  /* to_string for a string just returns itself */
+  sbVm_push_immediate(vm, target);
+}
+
 void sbString_create_methods(void) {
   REGISTER_METHOD(&g_string_methods, "split", split);
+  REGISTER_METHOD(&g_string_methods, "to_string", to_string);
 }

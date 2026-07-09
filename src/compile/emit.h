@@ -20,4 +20,4 @@
  * have to essentially convert the tree to "reverse polish
  * notation." */
 
-void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir);
+void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir, flag debugmode);

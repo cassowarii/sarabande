@@ -14,6 +14,7 @@ void push_stack_immediate(hVm vm, const hV *value);
 hV *pop_stack(hVm vm);
 hV *npop_stack(hVm vm, usize count);
 hV *peek_stack(hVm vm, isize offset);
+void swap_stack_top(hVm vm);
 void print_stack(hVm vm);
 
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
@@ -73,6 +74,10 @@ hV *sbVm_peek(hVm vm, usize where) {
   return peek_stack(vm, where);
 }
 
+void sbVm_swap(hVm vm) {
+  swap_stack_top(vm);
+}
+
 void sbVm_call_func(hVm vm, hV *func) {
   call_block(vm, func->type, func->closure);
 }
@@ -89,10 +94,11 @@ void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
   vm->fp = (sbVmStackFrame*)vm->rsp;
   vm->rsp += sizeof(sbVmStackFrame);
 
-  func(vm, TRUE);
+  sbCFuncStatus result = func(vm, TRUE);
 
-  if (vm->fp->is_c_func) {
+  if (result == CFUNC_END) {
     /* if c_func didn't call another callback, return from it */
+    printf("returning\n");
     return_from_block(vm);
   }
 }
@@ -117,6 +123,19 @@ void print_stack(hVm vm) {
     debug("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
   }
   debug("\n");
+}
+
+void call_builtin(hVm vm, hV *to_call) {
+  if (to_call->type != IT_BUILTIN) {
+    CHECK("call_builtin can only call builtins!");
+  }
+
+  hV *argc = sbVm_pop(vm);
+  if (argc->type != IT_INTEGER) {
+    CHECK("argc to builtin needs to be integer!");
+  }
+
+  to_call->builtin(vm, argc->integer);
 }
 
 void call_block(hVm vm, usize block_id, hClosure closure) {
@@ -149,16 +168,6 @@ void return_from_block(hVm vm) {
     vm->fp = frame->last_fp;
     vm->rsp = frame->last_rp;
     vm->ip = frame->return_addr;
-
-    if (vm->fp->is_c_func) {
-      /* if we returned into a c-function call frame, go back to the c-function */
-      vm->fp->c_func(vm, FALSE);
-
-      if (vm->fp->is_c_func) {
-        /* c-function didn't make a callback, so is done */
-        return_from_block(vm);
-      }
-    }
   }
 }
 
@@ -286,6 +295,18 @@ i64 get_param(hVm vm) {
 
 /* execute one instruction! wow! */
 void execute_instruction(hVm vm) {
+  if (vm->fp->is_c_func) {
+    /* if still in c func, do that instead of instruction */
+    sbCFuncStatus result = vm->fp->c_func(vm, FALSE);
+
+    if (result == CFUNC_END) {
+      /* c-function is done */
+      return_from_block(vm);
+    }
+
+    return;
+  }
+
   sbOpcode op = get_opcode(vm);
   if (vm->debugmode) debug("op %02X ", op);
   u64 param;
@@ -307,7 +328,10 @@ void execute_instruction(hVm vm) {
       push_stack_immediate(vm, &vm->fp->block_func.block->constants[param]);
       break;
     case BC_LD_CTX:
-      PANIC("todo");
+      param = get_param(vm);
+      push_stack_immediate(vm, &HVSYM((hSymbol)param));
+      sbLib_resolve_global(vm);
+      break;
     case BC_LD_VAR:
       param = get_param(vm);
       push_stack(vm, &vm->fp->locals[param]);
@@ -434,6 +458,7 @@ void execute_instruction(hVm vm) {
     case BC_CALL:
       v = pop_stack(vm);
       if (v->type == IT_BUILTIN) {
+        call_builtin(vm, v);
       } else if (v->type <= 0) {
         /* We need to figure out exception support or some such.
          * User error should not panic. */

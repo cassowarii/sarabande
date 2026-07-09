@@ -44,6 +44,7 @@ typedef enum sbIrExprType {
   IR_E_VALUE,
   IR_E_OP,
   IR_E_VAR,
+  IR_E_CONTEXT,
   IR_E_FUNC,
   IR_E_CALL,
   IR_E_SEND,
@@ -56,6 +57,7 @@ typedef enum sbIrNameIntroduceType {
   BY_DEF,
   BY_LET,
   BY_PARAM,
+  BY_CONTEXT,
 } sbIrNameIntroduceType;
 
 typedef struct sbIrLabel {
@@ -84,6 +86,7 @@ typedef struct sbIrExpr {
   union {
     hV value;
     sbIrVariable *var;
+    hSymbol symbol;
     struct {
       struct sbIrChunk *chunk;
       sbBuffer bound;
@@ -154,6 +157,7 @@ typedef struct sbIrProgram {
   sbBuffer varmapping;
   sbBuffer chunks;
   sbBuffer buffers;
+  sbBuffer context_vars;
   i32 error_count;
 } sbIrProgram;
 

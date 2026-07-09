@@ -13,6 +13,7 @@
 /* dynamic sized block that we can more easily add
  * things to while compiling */
 typedef struct sbVmCompiler {
+  flag debugmode;
   sbBuffer bytecode;
   sbBuffer constants;
   sbBuffer label_positions;
@@ -35,7 +36,7 @@ typedef struct sbVmProgram {
 
 typedef usize sbBlockId;
 
-sbVmCompiler sbVmCompiler_create(usize initial_bytecode_size, usize initial_constant_size);
+sbVmCompiler sbVmCompiler_create(usize initial_bytecode_size, usize initial_constant_size, flag debugmode);
 
 void sbVmCompiler_reset(sbVmCompiler *pb);
 

@@ -5,11 +5,11 @@
 #include "data/string.h"
 #include "vm/exec.h"
 
-void list_each_cfunc(hVm vm, flag init);
-void list_map_cfunc(hVm vm, flag init);
-void list_filter_cfunc(hVm vm, flag init);
-void list_any_cfunc(hVm vm, flag init);
-void list_all_cfunc(hVm vm, flag init);
+sbCFuncStatus list_each_cfunc(hVm vm, flag init);
+sbCFuncStatus list_map_cfunc(hVm vm, flag init);
+sbCFuncStatus list_filter_cfunc(hVm vm, flag init);
+sbCFuncStatus list_any_cfunc(hVm vm, flag init);
+sbCFuncStatus list_all_cfunc(hVm vm, flag init);
 
 sbLibTable g_list_methods;
 
@@ -134,7 +134,7 @@ void sbList_create_methods(void) {
 
 /* --- */
 
-void list_each_cfunc(hVm vm, flag init) {
+sbCFuncStatus list_each_cfunc(hVm vm, flag init) {
   if (init) {
     /* store three state variables: the list we're iterating, the index into it, and the callback function */
     sbVm_request_var_space(vm, 3);
@@ -157,13 +157,15 @@ void list_each_cfunc(hVm vm, flag init) {
     sbVm_push(vm, &iter_values[current_index]);
     sbVm_push_immediate(vm, &HVINT(1));
     sbVm_call_func(vm, &vm->fp->locals[2]);
+    return CFUNC_NEXT;
   } else {
     /* if index was past the end, callback function won't be called, and we'll exit. return nil */
     sbVm_push_immediate(vm, &HVNIL);
+    return CFUNC_END;
   }
 }
 
-void list_map_cfunc(hVm vm, flag init) {
+sbCFuncStatus list_map_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being mapped, index, callback, result */
     sbVm_request_var_space(vm, 4);
@@ -192,13 +194,15 @@ void list_map_cfunc(hVm vm, flag init) {
     sbVm_push(vm, &iter_values[current_index]);
     sbVm_push_immediate(vm, &HVINT(1));
     sbVm_call_func(vm, &vm->fp->locals[2]);
+    return CFUNC_NEXT;
   } else {
     /* return result list */
     sbVm_push_immediate(vm, &vm->fp->locals[3]);
+    return CFUNC_END;
   }
 }
 
-void list_filter_cfunc(hVm vm, flag init) {
+sbCFuncStatus list_filter_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being filtered, index, callback, result */
     sbVm_request_var_space(vm, 4);
@@ -232,13 +236,15 @@ void list_filter_cfunc(hVm vm, flag init) {
     sbVm_push(vm, &iter_values[current_index]);
     sbVm_push_immediate(vm, &HVINT(1));
     sbVm_call_func(vm, &vm->fp->locals[2]);
+    return CFUNC_NEXT;
   } else {
     /* return result list */
     sbVm_push_immediate(vm, &vm->fp->locals[3]);
+    return CFUNC_END;
   }
 }
 
-void list_any_cfunc(hVm vm, flag init) {
+sbCFuncStatus list_any_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being filtered, index, callback */
     sbVm_request_var_space(vm, 3);
@@ -256,7 +262,7 @@ void list_any_cfunc(hVm vm, flag init) {
     if (!sbV_c_falsy(mapped)) {
       /* one was true! return true */
       sbVm_push_immediate(vm, &HVBOOL(TRUE));
-      return;
+      return CFUNC_END;
     }
   }
 
@@ -269,13 +275,15 @@ void list_any_cfunc(hVm vm, flag init) {
     sbVm_push(vm, &iter_values[current_index]);
     sbVm_push_immediate(vm, &HVINT(1));
     sbVm_call_func(vm, &vm->fp->locals[2]);
+    return CFUNC_NEXT;
   } else {
     /* no result found */
     sbVm_push_immediate(vm, &HVBOOL(FALSE));
+    return CFUNC_END;
   }
 }
 
-void list_all_cfunc(hVm vm, flag init) {
+sbCFuncStatus list_all_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being filtered, index, callback */
     sbVm_request_var_space(vm, 3);
@@ -293,7 +301,7 @@ void list_all_cfunc(hVm vm, flag init) {
     if (sbV_c_falsy(mapped)) {
       /* one was false; return false */
       sbVm_push_immediate(vm, &HVBOOL(FALSE));
-      return;
+      return CFUNC_END;
     }
   }
 
@@ -306,8 +314,10 @@ void list_all_cfunc(hVm vm, flag init) {
     sbVm_push(vm, &iter_values[current_index]);
     sbVm_push_immediate(vm, &HVINT(1));
     sbVm_call_func(vm, &vm->fp->locals[2]);
+    return CFUNC_NEXT;
   } else {
     /* all passed */
     sbVm_push_immediate(vm, &HVBOOL(TRUE));
+    return CFUNC_END;
   }
 }

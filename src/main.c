@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
     sbVmProgram pm;
     sbVmProgram_initialize(&pm, 65536);
 
-    sbEmit_compile_program(&pm, &ir);
+    sbEmit_compile_program(&pm, &ir, debugmode);
 
     sbIrProgram_deinitialize(&ir);
 
@@ -71,11 +71,13 @@ int main(int argc, char **argv) {
 
     sbVm_execute(&vm, &pm);
 
-    printf("Stack result: ");
-    for (hV **p = (hV**)vm.vstack; p < (hV**)vm.vsp; p++) {
-      printf("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
+    if (vm.debugmode) {
+      printf("Stack result: ");
+      for (hV **p = (hV**)vm.vstack; p < (hV**)vm.vsp; p++) {
+        printf("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
+      }
+      printf("\n");
     }
-    printf("\n");
 
     sbVmProgram_deinitialize(&pm);
     sbVm_deinitialize(&vm);

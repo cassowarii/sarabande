@@ -16,10 +16,6 @@ typedef struct sbLibTable {
 
 typedef sbLibTable *hLibTable;
 
-extern sbLibTable g_list_methods;
-extern sbLibTable g_string_methods;
-extern sbLibTable g_integer_methods;
-
 void sbLibTable_initialize(hLibTable t, usize capacity, flag method_table);
 
 void sbLibTable_deinitialize(hLibTable t);

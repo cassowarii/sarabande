@@ -15,6 +15,9 @@
 #define HVNOTHING ((hV) {0})
 #define HVFUNC(i, c) ((hV) { .type = i, .closure = c })
 #define HVFUNC2(i, c) ((hV) { .type = i | FLAG_SQUIGGLY, .closure = c })
+#define HVBUILTIN(b) ((hV) { .type = IT_BUILTIN, .builtin = b })
+
+struct sbVm;
 
 typedef u64 hHash;
 typedef u64 hString;
@@ -23,6 +26,7 @@ typedef i64 hInteger;
 typedef u64 hList;
 typedef u64 hRef;
 typedef u64 hClosure;
+typedef void (*sbBuiltinFunc)(struct sbVm*, usize);
 
 enum intrinsic_type {
   IT_NOTHING,          // sentinel for "no value here"
@@ -52,6 +56,7 @@ typedef struct hV {
     hRef ref;
     u64 boolean;
     double float_val;
+    sbBuiltinFunc builtin;
     u64 data;
   };
 } hV;

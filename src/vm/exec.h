@@ -36,7 +36,12 @@
 
 /* Also these stacks grow upwards in memory, from low to high addresses. */
 
-typedef void (*sbRuntimeCFunc)(hVm, flag init);
+typedef enum {
+  CFUNC_END,
+  CFUNC_NEXT,
+} sbCFuncStatus;
+
+typedef sbCFuncStatus (*sbRuntimeCFunc)(hVm, flag init);
 
 typedef enum sbVmStatus {
   VM_STAT_UNKNOWN,
@@ -92,6 +97,8 @@ void sbVm_push_immediate(hVm vm, hV *value);
 hV *sbVm_pop(hVm vm);
 
 hV *sbVm_peek(hVm vm, usize where);
+
+void sbVm_swap(hVm vm);
 
 void sbVm_call_func(hVm vm, hV *func);
 

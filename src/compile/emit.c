@@ -2,7 +2,10 @@
 
 #define STRING1(...) #__VA_ARGS__
 #define STRING2(...) STRING1(__VA_ARGS__)
-#define EMIT(...) do { debug(STRING2(__VA_ARGS__) "\n"); sbVmCompiler_write_code(cm, (u8[]) { __VA_ARGS__ }, sizeof((u8[]) { __VA_ARGS__ })); } while (0)
+#define EMIT(...) do { \
+  if (cm->debugmode) debug(STRING2(__VA_ARGS__) "\n"); \
+  sbVmCompiler_write_code(cm, (u8[]) { __VA_ARGS__ }, sizeof((u8[]) { __VA_ARGS__ })); \
+} while (0)
 #define EARG(x) (emit_arg(cm, x))
 
 struct labelpos {
@@ -14,8 +17,8 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk);
 void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt);
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr);
 
-void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir) {
-  sbVmCompiler cm = sbVmCompiler_create(4096, 4096);
+void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir, flag debugmode) {
+  sbVmCompiler cm = sbVmCompiler_create(4096, 4096, debugmode);
 
   int nchunks = ir->chunks.size / sizeof(sbIrChunk*);
   for (int i = 0; i < nchunks; i++) {
@@ -33,7 +36,8 @@ void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir) {
 /* --- */
 
 void emit_arg(sbVmCompiler *cm, i64 actual_number) {
-  debug("    arg %lld\n", (long long)actual_number);
+  if (cm->debugmode) debug("    arg %lld\n", (long long)actual_number);
+
   u8 buf[9];
   u64 number = actual_number;
   if (0 <= actual_number && actual_number < 253) {
@@ -74,7 +78,7 @@ void emit_arg(sbVmCompiler *cm, i64 actual_number) {
 
 
 void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
-  debug("\n--block %d--\n", chunk->id);
+  if (cm->debugmode) debug("\n--block %d--\n", chunk->id);
 
   int nstmts = chunk->stmts.size / sizeof(sbIrStmt*);
   if (chunk->id > 0) {
@@ -108,7 +112,7 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
     struct labelpos lp = ((struct labelpos*)cm->label_positions.data)[i];
     u8 location_bytes[4];
     u32 position = lp.label->block_position;
-    debug("now we know that the jump at %d should go to %d\n", lp.offset - 2, position);
+    if (cm->debugmode) debug("now we know that the jump at %d should go to %d\n", lp.offset - 2, position);
     location_bytes[0] = (position >> 24) & 0xFF;
     location_bytes[1] = (position >> 16) & 0xFF;
     location_bytes[2] = (position >>  8) & 0xFF;
@@ -133,7 +137,7 @@ void record_labelpos(sbVmCompiler *cm, sbIrLabel *label, u32 offset) {
 void compile_list(sbVmCompiler *cm, sbIrExpr *expr);
 void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list);
 void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
-  debug("%3zu ", sbVmCompiler_get_position(cm));
+  if (cm->debugmode) debug("%3zu ", sbVmCompiler_get_position(cm));
   switch (stmt->type) {
     case IR_S_EXPR:
       compile_expr(cm, stmt->expr);
@@ -332,6 +336,10 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       compile_list(cm, expr->send.message);
       compile_expr(cm, expr->send.target);
       EMIT(BC_SEND);
+      break;
+    case IR_E_CONTEXT:
+      EMIT(BC_LD_CTX);
+      EARG(expr->symbol);
       break;
     case IR_E_VAR:
       if (expr->var->is_upvalue) {

@@ -38,6 +38,7 @@ void sbIrProgram_deinitialize(hIrProgram ir) {
 
   sbBuffer_deinitialize(&ir->chunks);
   sbBuffer_deinitialize(&ir->varmapping);
+  sbBuffer_deinitialize(&ir->context_vars);
   BUFFER_ITER(ir->buffers, sbBuffer*, buf) {
     sbBuffer_deinitialize(*buf);
   }
@@ -195,11 +196,9 @@ static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
   sbIrVariable *v = existing_var(ck, name, name_len, &index);
 
   if (v == NO_VAR) {
-    /* TODO do a different thing here */
-    chunk_error(ck, "unknown variable name! '%s'\n", name);
-  }
-
-  if (index >= ck->lowest_var_id) {
+    /* not a lexical variable */
+    return NULL;
+  } else if (index >= ck->lowest_var_id) {
     /* normal variable in inner function scope */
     return v;
   } else {
@@ -210,14 +209,14 @@ static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
 
 /* we can introduce new variables into a scope using LET */
 static sbIrVariable *create_var(hIrChunk ck, const char *name, usize name_len) {
-  sbIrVariable *new_var = sbArena_alloc(&ck->program->arena, sizeof(sbIrVariable));
-
   sbIrVariable *already_existing = existing_var(ck, name, name_len, NULL);
   if (already_existing != NO_VAR) {
     // TODO this should probably just be a warning
     chunk_error(ck, "redeclaration of variable '%s'!\n", name);
     return NO_VAR;
   }
+
+  sbIrVariable *new_var = sbArena_alloc(&ck->program->arena, sizeof(sbIrVariable));
 
   usize nvars = ck->program->varmapping.size / sizeof(varmapentry);
 
@@ -266,6 +265,13 @@ static sbIrExpr *expr_var(hIrChunk ck, sbIrVariable *var) {
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_VAR,
     .var = var,
+  });
+}
+
+static sbIrExpr *expr_context(hIrChunk ck, hSymbol symbol) {
+  return new_expr(ck, &(sbIrExpr) {
+    .type = IR_E_CONTEXT,
+    .symbol = symbol,
   });
 }
 
@@ -675,7 +681,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
        *    RETURN a
        * linearizes to:
        *    RETURN a
-       * 
+       *
        * OK, this one's pretty simple.
        */
       if (node->seq.left == NO_NODE) {
@@ -855,6 +861,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
 
 static sbIrVariable *compile_ast_var(hIrChunk ck, sbAst node) {
   if (node->type == AST_NODE_NAME) {
+    /* TODO I don't want to use strlen. symbols should know their length */
     return var_name(ck, sbSymbol_name(node->symb), strlen(sbSymbol_name(node->symb)));
   } else {
     /* TODO make errors not bad */
@@ -1009,9 +1016,11 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
   } else if (node->type == AST_VAL_NIL) {
     return expr_value(ck, &HVNIL);
   } else if (node->type == AST_NODE_NAME) {
-    /* TODO: I don't want to use strlen. Can we remember the lengths of symbols? */
     sbIrVariable *var = compile_ast_var(ck, node);
-    if (var->introduced) {
+    if (!var) {
+      /* it is not a variable that was introduced anywhere. assume it is a context value */
+      return expr_context(ck, node->symb);
+    } else if (var->introduced) {
       return expr_var(ck, var);
     } else {
       chunk_error(ck, "Variable '%s' has not been declared here!\n", sbSymbol_name(node->symb));

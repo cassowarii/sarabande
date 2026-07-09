@@ -1,13 +1,16 @@
 #include "common.h"
-#include "lib/table.h"
 #include "data/symbol.h"
 #include "vm/exec.h"
 
-extern void sbList_create_methods();
-extern void sbString_create_methods();
-extern void sbInteger_create_methods();
+#include "lib/table.h"
+#include "lib/method.h"
+#include "lib/module.h"
 
 void sbLib_sys_init() {
+  sbLibTable_initialize(&g_global_module, 16, FALSE);
+
+  sbLib_loadmodule_global();
+
   sbLibTable_initialize(&g_list_methods, 16, TRUE);
   sbLibTable_initialize(&g_string_methods, 16, TRUE);
   sbLibTable_initialize(&g_integer_methods, 16, TRUE);
@@ -21,6 +24,8 @@ void sbLib_sys_deinit() {
   sbLibTable_deinitialize(&g_list_methods);
   sbLibTable_deinitialize(&g_string_methods);
   sbLibTable_deinitialize(&g_integer_methods);
+
+  sbLibTable_deinitialize(&g_global_module);
 }
 
 void sbLib_resolve_method(hVm vm) {
@@ -57,5 +62,18 @@ void sbLib_resolve_method(hVm vm) {
     f(vm, target, num_params);
   } else {
     PANIC("invalid method name for type %lld: %s", (long long)target->type, sbSymbol_name(method_name_val->symbol));
+  }
+}
+
+void sbLib_resolve_global(hVm vm) {
+  hV *target = sbVm_pop(vm);
+  if (target->type != IT_SYMBOL) {
+    CHECK("global lookup must be symbol!");
+  }
+  hV *v = sbLibTable_find_value(&g_global_module, target->symbol);
+  if (v) {
+    sbVm_push_immediate(vm, v);
+  } else {
+    PANIC("name '%s' is not defined", sbSymbol_name(target->symbol));
   }
 }

@@ -5,12 +5,6 @@
 #include "data/string.h"
 #include "vm/exec.h"
 
-void list_each_cfunc(hVm vm, flag init);
-void list_map_cfunc(hVm vm, flag init);
-void list_filter_cfunc(hVm vm, flag init);
-void list_any_cfunc(hVm vm, flag init);
-void list_all_cfunc(hVm vm, flag init);
-
 sbLibTable g_integer_methods;
 
 static void to_string(hVm vm, hV *target, usize num_params) {

@@ -5,6 +5,8 @@ typedef void (*sbLibMethod)(hVm, hV*, usize);
 
 void sbLib_resolve_method(hVm vm);
 
+void sbLib_resolve_global(hVm vm);
+
 void sbLib_sys_init();
 
 void sbLib_sys_deinit();
