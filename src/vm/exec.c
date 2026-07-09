@@ -220,20 +220,29 @@ void swap_stack_top(hVm vm) {
   hV *first_x = &((hV*)vm->xsp)[-1];
   hV *second_x = &((hV*)vm->xsp)[-2];
 
-  hV xtmp = *first_x;
+  /* if we're swapping things that are allocated on the x-stack,
+   * we have to swap their pointers as well so we don't accidentally
+   * overwrite what they're pointing to. but if they're pointing
+   * somewhere else, we don't care */
+
+  /* x2 x1    &v2 &v1 (might be &x2 &x1)*/
+
+  hV xtmp = *second_x;
   if (*first_v == first_x) {
-    *first_x = *second_x;
-    *first_v = second_x;
+                          /* x2a x1a   &v2  &x1a */
+    *second_x = *first_x; /* x1b x1a   &v2  &x1a */
+    *first_v = second_x;  /* x1b x1a   &v2  &x1b */
   }
 
   if (*second_v == second_x) {
-    *second_x = xtmp;
-    *second_v = first_x;
+                          /* x2a x1a   &x2a &v1  */
+    *first_x = xtmp;      /* x2a x2b   &x2a &v1  */
+    *second_v = first_x;  /* x2a x2b   &x2b &v1  */
   }
 
-  hV *vtmp = *first_v;
-  *first_v = *second_v;
-  *second_v = vtmp;
+  hV *vtmp = *first_v;    /* x2  x1    &v2  &v1  */
+  *first_v = *second_v;   /* x2  x1    &v2  &v2  */
+  *second_v = vtmp;       /* x2  x1    &v1  &v2  */
 }
 
 hV *peek_stack(hVm vm, isize offset) {

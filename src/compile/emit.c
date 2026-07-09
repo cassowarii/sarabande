@@ -148,7 +148,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
         EMIT(BC_JMP);
       } else {
         compile_expr(cm, stmt->jump.condition);
-        debug("%3zu ", sbVmCompiler_get_position(cm));
+        if (cm->debugmode) debug("%3zu ", sbVmCompiler_get_position(cm));
         if (stmt->jump.inverted) {
           EMIT(BC_JF);
         } else {
@@ -170,7 +170,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
     case IR_S_LABEL:
       stmt->label->found_yet = TRUE;
       stmt->label->block_position = sbVmCompiler_get_position(cm);
-      debug("\n");
+      if (cm->debugmode) debug("\n");
       break;
     case IR_S_ASSIGN:
       compile_expr(cm, stmt->assign.expr);
@@ -196,7 +196,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       EMIT(BC_RET);
       break;
     default:
-      debug("haven't implemented this yet!\n");
+      PANIC("haven't implemented this yet!\n");
   }
 }
 
@@ -414,7 +414,7 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       }
       break;
     default:
-      debug("(compile an expr)\n");
+      PANIC("haven't implemented this expr type!");
   }
 }
 

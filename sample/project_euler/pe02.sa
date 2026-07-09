@@ -16,4 +16,4 @@ repeat {
   accumulator = accumulator + f if f %% 2
 } while f < 4_000_000
 
-accumulator
+println accumulator
