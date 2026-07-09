@@ -4,7 +4,7 @@
 #include "data/list.h"
 #include "data/reference.h"
 #include "data/closure.h"
-#include "lib/methodtable.h"
+#include "lib/lib.h"
 
 void call_block(hVm vm, usize block_id, hClosure closure);
 void return_from_block(hVm vm);

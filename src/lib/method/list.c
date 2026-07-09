@@ -1,5 +1,6 @@
-#include "lib/methodtable.h"
+#include "common.h"
 
+#include "lib/table.h"
 #include "data/list.h"
 #include "data/string.h"
 #include "vm/exec.h"
@@ -10,7 +11,7 @@ void list_filter_cfunc(hVm vm, flag init);
 void list_any_cfunc(hVm vm, flag init);
 void list_all_cfunc(hVm vm, flag init);
 
-sbMethodTable g_list_methods;
+sbLibTable g_list_methods;
 
 static void length(hVm vm, hV *list, usize num_params) {
   if (num_params != 0) {
@@ -120,15 +121,15 @@ static void all_p(hVm vm, hV *list, usize num_params) {
 }
 
 void sbList_create_methods(void) {
-  LIB_REGISTER(&g_list_methods, "length", length);
-  LIB_REGISTER(&g_list_methods, "push", push);
-  LIB_REGISTER(&g_list_methods, "reverse", reverse);
-  LIB_REGISTER(&g_list_methods, "join", join);
-  LIB_REGISTER(&g_list_methods, "each", each);
-  LIB_REGISTER(&g_list_methods, "map", map);
-  LIB_REGISTER(&g_list_methods, "filter", filter);
-  LIB_REGISTER(&g_list_methods, "any?", any_p);
-  LIB_REGISTER(&g_list_methods, "all?", all_p);
+  REGISTER_METHOD(&g_list_methods, "length", length);
+  REGISTER_METHOD(&g_list_methods, "push", push);
+  REGISTER_METHOD(&g_list_methods, "reverse", reverse);
+  REGISTER_METHOD(&g_list_methods, "join", join);
+  REGISTER_METHOD(&g_list_methods, "each", each);
+  REGISTER_METHOD(&g_list_methods, "map", map);
+  REGISTER_METHOD(&g_list_methods, "filter", filter);
+  REGISTER_METHOD(&g_list_methods, "any?", any_p);
+  REGISTER_METHOD(&g_list_methods, "all?", all_p);
 }
 
 /* --- */

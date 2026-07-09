@@ -7,7 +7,7 @@
 #include "data/reference.h"
 #include "data/closure.h"
 
-#include "lib/methodtable.h"
+#include "lib/lib.h"
 
 extern sbPool g_closure_pool;
 
