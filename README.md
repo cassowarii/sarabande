@@ -7,6 +7,10 @@ It supports lists, hash tables, anonymous functions, and lexical closures, and i
 It is still extremely a work in progress, but we can already do some little basic test math programs:
 
 ```
+println `Hello, world!`
+```
+
+```
 def factorial n {
     if n == 0 {
         1
