@@ -4,7 +4,7 @@
 #include "data/list.h"
 #include "data/reference.h"
 #include "data/closure.h"
-#include "lib/libtable.h"
+#include "lib/methodtable.h"
 
 void call_block(hVm vm, usize block_id, hClosure closure);
 void return_from_block(hVm vm);
@@ -433,12 +433,14 @@ void execute_instruction(hVm vm) {
       break;
     case BC_CALL:
       v = pop_stack(vm);
-      if (v->type <= 0) {
+      if (v->type == IT_BUILTIN) {
+      } else if (v->type <= 0) {
         /* We need to figure out exception support or some such.
          * User error should not panic. */
         PANIC("attempt to call a non-function value");
+      } else {
+        call_block(vm, v->type, v->closure);
       }
-      call_block(vm, v->type, v->closure);
       break;
     case BC_SEND:
       sbLib_resolve_method(vm);

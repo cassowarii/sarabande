@@ -1,20 +1,5 @@
 #include "cstrutil.h"
 
-usize sbstrncpy(char *dst, const char *src, usize limit) {
-    usize count = 0;
-    char ch = 0;
-
-    do {
-        ch = dst[count] = src[count];
-        count ++;
-    } while (ch && count < limit);
-
-    count --;
-    if (dst[count] != 0) dst[count] = 0;
-
-    return count;
-}
-
 int sbstrncmp(const char *a, const char *b, usize limit) {
     usize count = 0;
 

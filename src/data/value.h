@@ -1,7 +1,7 @@
 #ifndef __SARABANDE_HANDLE_H__
 #define __SARABANDE_HANDLE_H__
 
-#include "common.h"
+#include "global.h"
 
 #define FLAG_SQUIGGLY (1ULL << 62)
 
@@ -36,8 +36,8 @@ enum intrinsic_type {
   IT_REF = -8,         // pointer \abc
   IT_LIST = -9,        // list [1, 3, 5, 7]
   IT_HASH = -10,       // hash {a: 1, b: 2}
-  IT_FUNCTION = -11,   // function => a, b { a + b }
-  ITX_TOMBSTONE = -12, // <hashtable_tombstone>
+  IT_BUILTIN = -12,    // c function
+  ITX_TOMBSTONE = -13, // <hashtable_tombstone>
 };
 
 typedef struct hV {
@@ -63,7 +63,6 @@ hV sbV_float(double fl);
 hV sbV_hash(hHash hash);
 hV sbV_int(hInteger i);
 hV sbV_boolean(flag b);
-hV sbV_function(u64 id);
 hV sbV_empty_list(usize capacity);
 hV sbV_empty_hash(usize capacity);
 

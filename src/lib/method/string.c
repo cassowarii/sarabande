@@ -1,4 +1,4 @@
-#include "lib/libtable.h"
+#include "lib/methodtable.h"
 
 #include "data/list.h"
 #include "data/string.h"
@@ -10,7 +10,7 @@ void list_filter_cfunc(hVm vm, flag init);
 void list_any_cfunc(hVm vm, flag init);
 void list_all_cfunc(hVm vm, flag init);
 
-sbLibTable g_string_methods;
+sbMethodTable g_string_methods;
 
 static void split(hVm vm, hV *target, usize num_params) {
   sbVm_pop(vm); /* remove method name */

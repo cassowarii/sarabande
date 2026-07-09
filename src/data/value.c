@@ -52,13 +52,6 @@ hV sbV_int(hInteger i) {
   };
 }
 
-hV sbV_function(u64 id) {
-  return (hV) {
-    .type = IT_FUNCTION,
-    .data = id,
-  };
-}
-
 hV sbV_empty_list(usize capacity) {
   return (hV) {
     .type = IT_LIST,
