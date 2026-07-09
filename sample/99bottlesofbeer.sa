@@ -1,0 +1,38 @@
+def bottles num, otw {
+  if num == 0 {
+    print `no more bottles of beer`
+  } else if num == 1 {
+    print num
+    print ` bottle of beer`
+  } else {
+    print num
+    print ` bottles of beer`
+  }
+
+  if otw {
+    print ` on the wall`
+  }
+
+  if num == 0 and otw {
+    print `!`
+  }
+
+  println ``
+}
+
+def verse num {
+  bottles num, true
+  bottles num, false
+  println `take one down, pass it around`
+  bottles num - 1, true
+
+  if num - 1 > 0 {
+    println ``
+  }
+}
+
+let counter = 99
+while counter > 0 {
+  verse counter
+  counter = counter - 1
+}
