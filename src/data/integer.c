@@ -125,18 +125,6 @@ void sbInteger_method(hVm vm) {
   /* TODO: Need a better way of resolving these */
   /* also TODO shouldn't be 'to_string' */
   if (METHOD_IS("to_string")) {
-    sbVm_pop(vm); /* remove method name */
-    char stackbuf[1024];
-    char *buf = stackbuf;
-    usize length = snprintf(buf, 1024, "%lld", (long long)target->integer);
-    if (length + 1 >= sizeof(stackbuf)) {
-      buf = malloc(length + 1);
-      snprintf(buf, length, "%lld", (long long)target->integer);
-    }
-    sbVm_push_immediate(vm, &HVSTR(sbString_new(buf, length)));
-    if (buf != stackbuf) {
-      free(buf);
-    }
   } else {
     PANIC("unknown method name for integer");
   }

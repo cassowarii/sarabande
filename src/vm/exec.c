@@ -4,6 +4,7 @@
 #include "data/list.h"
 #include "data/reference.h"
 #include "data/closure.h"
+#include "lib/libtable.h"
 
 void call_block(hVm vm, usize block_id, hClosure closure);
 void return_from_block(hVm vm);
@@ -440,7 +441,7 @@ void execute_instruction(hVm vm) {
       call_block(vm, v->type, v->closure);
       break;
     case BC_SEND:
-      sbV_message_handler(vm);
+      sbLib_resolve_method(vm);
       break;
     case BC_NUMARG:
       param = get_param(vm);
