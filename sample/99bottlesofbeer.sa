@@ -2,11 +2,9 @@ def bottles num, otw {
   if num == 0 {
     print `no more bottles of beer`
   } else if num == 1 {
-    print num
-    print ` bottle of beer`
+    print `1 bottle of beer`
   } else {
-    print num
-    print ` bottles of beer`
+    print num, ` bottles of beer`
   }
 
   if otw {
