@@ -44,6 +44,10 @@ hSymbol sbSymbol_from_string(hString str) {
   return sbSymbol_from_bytes(data, length);
 }
 
+hSymbol sbSymbol_sentinel(const char *text, usize length) {
+  return new_symbol(text, length);
+}
+
 void sbSymbol_sys_init() {
   symbol_table = sbHash_create(256);
   sbArena_initialize(&symbol_text_arena, NAME_BLOCK_SIZE);

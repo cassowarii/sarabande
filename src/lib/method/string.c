@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include "lib/table.h"
+#include "lib/sentinel.h"
 #include "data/list.h"
 #include "data/string.h"
 #include "vm/exec.h"
@@ -36,5 +37,5 @@ static void to_string(hVm vm, hV *target, usize num_params) {
 void sbString_create_methods(void) {
   sbLibTable_initialize(&g_string_methods, 16, TRUE);
   REGISTER_METHOD(&g_string_methods, "split", split);
-  REGISTER_METHOD(&g_string_methods, "to_string", to_string);
+  REGISTER_METHOD_SYM(&g_string_methods, S_OP_TO_STRING, to_string);
 }

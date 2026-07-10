@@ -80,24 +80,32 @@ hV *sbLibTable_find_value(hLibTable t, hSymbol key) {
   }
 }
 
-void sbLibTable_register_method(hLibTable t, const char *method_name, usize method_name_length, sbLibMethod method) {
+void sbLibTable_register_method_sym(hLibTable t, hSymbol key, sbLibMethod method) {
   if (!t->method_table) CHECK("cannot put method in non-method table");
 
   check_grow_table(t);
 
-  hSymbol sym = sbSymbol_from_bytes(method_name, method_name_length);
-  insert_method(t->keys, t->methods, t->capacity, sym, method);
+  insert_method(t->keys, t->methods, t->capacity, key, method);
   t->used ++;
 }
 
-void sbLibTable_register_value(hLibTable t, const char *value_name, usize value_name_length, hV *value) {
+void sbLibTable_register_method(hLibTable t, const char *method_name, usize method_name_length, sbLibMethod method) {
+  hSymbol sym = sbSymbol_from_bytes(method_name, method_name_length);
+  sbLibTable_register_method_sym(t, sym, method);
+}
+
+void sbLibTable_register_value_sym(hLibTable t, hSymbol key, hV *value) {
   if (t->method_table) CHECK("cannot put value in method table");
 
   check_grow_table(t);
 
-  hSymbol sym = sbSymbol_from_bytes(value_name, value_name_length);
-  insert_value(t->keys, t->values, t->capacity, sym, value);
+  insert_value(t->keys, t->values, t->capacity, key, value);
   t->used ++;
+}
+
+void sbLibTable_register_value(hLibTable t, const char *value_name, usize value_name_length, hV *value) {
+  hSymbol sym = sbSymbol_from_bytes(value_name, value_name_length);
+  sbLibTable_register_value_sym(t, sym, value);
 }
 
 /* --- */

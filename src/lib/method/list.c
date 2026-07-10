@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include "lib/table.h"
+#include "lib/sentinel.h"
 #include "data/list.h"
 #include "data/string.h"
 #include "vm/exec.h"

@@ -2,6 +2,7 @@
 
 #include "lib/table.h"
 #include "lib/module.h"
+#include "lib/sentinel.h"
 #include "data/list.h"
 #include "data/string.h"
 #include "data/symbol.h"
@@ -11,6 +12,8 @@ sbCFuncStatus print_cfunc(hVm vm, flag init);
 sbCFuncStatus println_cfunc(hVm vm, flag init);
 
 sbLibTable g_global_module;
+
+sbLibTable g_string_namespace;
 
 extern sbLibTable g_math_module;
 
@@ -29,6 +32,10 @@ void sbLib_loadmodule_global() {
   REGISTER_VALUE(&g_global_module, "print", &HVBUILTIN(print));
   REGISTER_VALUE(&g_global_module, "println", &HVBUILTIN(println));
 
+  sbLibTable_initialize(&g_string_namespace, 16, FALSE);
+  REGISTER_VALUE(&g_string_namespace, "convert", &HVSYM(S_OP_TO_STRING));
+  REGISTER_VALUE(&g_global_module, "string", &HVMODULE(&g_string_namespace));
+
   sbLib_loadmodule_math();
   REGISTER_VALUE(&g_global_module, "math", &HVMODULE(&g_math_module));
 }
@@ -45,7 +52,7 @@ sbCFuncStatus print_cfunc(hVm vm, flag init) {
      * thing that checks that it's really a string and throws if not, that we
      * can call from multiple places  */
     if (value->type != IT_STRING) {
-      PANIC("to_string needs to return a string");
+      PANIC("string::convert needs to return a string");
     }
 
     char scratch[8];
@@ -59,17 +66,15 @@ sbCFuncStatus print_cfunc(hVm vm, flag init) {
     }
   }
 
-  /* TODO: Built-in symbols like 'to_string' should be saved globally, so we don't have to do this
-   * hashing at runtime. */
   if (args_left->integer > 0) {
     args_left->integer --;
-    sbVm_push_immediate(vm, args_left); /* ... param args_left */
-    sbVm_swap(vm);                      /* ... args_left param */
-    sbVm_push_immediate(vm, &HVSYM(sbSymbol_from_bytes("to_string", 9))); /* ... args_left param :to_string */
-    sbVm_swap(vm);                      /* ... args_left :to_string param */
-    sbVm_push_immediate(vm, &HVINT(1)); /* ... args_left :to_string param 1 */
-    sbVm_swap(vm);                      /* ... args_left :to_string 1 param */
-    sbLib_resolve_method(vm);           /* call method */
+    sbVm_push_immediate(vm, args_left);               /* ... param args_left */
+    sbVm_swap(vm);                                    /* ... args_left param */
+    sbVm_push_immediate(vm, &HVSYM(S_OP_TO_STRING));  /* ... args_left param string::convert*/
+    sbVm_swap(vm);                                    /* ... args_left string::convert param */
+    sbVm_push_immediate(vm, &HVINT(1));               /* ... args_left string::convert param 1 */
+    sbVm_swap(vm);                                    /* ... args_left string::convert 1 param */
+    sbLib_resolve_method(vm);                         /* call method */
     return CFUNC_NEXT;
   } else {
     sbVm_push_immediate(vm, &HVNIL);

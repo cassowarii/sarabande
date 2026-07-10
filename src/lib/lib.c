@@ -3,10 +3,13 @@
 #include "vm/exec.h"
 
 #include "lib/table.h"
+#include "lib/sentinel.h"
 #include "lib/method.h"
 #include "lib/module.h"
 
 void sbLib_sys_init() {
+  sbLib_create_sentinels();
+
   sbLib_loadmodule_global();
 
   sbList_create_methods();

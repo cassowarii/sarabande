@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include "lib/table.h"
+#include "lib/sentinel.h"
 #include "data/list.h"
 #include "data/string.h"
 #include "data/integer.h"
@@ -24,5 +25,5 @@ static void to_string(hVm vm, hV *target, usize num_params) {
 
 void sbInteger_create_methods(void) {
   sbLibTable_initialize(&g_integer_methods, 16, TRUE);
-  REGISTER_METHOD(&g_integer_methods, "to_string", to_string);
+  REGISTER_METHOD_SYM(&g_integer_methods, S_OP_TO_STRING, to_string);
 }
