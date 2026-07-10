@@ -1,0 +1,21 @@
+def sum list {
+  let acc = 0
+  list.each => elem {
+    acc = acc + elem
+  }
+  acc
+}
+
+def square num {
+  num * num
+}
+
+def sum_squares list {
+  list.map(square) | sum _
+}
+
+def square_sum list {
+  sum list | square _
+}
+
+list::iota 1, 101 | (square_sum _) - (sum_squares _) | println _
