@@ -23,6 +23,12 @@ hInteger sbInteger_mul(hInteger a, hInteger b);
 
 hInteger sbInteger_floordiv(hInteger a, hInteger b);
 
+flag sbInteger_lt(hInteger a, hInteger b);
+
+flag sbInteger_le(hInteger a, hInteger b);
+
+flag sbInteger_eq(hInteger a, hInteger b);
+
 void sbInteger_fprint(FILE *out, hInteger a);
 
 usize sbInteger_snprint(char *buf, usize size, hInteger a);

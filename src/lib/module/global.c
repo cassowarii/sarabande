@@ -36,6 +36,9 @@ void sbLib_loadmodule_global() {
   REGISTER_VALUE(&g_string_namespace, "convert", &HVSYM(S_OP_TO_STRING));
   REGISTER_VALUE(&g_global_module, "string", &HVMODULE(&g_string_namespace));
 
+  sbLib_loadmodule_list();
+  REGISTER_VALUE(&g_global_module, "list", &HVMODULE(&g_list_module));
+
   sbLib_loadmodule_math();
   REGISTER_VALUE(&g_global_module, "math", &HVMODULE(&g_math_module));
 }

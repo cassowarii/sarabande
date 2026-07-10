@@ -56,7 +56,7 @@ void sbLib_resolve_method(hVm vm) {
       table_to_use = &g_float_methods;
       break;
     default:
-      PANIC("Have not implemented this method table yet!");
+      PANIC("Have not implemented this method table yet! (%lld)", (long long)target->type);
   }
 
   sbLibMethod f = sbLibTable_find_method(table_to_use, method_name_val->symbol);

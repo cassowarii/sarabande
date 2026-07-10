@@ -72,8 +72,8 @@ typedef struct sbVm {
 
   const u8 *ip;       /* instruction pointer */
   sbVmStackFrame *fp; /* frame pointer */
-  u8 *vsp;            /* stack pointer */
-  u8 *xsp;            /* rstack pointer */
+  u8 *vsp;            /* vstack pointer */
+  u8 *xsp;            /* xstack pointer */
   u8 *rsp;            /* rstack pointer */
 
   usize stacksize;    /* to detect overflow, save these */

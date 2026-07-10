@@ -6,16 +6,6 @@ def sum list {
   s
 }
 
-def iota N {
-  let L = []
-  let x = 1
-  while x < N {
-    L.push x
-    x = x + 1
-  }
-  L
-}
-
-println sum iota(1000).filter => num {
+println sum list::iota(1000).filter => num {
   [3, 5].any? => factor { num %% factor }
 }

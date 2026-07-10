@@ -1,0 +1,18 @@
+def gcd a, b {
+  # Euclid's algorithm
+  if b == 0 {
+    a
+  } else {
+    gcd b, a % b
+  }
+}
+
+def lcm nums {
+  let result = 1
+  nums.each => num {
+    result = result * num // gcd(result, num)
+  }
+  result
+}
+
+println lcm list::iota 1, 21

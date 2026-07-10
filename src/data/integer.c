@@ -136,6 +136,27 @@ hInteger sbInteger_diff(hInteger a, hInteger b) {
   PANIC("I haven't implemented this yet!");
 }
 
+flag sbInteger_lt(hInteger a, hInteger b) {
+  if (!is_bigint(a) && !is_bigint(b)) {
+    return a < b;
+  }
+  PANIC("I haven't implemented this yet!");
+}
+
+flag sbInteger_le(hInteger a, hInteger b) {
+  if (!is_bigint(a) && !is_bigint(b)) {
+    return a <= b;
+  }
+  PANIC("I haven't implemented this yet!");
+}
+
+flag sbInteger_eq(hInteger a, hInteger b) {
+  if (!is_bigint(a) && !is_bigint(b)) {
+    return a == b;
+  }
+  PANIC("I haven't implemented this yet!");
+}
+
 double sbInteger_as_double(hInteger a) {
   if (!is_bigint(a)) {
     return (double)a;

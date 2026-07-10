@@ -158,6 +158,13 @@ void return_from_block(hVm vm) {
     sbV_release(&vm->fp->locals[i]);
   }
 
+  /* move thing that is being returned to the xstack: if we were
+   * originally returning a local variable, we don't want it to get
+   * overwritten by a subsequent function call (and if we were
+   * already returning an immediate value, it does nothing) */
+  ((hV*)(vm->xsp))[-1] = *((hV**)(vm->vsp))[-1];
+  ((hV**)(vm->vsp))[-1] = &((hV*)(vm->xsp))[-1];
+
   sbVmStackFrame *frame = (sbVmStackFrame*)vm->fp;
 
   if (frame->return_addr == NULL) {
@@ -240,6 +247,10 @@ void swap_stack_top(hVm vm) {
 
 hV *peek_stack(hVm vm, isize offset) {
   return ((hV**)(vm->vsp))[-offset - 1];
+}
+
+hV *peek_xstack(hVm vm, isize offset) {
+  return &((hV*)(vm->xsp))[-offset - 1];
 }
 
 sbOpcode get_opcode(hVm vm) {
