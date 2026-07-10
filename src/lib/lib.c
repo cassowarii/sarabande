@@ -30,14 +30,14 @@ void sbLib_resolve_method(hVm vm) {
   if (argc->type != IT_INTEGER) {
     CHECK("argc of send should be integer!");
   }
-  /* subtract 1 because the method name is itself a param */
-  usize num_params = argc->integer - 1;
-  hV *method_name_val = sbVm_peek(vm, num_params);
+  hV *method_name_val = sbVm_pop(vm);
   if (method_name_val->type != IT_SYMBOL) {
     /* TODO this may become not true */
     PANIC("method name must be symbol!");
   }
 
+  /* subtract 1 because the method name is itself a param */
+  usize num_params = argc->integer - 1;
   hLibTable table_to_use = NULL;
   switch(target->type) {
     case IT_LIST:

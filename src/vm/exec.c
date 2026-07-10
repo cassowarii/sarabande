@@ -644,16 +644,14 @@ void execute_instruction(hVm vm) {
         CHECK("internal violation: LIST_GATHER should receive an integer on top of stack");
       }
       param = v->integer;
-      count = param;
+      count = 0;
       res = sbV_empty_list(param);
-      while (count > 0) {
-        /* list gets built from bottom up, because first thing pushed is lower
-         * on the stack */
-        w = peek_stack(vm, count - 1);
+      while (count < param) {
+        /* list gets built from top of stack down */
+        w = pop_stack(vm);
         sbV_append(&res, w);
-        count --;
+        count ++;
       }
-      npop_stack(vm, param);
       push_stack_immediate(vm, &res);
       break;
     case BC_HASH_GATHER:

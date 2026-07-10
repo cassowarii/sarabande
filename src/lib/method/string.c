@@ -14,7 +14,6 @@ void list_all_cfunc(hVm vm, flag init);
 sbLibTable g_string_methods;
 
 static void split(hVm vm, hV *target, usize num_params) {
-  sbVm_pop(vm); /* remove method name */
   usize length;
   char scratch[8];
   const char *buf = sbString_get_value(target->string, scratch, &length);
@@ -29,7 +28,6 @@ static void to_string(hVm vm, hV *target, usize num_params) {
   if (num_params != 0) {
     PANIC("to_string takes no parameters");
   }
-  sbVm_pop(vm); /* remove method name */
 
   /* to_string for a string just returns itself */
   sbVm_push_immediate(vm, target);

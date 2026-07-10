@@ -9,7 +9,6 @@
 sbLibTable g_integer_methods;
 
 static void to_string(hVm vm, hV *target, usize num_params) {
-  sbVm_pop(vm); /* remove method name */
   char stackbuf[1024];
   char *buf = stackbuf;
   usize length = sbInteger_snprint(buf, 1024, target->integer);

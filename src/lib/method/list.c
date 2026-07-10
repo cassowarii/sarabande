@@ -17,7 +17,6 @@ static void length(hVm vm, hV *list, usize num_params) {
   if (num_params != 0) {
     PANIC("list#length takes no arguments!");
   }
-  sbVm_pop(vm); /* remove method name */
   usize length;
   sbList_get_value(list->list, &length);
   sbVm_push_immediate(vm, &HVINT(length));
@@ -28,7 +27,6 @@ static void push(hVm vm, hV *list, usize num_params) {
     PANIC("list#push expects 1 argument!");
   }
   hV *to_append = sbVm_pop(vm);
-  sbVm_pop(vm); /* remove method name */
   sbList_append(list->list, to_append);
   sbVm_push_immediate(vm, &HVNIL);
 }
@@ -38,7 +36,6 @@ static void reverse(hVm vm, hV *list, usize num_params) {
     PANIC("list#reverse takes no arguments!");
   }
   /* TODO maybe mutate in place if no other refs */
-  sbVm_pop(vm); /* remove method name */
   usize length;
   hV *elems = sbList_get_value(list->list, &length);
   hList new_list = sbList_new(length);
@@ -64,7 +61,6 @@ static void join(hVm vm, hV *list, usize num_params) {
     join_with = TRUE;
     delimiter = delimiter_v->string;
   }
-  sbVm_pop(vm); /* remove method name */
   usize length;
   hV *elems = sbList_get_value(list->list, &length);
   hString joined = sbString_new("", 0);
@@ -141,7 +137,6 @@ sbCFuncStatus list_each_cfunc(hVm vm, flag init) {
     sbVm_request_var_space(vm, 3);
     hV *iterating_list = sbVm_pop(vm);
     hV *loop_func = sbVm_pop(vm);
-    sbVm_pop(vm); /* remove method name */
     hV index = HVINT(0);
     vm->fp->locals[0] = *iterating_list;
     vm->fp->locals[1] = index;
@@ -172,7 +167,6 @@ sbCFuncStatus list_map_cfunc(hVm vm, flag init) {
     sbVm_request_var_space(vm, 4);
     hV *iterating_list = sbVm_pop(vm);
     hV *map_func = sbVm_pop(vm);
-    sbVm_pop(vm); /* remove method name */
     usize length;
     sbList_get_value(iterating_list->list, &length);
     hV index = HVINT(0);
@@ -209,7 +203,6 @@ sbCFuncStatus list_filter_cfunc(hVm vm, flag init) {
     sbVm_request_var_space(vm, 4);
     hV *iterating_list = sbVm_pop(vm);
     hV *filter_func = sbVm_pop(vm);
-    sbVm_pop(vm); /* remove method name */
     usize length;
     sbList_get_value(iterating_list->list, &length);
     hV index = HVINT(0);
@@ -251,7 +244,6 @@ sbCFuncStatus list_any_cfunc(hVm vm, flag init) {
     sbVm_request_var_space(vm, 3);
     hV *iterating_list = sbVm_pop(vm);
     hV *pred_func = sbVm_pop(vm);
-    sbVm_pop(vm); /* remove method name */
     hV index = HVINT(0);
 
     vm->fp->locals[0] = *iterating_list;
@@ -290,7 +282,6 @@ sbCFuncStatus list_all_cfunc(hVm vm, flag init) {
     sbVm_request_var_space(vm, 3);
     hV *iterating_list = sbVm_pop(vm);
     hV *pred_func = sbVm_pop(vm);
-    sbVm_pop(vm); /* remove method name */
     hV index = HVINT(0);
 
     vm->fp->locals[0] = *iterating_list;

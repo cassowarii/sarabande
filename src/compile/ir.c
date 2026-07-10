@@ -686,7 +686,7 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
         E1 = NIL_EXPR;
       } else {
         /* TODO handle multival here */
-        E1 = compile_ast_expr(ck, node->seq.left->seq.left, FALSE);
+        E1 = compile_ast_expr(ck, node->seq.left->seq.right, FALSE);
       }
       put_return(ck, E1);
       break;
@@ -732,11 +732,11 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       N1 = node->seq.left;  /* things to bind to */
       N2 = node->seq.right; /* values to assign */
       while (N1 != NO_NODE && N2 != NO_NODE) {
-        V1 = compile_ast_var(ck, N1->seq.left);
-        E1 = compile_ast_expr(ck, N2->seq.left, TRUE);
+        V1 = compile_ast_var(ck, N1->seq.right);
+        E1 = compile_ast_expr(ck, N2->seq.right, TRUE);
         put_assign(ck, V1, E1);
-        N1 = N1->seq.right;
-        N2 = N2->seq.right;
+        N1 = N1->seq.left;
+        N2 = N2->seq.left;
       }
 
       if (N1 != NO_NODE) {
@@ -872,9 +872,11 @@ static sbIrExpr *compile_ast_list(hIrChunk ck, sbAst node) {
   sbIrExpr *list = IR_EMPTY_LIST;
   sbIrExpr **place_here = &list;
   while (considering != NO_NODE) {
-    *place_here = expr_list(ck, compile_ast_expr(ck, considering->seq.left, TRUE));
+    /* we compile the list right-to-left so that it ends up being on the stack with
+     * the earliest elements closest to the top */
+    *place_here = expr_list(ck, compile_ast_expr(ck, considering->seq.right, TRUE));
     place_here = &(*place_here)->list.next;
-    considering = considering->seq.right;
+    considering = considering->seq.left;
   }
   return list;
 }
@@ -937,9 +939,9 @@ static sbIrBindList *compile_ast_bind_list(hIrChunk ck, sbAst node, flag create_
   usize pre_splat_count = 0;
   while (considering != NO_NODE) {
     /* bind list needs to be reversed, because we're going to bind to some stack
-     * that was built bottom-to-top. so we build it in the reverse order from a
+     * that was built top-to-bottom. so we build it in the reverse order from a
      * value list. */
-    sbAst elem = considering->seq.left;
+    sbAst elem = considering->seq.right;
     if (elem->type == AST_NODE_OP && elem->op.type == AST_OP_SPLAT) {
       if (!was_splat) {
         was_splat = TRUE;
@@ -954,11 +956,11 @@ static sbIrBindList *compile_ast_bind_list(hIrChunk ck, sbAst node, flag create_
       pre_splat_count ++;
     }
     sbIrBindList *new_list = new_bind_list(
-        ck, compile_ast_binding(ck, considering->seq.left, create_vars, type), pre_splat_count
+        ck, compile_ast_binding(ck, elem, create_vars, type), pre_splat_count
     );
     new_list->next = list;
     list = new_list;
-    considering = considering->seq.right;
+    considering = considering->seq.left;
   }
 
   return list;

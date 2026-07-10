@@ -383,12 +383,10 @@ static sbAst id_sym_node(hParser pr, sbLexToken token) {
 static sbAst parse_expr(hParser pr, u8 min_precedence);
 static sbAst parse_comma_exprs(hParser pr, sbAst after) {
   sbAst result = NO_NODE;
-  sbAst *put_here = &result;
   sbAst expr;
 
   if (after) {
-    *put_here = seq_node(pr, AST_NODE_MULTIVAL, after, NO_NODE);
-    put_here = &(*put_here)->seq.right;
+    result = after;
   }
 
   do {
@@ -408,8 +406,11 @@ static sbAst parse_comma_exprs(hParser pr, sbAst after) {
       if (expr == NO_NODE) break;
     }
 
-    *put_here = seq_node(pr, AST_NODE_MULTIVAL, expr, NO_NODE);
-    put_here = &(*put_here)->seq.right;
+    /* we build up our linked list in 'reverse' order, with later elements
+     * closer to the root of the tree, because lists are passed on the stack
+     * with the first elements at the top, which means we want to evaluate
+     * the last ones first */
+    result = seq_node(pr, AST_NODE_MULTIVAL, result, expr);
   } while (expect(pr, T_COMMA));
 
   return result;
@@ -611,9 +612,9 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
         method_name = parse_name_as_sym(pr);
       }
       if (method_name == NO_NODE) return syntax_error(pr);
-      sbAst params = NO_NODE;
+      rhs = seq_node(pr, AST_NODE_MULTIVAL, NO_NODE, method_name);
       if (expect(pr, T_LPAREN)) {
-        params = parse_comma_exprs(pr, NULL);
+        rhs = parse_comma_exprs(pr, rhs);
         if (!expect(pr, T_RPAREN)) return syntax_error(pr);
       }
       ast_type = AST_NODE_METHODCALL;
@@ -621,7 +622,6 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
         /* (whatever)->x is rewritten as (*whatever).x */
         lhs = unop_node(pr, AST_OP_DEREF, lhs);
       }
-      rhs = seq_node(pr, AST_NODE_MULTIVAL, method_name, params);
     } else if (op.type == T_BACKSQUIGARROW) {
       /* a <~ b, c, d can have multiple comma things on the right side */
       if (!expect(pr, T_LPAREN)) return syntax_error(pr);
@@ -823,7 +823,7 @@ static sbAst parse_stmt(hParser pr) {
         if (expr->type != AST_NODE_MULTIVAL) {
           /* if we have an = with one thing on the left side,
            * wrap it in a multival anyway for consistency */
-          expr = seq_node(pr, AST_NODE_MULTIVAL, expr, NO_NODE);
+          expr = seq_node(pr, AST_NODE_MULTIVAL, NO_NODE, expr);
         }
         expr = seq_node(pr, AST_NODE_ASSIGN, expr, assigned_values);
       }
