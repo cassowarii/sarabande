@@ -2,6 +2,7 @@
 
 #include "parse/ast.h"
 #include "data/symbol.h"
+#include "data/integer.h"
 
 #include "mem/debug.h"
 
@@ -308,16 +309,16 @@ static sbIrExpr *expr_func(hIrChunk ck, sbIrChunk *func) {
 static flag int_constant_fold(sbAstOp op, hInteger left, hInteger right, hInteger *result) {
   switch (op) {
     case AST_OP_ADD:
-      *result = left + right;
+      *result = sbInteger_sum(left, right);
       break;
     case AST_OP_SUB:
-      *result = left - right;
+      *result = sbInteger_diff(left, right);
       break;
     case AST_OP_MUL:
-      *result = left * right;
+      *result = sbInteger_mul(left, right);
       break;
     case AST_OP_FLDIV:
-      *result = left / right;
+      *result = sbInteger_floordiv(left, right);
       break;
     case AST_OP_MOD:
       *result = left % right;

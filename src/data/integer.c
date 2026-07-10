@@ -3,6 +3,7 @@
 #include "vm/exec.h"
 #include "data/symbol.h"
 #include "data/string.h"
+#include "gc/gcinfo.h"
 
 #define METHOD_IS(name) (!sbstrncmp(method_name, name, sizeof(name)))
 
@@ -15,12 +16,13 @@
 
 #define NUM_PER_BLOCK 256
 
-typedef u32 Piece;
+typedef u32 piece;
 
 /* TODO don't want to have these global i think */
 sbPool g_bigint_pool;
 
 typedef struct bigint {
+  GCINFO gcinfo;
   flag allocated : 1;
   flag sign_bit : 1;
   hInteger handle;
@@ -31,17 +33,26 @@ flag is_bigint(hInteger n);
 static usize int_size(bigint *bi);
 static i8 int_sign(bigint *bi, hInteger h);
 static void set_bigint_size(bigint *i, usize new_size);
-static bigint *new_bigint_to_fit(bigint *a, bigint *b);
+static bigint *temp_bigint_of_size(usize size);
+static bigint *temp_bigint_to_fit(bigint *a, bigint *b);
 static bigint *find_bigint_for_handle(hInteger handle);
 static bigint *new_bigint(usize initial_size);
 static u64 int_piece(bigint *bi, hInteger h, usize index);
 static void trim_bigint(bigint *bi);
+static hInteger finalize_bigint(hInteger a, hInteger b, bigint *val);
+
+bigint temp_val;
 
 void sbInteger_sys_init() {
+  temp_val = (bigint) {0};
+  sbBuffer_initialize(&temp_val.buf, 16 * sizeof(piece));
+  set_bigint_size(&temp_val, 16);
+
   sbPool_initialize(&g_bigint_pool, sizeof(bigint), NUM_PER_BLOCK);
 }
 
 void sbInteger_sys_deinit() {
+  sbBuffer_deinitialize(&temp_val.buf);
   //sbPool_deinitialize(&g_bigint_pool);
 }
 
@@ -55,8 +66,8 @@ hInteger sbInteger_new(i64 value) {
       i->sign_bit = 1;
       value *= -1;
     }
-    i->buf.data[0] = (value & 0xFFFFFFFF);
-    i->buf.data[1] = ((value >> 32) & 0xFFFFFFFF);
+    i->buf.data[0] = (value % BIGINT_PIECE_MAX);
+    i->buf.data[1] = (value / BIGINT_PIECE_MAX);
 
     return i->handle;
   }
@@ -72,18 +83,18 @@ hInteger sbInteger_sum(hInteger a, hInteger b) {
       PANIC("I haven't implemented this one yet!");
     }
 
-    bigint *result = new_bigint_to_fit(biga, bigb);
+    bigint *result = temp_bigint_to_fit(biga, bigb);
 
     usize asize = int_size(biga);
     usize bsize = int_size(bigb);
     u64 carry = 0;
-  /* + 1 here because we might need to carry into another slice */
+    /* + 1 here because we might need to carry into another slice */
     for (int i = 0; i < asize || i < bsize; i++) {
       u64 a_piece = int_piece(biga, a, i);
       u64 b_piece = int_piece(bigb, b, i);
 
       u64 digit_sum = (u64)a_piece + (u64)b_piece + carry;
-      BUFFER_INDEX_SET(result->buf, Piece, i, digit_sum % BIGINT_PIECE_MAX);
+      BUFFER_INDEX_SET(result->buf, piece, i, digit_sum % BIGINT_PIECE_MAX);
       carry = 0;
       if (digit_sum > BIGINT_PIECE_MAX) {
         carry = digit_sum / BIGINT_PIECE_MAX;
@@ -92,7 +103,9 @@ hInteger sbInteger_sum(hInteger a, hInteger b) {
 
     trim_bigint(result);
 
-    return result->handle;
+    hInteger ret = finalize_bigint(a, b, result);
+
+    return ret;
   }
 }
 
@@ -134,7 +147,7 @@ hInteger sbInteger_mul(hInteger a, hInteger b) {
 
   usize asize = int_size(biga);
   usize bsize = int_size(bigb);
-  bigint *result = new_bigint(asize + bsize);
+  bigint *result = temp_bigint_of_size(asize + bsize);
   result->sign_bit = int_sign(biga, a) < 0 || int_sign(bigb, b) < 0;
 
   u64 carry = 0;
@@ -145,7 +158,7 @@ hInteger sbInteger_mul(hInteger a, hInteger b) {
       u64 b_piece = int_piece(bigb, b, bi);
 
       u64 digit_sum = a_piece * b_piece + carry;
-      BUFFER_INDEX_SET(result->buf, Piece, ai + bi, digit_sum % BIGINT_PIECE_MAX);
+      BUFFER_INDEX_SET(result->buf, piece, ai + bi, digit_sum % BIGINT_PIECE_MAX);
       carry = 0;
       if (digit_sum > BIGINT_PIECE_MAX) {
         carry = digit_sum / BIGINT_PIECE_MAX;
@@ -155,7 +168,7 @@ hInteger sbInteger_mul(hInteger a, hInteger b) {
 
   trim_bigint(result);
 
-  return result->handle;
+  return finalize_bigint(a, b, result);
 }
 
 hInteger sbInteger_floordiv(hInteger a, hInteger b) {
@@ -177,14 +190,50 @@ void sbInteger_fprint(FILE *out, hInteger a) {
     } else if (sgn < 0) {
       fprintf(out, "-");
     }
-    isize sz = int_size(big);
-    for (isize i = sz - 1; i >= 0; i--) {
-      if (i == sz - 1) {
+    isize size = int_size(big);
+    for (isize i = size - 1; i >= 0; i--) {
+      if (i == size - 1) {
         fprintf(out, "%lld", (long long)int_piece(big, a, i));
       } else {
         fprintf(out, "%09lld", (long long)int_piece(big, a, i));
       }
     }
+  }
+}
+
+usize sbInteger_snprint(char *buf, usize bufsize, hInteger a) {
+  if (!is_bigint(a)) {
+    return snprintf(buf, bufsize, "%lld", (long long)a);
+  } else if (!buf || bufsize == 0) {
+    bigint *big = find_bigint_for_handle(a);
+    /* this may overestimate but it's ok */
+    return int_size(big) * 9 + 1;
+  } else {
+    bigint *big = find_bigint_for_handle(a);
+    i8 sgn = int_sign(big, a);
+    isize count = 0;
+    if (sgn == 0) {
+      return snprintf(buf + count, bufsize - count, "0");
+    } else if (sgn < 0) {
+      count += snprintf(buf, bufsize, "-");
+    }
+
+    isize numsize = int_size(big);
+    for (isize i = numsize - 1; i >= 0; i--) {
+      isize space = bufsize - count;
+      char *where = buf + count;
+      if (space <= 0) {
+        space = 0;
+        where = NULL;
+      }
+
+      if (i == numsize - 1) {
+        count += snprintf(where, space, "%lld", (long long)int_piece(big, a, i));
+      } else {
+        count += snprintf(where, space, "%09lld", (long long)int_piece(big, a, i));
+      }
+    }
+    return count;
   }
 }
 
@@ -198,12 +247,12 @@ flag is_bigint(hInteger n) {
 }
 
 static void set_bigint_size(bigint *bi, usize new_size) {
-  sbBuffer_set_size(&bi->buf, new_size * sizeof(Piece));
+  sbBuffer_set_size(&bi->buf, new_size * sizeof(piece));
 }
 
 static usize int_size(bigint *bi) {
   if (bi == NULL) return 1;
-  return bi->buf.size / sizeof(Piece);
+  return bi->buf.size / sizeof(piece);
 }
 
 static i8 int_sign(bigint *bi, hInteger h) {
@@ -243,30 +292,58 @@ static bigint *find_bigint_for_handle(hInteger handle) {
 static bigint *new_bigint(usize initial_size) {
   usize index;
   bigint *i = sbPool_alloc(&g_bigint_pool, &index);
-  sbBuffer_initialize(&i->buf, initial_size * sizeof(u32));
+  sbBuffer_initialize(&i->buf, initial_size * sizeof(piece));
   set_bigint_size(i, initial_size);
   i->handle = index | FLAG_BIGINT;
   return i;
 }
 
-static bigint *new_bigint_to_fit(bigint *a, bigint *b) {
+static bigint *temp_bigint_of_size(usize size) {
+  sbBuffer_reset(&temp_val.buf);
+  set_bigint_size(&temp_val, size);
+  return &temp_val;
+}
+
+static bigint *temp_bigint_to_fit(bigint *a, bigint *b) {
   usize a_size = int_size(a);
   usize b_size = int_size(b);
-  return new_bigint(a_size > b_size ? a_size + 1 : b_size + 1);
+  return temp_bigint_of_size(a_size > b_size ? a_size + 1 : b_size + 1);
+}
+
+static hInteger finalize_bigint(hInteger a, hInteger b, bigint *val) {
+  usize size = int_size(val);
+  bigint *biga = find_bigint_for_handle(a);
+  bigint *bigb = find_bigint_for_handle(b);
+  if (biga && biga->gcinfo.refcount == 0) {
+    /* reuse biga */
+    set_bigint_size(biga, size);
+    memcpy(biga->buf.data, val->buf.data, biga->buf.size);
+    return biga->handle;
+  } else if (bigb && bigb->gcinfo.refcount == 0) {
+    /* reuse bigb */
+    set_bigint_size(bigb, size);
+    memcpy(bigb->buf.data, val->buf.data, bigb->buf.size);
+    return bigb->handle;
+  } else {
+    /* can't reuse */
+    bigint *result = new_bigint(size);
+    memcpy(result->buf.data, val->buf.data, result->buf.size);
+    return result->handle;
+  }
 }
 
 static void trim_bigint(bigint *a) {
   if (!a) return;
   usize trim_count = 0;
-  usize sz = int_size(a);
-  for (isize i = sz - 1; i >= 0; i --) {
-    if (BUFFER_INDEX(a->buf, Piece, i) != 0) {
+  usize size = int_size(a);
+  for (isize i = size - 1; i >= 0; i --) {
+    if (BUFFER_INDEX(a->buf, piece, i) != 0) {
       break;
     }
     trim_count ++;
   }
   if (trim_count > 0) {
-    set_bigint_size(a, sz - trim_count);
+    set_bigint_size(a, size - trim_count);
   }
 }
 
@@ -278,7 +355,7 @@ static u64 int_piece(bigint *bi, hInteger h, usize index) {
       return 0;
     }
   } else if (index < int_size(bi)) {
-    return BUFFER_INDEX(bi->buf, Piece, index);
+    return BUFFER_INDEX(bi->buf, piece, index);
   } else {
     return 0;
   }

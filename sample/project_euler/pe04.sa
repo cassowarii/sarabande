@@ -4,15 +4,15 @@ def is_palindrome num {
 
 let max = 0
 
-let a = 100
-while a < 1000 {
-  let b = 100
-  while b < 1000 {
+let a = 999
+while a >= 100 {
+  let b = 999
+  while b >= 100 {
     let product = a * b
-    max = product if is_palindrome product and product > max
-    b = b + 1
+    max = product if product > max and is_palindrome product
+    b = b - 1
   }
-  a = a + 1
+  a = a - 1
 }
 
 println max

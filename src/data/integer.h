@@ -21,4 +21,6 @@ hInteger sbInteger_floordiv(hInteger a, hInteger b);
 
 void sbInteger_fprint(FILE *out, hInteger a);
 
+usize sbInteger_snprint(char *buf, usize size, hInteger a);
+
 void sbInteger_method(hVm vm);
