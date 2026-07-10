@@ -28,7 +28,7 @@ dev: clean build/a.out
 
 $(OBJ)/%.o: $(SRC)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(LIBS) -I$(SRC) -c $< -o $@
+	$(CC) $(CFLAGS) -I$(SRC) -c $< -o $@
 
 clean:
 	rm -rf $(OBJ) $(BUILDDIR)

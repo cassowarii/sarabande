@@ -121,6 +121,7 @@ void sbV_retain(const hV *a) {
       break;
     default:
       /* nothing */
+      break;
   }
 }
 
@@ -134,6 +135,7 @@ void sbV_release(const hV *a) {
       break;
     default:
       /* nothing */
+      break;
   }
 }
 
