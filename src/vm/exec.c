@@ -182,7 +182,6 @@ void store_local(hVm vm, usize local_index, const hV *value) {
 }
 
 void push_stack(hVm vm, hV *value) {
-  sbV_retain(value);
   *(hV**)vm->vsp = value;
   vm->vsp += sizeof(hV*);
   vm->xsp += sizeof(hV);
@@ -190,7 +189,6 @@ void push_stack(hVm vm, hV *value) {
 
 void push_stack_immediate(hVm vm, const hV *value) {
   /* save it on our own stack */
-  sbV_retain(value);
   *(hV*)vm->xsp = *value;
   *(hV**)vm->vsp = (hV*)vm->xsp;
   vm->vsp += sizeof(hV*);
@@ -200,16 +198,12 @@ void push_stack_immediate(hVm vm, const hV *value) {
 hV *pop_stack(hVm vm) {
   vm->vsp -= sizeof(hV*);
   vm->xsp -= sizeof(hV);
-  sbV_release(*(hV**)vm->vsp);
   return *(hV**)vm->vsp;
 }
 
 hV *npop_stack(hVm vm, usize count) {
   vm->vsp -= count * sizeof(hV*);
   vm->xsp -= count * sizeof(hV);
-  for (usize i = 0; i < count; i++) {
-    sbV_release(((hV**)vm->vsp)[i]);
-  }
   return *(hV**)vm->vsp;
 }
 

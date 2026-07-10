@@ -73,6 +73,20 @@ hInteger sbInteger_new(i64 value) {
   }
 }
 
+void sbInteger_retain(hInteger a) {
+  if (is_bigint(a)) {
+    bigint *big = find_bigint_for_handle(a);
+    big->gcinfo.refcount ++;
+  }
+}
+
+void sbInteger_release(hInteger a) {
+  if (is_bigint(a)) {
+    bigint *big = find_bigint_for_handle(a);
+    big->gcinfo.refcount --;
+  }
+}
+
 hInteger sbInteger_sum(hInteger a, hInteger b) {
   if (!is_bigint(a) && !is_bigint(b)) {
     return sbInteger_new(a + b);

@@ -8,10 +8,6 @@
 
 #include <stdarg.h>
 
-#define BY_LET 1
-#define BY_DEF 2
-#define BY_PARAM 3
-
 typedef struct varmapentry {
   const char *name;
   usize name_len;

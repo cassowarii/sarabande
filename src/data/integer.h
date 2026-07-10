@@ -11,6 +11,10 @@ void sbInteger_sys_deinit();
 
 hInteger sbInteger_new(i64 value);
 
+void sbInteger_retain(hInteger a);
+
+void sbInteger_release(hInteger a);
+
 hInteger sbInteger_sum(hInteger a, hInteger b);
 
 hInteger sbInteger_diff(hInteger a, hInteger b);

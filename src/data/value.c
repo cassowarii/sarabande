@@ -3,6 +3,7 @@
 #include "data/string.h"
 #include "data/list.h"
 #include "data/hashtable.h"
+#include "data/integer.h"
 
 #define FLAG_NONINTRINSIC (1ULL << 63)
 
@@ -111,14 +112,28 @@ void sbV_retain(const hV *a) {
    * because they are trivially copiable. some classes (integer, string) need
    * to sometimes be retained but sometimes not, so we delegate to them to
    * figure out if they need to or not. */
-  if (a->type == IT_STRING) {
-    sbString_clone(a->string);
+  switch (a->type) {
+    case IT_STRING:
+      sbString_clone(a->string);
+      break;
+    case IT_INTEGER:
+      sbInteger_retain(a->string);
+      break;
+    default:
+      /* nothing */
   }
 }
 
 void sbV_release(const hV *a) {
-  if (a->type == IT_STRING) {
-    sbString_release(a->string);
+  switch (a->type) {
+    case IT_STRING:
+      sbString_release(a->string);
+      break;
+    case IT_INTEGER:
+      sbInteger_release(a->string);
+      break;
+    default:
+      /* nothing */
   }
 }
 
