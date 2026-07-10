@@ -78,6 +78,7 @@ typedef enum sbAstOp {
 } sbAstOp;
 
 typedef struct sbAstNode {
+  flag has_us : 1; /* has some child that is var name '_' */
   sbAstType type;
   union {
     hString str;

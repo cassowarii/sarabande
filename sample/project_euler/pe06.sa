@@ -11,11 +11,11 @@ def square num {
 }
 
 def sum_squares list {
-  list.map(square) | sum _
+  list.map(square) | sum
 }
 
 def square_sum list {
-  sum list | square _
+  sum list | square
 }
 
-list::iota 1, 101 | (square_sum _) - (sum_squares _) | println _
+list::iota 1, 101 | (square_sum _) - (sum_squares _) | println

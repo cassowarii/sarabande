@@ -1034,7 +1034,13 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
        * then use RHS as our value */
       sbIrExpr *left = compile_ast_expr(ck, node->op.left, FALSE);
       put_assign(ck, pipe_var(ck), left);
-      return compile_ast_expr(ck, node->op.right, FALSE);
+      sbIrExpr *right = compile_ast_expr(ck, node->op.right, FALSE);
+      if (!node->op.right->has_us) {
+        /* if there is no _ to the right of the "|", assume it is a function
+         * call that we are passing the left side to as a singular argument */
+        right = expr_call(ck, right, expr_list(ck, expr_var(ck, pipe_var(ck))));
+      }
+      return right;
     } else {
       sbIrExpr *left = NULL, *right = NULL;
       if (node->op.left != NO_NODE) {

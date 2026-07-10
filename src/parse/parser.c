@@ -307,6 +307,7 @@ static sbAst unop_node(hParser pr, sbAstOp operation, sbAst child) {
     .op.type = operation,
     .op.left = child,
     .op.right = NO_NODE,
+    .has_us = child->has_us,
   };
   return new_node(pr, &n);
 }
@@ -317,6 +318,7 @@ static sbAst binop_node(hParser pr, sbAstOp operation, sbAst left, sbAst right) 
     .op.type = operation,
     .op.left = left,
     .op.right = right,
+    .has_us = left->has_us || right->has_us,
   };
   return new_node(pr, &n);
 }
@@ -326,6 +328,7 @@ static sbAst seq_node(hParser pr, sbAstType type, sbAst left, sbAst right) {
     .type = type,
     .seq.left = left,
     .seq.right = right,
+    .has_us = left->has_us || right->has_us,
   };
   return new_node(pr, &n);
 }
@@ -336,6 +339,7 @@ static sbAst tri_node(hParser pr, sbAstType type, sbAst left, sbAst center, sbAs
     .tri.left = left,
     .tri.center = center,
     .tri.right = right,
+    .has_us = left->has_us || center->has_us || right->has_us,
   };
   return new_node(pr, &n);
 }
@@ -345,6 +349,7 @@ static sbAst wrap_node(hParser pr, sbAstType type, sbAst left) {
     .type = type,
     .seq.left = left,
     .seq.right = NO_NODE,
+    .has_us = left->has_us,
   };
   return new_node(pr, &n);
 }
@@ -361,9 +366,15 @@ static sbAst name_node(hParser pr, sbLexToken token) {
     PANIC("can't create name node with token of type %d", token.type);
   }
 
+  flag has_us = FALSE;
+  if (sbstrncmp(sbSymbol_name(token.symb), "_", 1) == 0) {
+    has_us = TRUE;
+  }
+
   sbAstNode n = (sbAstNode) {
     .type = AST_NODE_NAME,
     .symb = token.symb,
+    .has_us = has_us,
   };
   return new_node(pr, &n);
 }
