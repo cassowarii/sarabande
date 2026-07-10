@@ -1,0 +1,26 @@
+def max_positive list {
+  let result = 0
+
+  list.each => element {
+    result = element if element > result
+  }
+
+  result
+}
+
+def factors num {
+  let list = []
+  let candidate = 2
+  let max = math::sqrt num
+  while candidate <= max {
+    list.push candidate if num %% candidate
+    candidate = candidate + 1
+  }
+  list
+}
+
+def prime? num {
+  factors(num).length == 0
+}
+
+println max_positive factors(600851475143).filter => num { prime? num }

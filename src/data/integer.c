@@ -103,9 +103,7 @@ hInteger sbInteger_sum(hInteger a, hInteger b) {
 
     trim_bigint(result);
 
-    hInteger ret = finalize_bigint(a, b, result);
-
-    return ret;
+    return finalize_bigint(a, b, result);
   }
 }
 
@@ -128,7 +126,19 @@ double sbInteger_as_double(hInteger a) {
   if (!is_bigint(a)) {
     return (double)a;
   } else {
-    PANIC("agh! i haven't done this!");
+    bigint *big = find_bigint_for_handle(a);
+    i8 sgn = int_sign(big, a);
+    isize size = int_size(big);
+    double result = 0.0;
+    for (isize i = size - 1; i >= 0; i--) {
+      /* this definitely loses precision. i wonder if there is a better way to do this */
+      result *= BIGINT_PIECE_MAX;
+      result += int_piece(big, a, i);
+    }
+
+    if (sgn < 0) result *= -1;
+
+    return result;
   }
 }
 

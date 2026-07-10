@@ -4,6 +4,7 @@
 #include "data/list.h"
 #include "data/string.h"
 #include "data/symbol.h"
+#include "data/integer.h"
 #include "vm/exec.h"
 
 #include <math.h>
@@ -18,8 +19,7 @@ static void sbsqrt(hVm vm, usize argc) {
 
   double original_value;
   if (argument->type == IT_INTEGER) {
-    original_value = (double)argument->integer;
-    printf("%g\n", original_value);
+    original_value = sbInteger_as_double(argument->integer);
   } else if (argument->type == IT_FLOAT) {
     original_value = argument->float_val;
   } else {
