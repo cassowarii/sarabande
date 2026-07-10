@@ -89,14 +89,14 @@ hInteger sbInteger_sum(hInteger a, hInteger b) {
     usize bsize = int_size(bigb);
     u64 carry = 0;
     /* + 1 here because we might need to carry into another slice */
-    for (int i = 0; i < asize || i < bsize; i++) {
+    for (int i = 0; i < asize + 1 || i < bsize + 1; i++) {
       u64 a_piece = int_piece(biga, a, i);
       u64 b_piece = int_piece(bigb, b, i);
 
       u64 digit_sum = (u64)a_piece + (u64)b_piece + carry;
       BUFFER_INDEX_SET(result->buf, piece, i, digit_sum % BIGINT_PIECE_MAX);
       carry = 0;
-      if (digit_sum > BIGINT_PIECE_MAX) {
+      if (digit_sum >= BIGINT_PIECE_MAX) {
         carry = digit_sum / BIGINT_PIECE_MAX;
       }
     }
@@ -160,7 +160,7 @@ hInteger sbInteger_mul(hInteger a, hInteger b) {
       u64 digit_sum = a_piece * b_piece + carry;
       BUFFER_INDEX_SET(result->buf, piece, ai + bi, digit_sum % BIGINT_PIECE_MAX);
       carry = 0;
-      if (digit_sum > BIGINT_PIECE_MAX) {
+      if (digit_sum >= BIGINT_PIECE_MAX) {
         carry = digit_sum / BIGINT_PIECE_MAX;
       }
     }
