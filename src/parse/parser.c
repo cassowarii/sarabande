@@ -625,6 +625,7 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
     } else if (op.type == T_BACKSQUIGARROW) {
       /* a <~ b, c, d can have multiple comma things on the right side */
       if (!expect(pr, T_LPAREN)) return syntax_error(pr);
+      ast_type = AST_NODE_METHODCALL;
       rhs = parse_comma_exprs(pr, NULL);
       if (!expect(pr, T_RPAREN)) return syntax_error(pr);
     } else if (op.type == T_PAAMAYIM_NEKUDOTAYIM) {
