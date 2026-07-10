@@ -263,14 +263,14 @@ void next_byte(hVm vm, u64 *result) {
 i64 get_param(hVm vm) {
   u64 result = *((u8*)vm->ip++);
   if (vm->debugmode) debug("%02llX ", (long long)result);
-  i64 signed_result = result;
+  i64 signed_result;
 
   if (result == BC_LONG_NUM) {
     result = 0;
     next_byte(vm, &result);
     next_byte(vm, &result);
     signed_result = result;
-    if (result > (1 << 15)) signed_result = result - (1 << 16);
+    if (result & (1 << 15)) signed_result = result - (1 << 16);
   } else if (result == BC_VLONG_NUM) {
     result = 0;
     next_byte(vm, &result); // 0
@@ -278,7 +278,7 @@ i64 get_param(hVm vm) {
     next_byte(vm, &result); // 2
     next_byte(vm, &result); // 3
     signed_result = result;
-    if (result > (1L << 31)) signed_result = result - (1L << 32);
+    if (result & (1L << 31)) signed_result = result - (1L << 32);
   } else if (result == BC_VVLONG_NUM) {
     result = 0;
     next_byte(vm, &result); // 0
@@ -289,6 +289,8 @@ i64 get_param(hVm vm) {
     next_byte(vm, &result); // 5
     next_byte(vm, &result); // 6
     next_byte(vm, &result); // 7
+    signed_result = (i64)result;
+  } else {
     signed_result = (i64)result;
   }
 
