@@ -1,5 +1,7 @@
 #include "compile/ir.h"
 
+#include "data/symbol.h"
+
 static void print_stmt(sbIrStmt *s);
 
 void sbIrProgram_print(hIrProgram ir) {
@@ -50,14 +52,17 @@ static void print_expr(sbIrExpr *e) {
           print_var(*var);
           debug(", ");
         }
+        debug("\b\b");
       }
-      debug("}");
+      debug(" }");
       break;
     case IR_E_VALUE:
       if (e->value.type == IT_NIL) {
         debug("nil");
       } else if (e->value.type == IT_INTEGER) {
         debug("%lld", (long long)e->value.integer);
+      } else if (e->value.type == IT_SYMBOL) {
+        debug(":%s", sbSymbol_name(e->value.symbol));
       } else {
         debug("some value");
       }
@@ -88,13 +93,18 @@ static void print_expr(sbIrExpr *e) {
       debug(" )");
       break;
     case IR_E_LIST:
+      if (e->list.next) {
+        print_expr(e->list.next);
+        if (e->list.next->list.next) {
+          debug(", ");
+        }
+      }
       if (e->list.this) {
         print_expr(e->list.this);
       }
-      if (e->list.next) {
-        debug(", ");
-        print_expr(e->list.next);
-      }
+      break;
+    case IR_E_CONTEXT:
+      debug("(context var %s)", sbSymbol_name(e->symbol));
       break;
     default:
       debug("something %d", e->type);
@@ -143,7 +153,7 @@ static void print_stmt(sbIrStmt *s) {
       if (s->expr) {
         print_expr(s->expr);
       } else {
-        debug("NOTHING");
+        debug("NOTHING!! (PROBABLY A BUG)");
       }
       debug("\n");
       break;

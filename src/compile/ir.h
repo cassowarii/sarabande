@@ -58,6 +58,7 @@ typedef enum sbIrNameIntroduceType {
   BY_LET,
   BY_PARAM,
   BY_CONTEXT,
+  BY_IMPLICIT,
 } sbIrNameIntroduceType;
 
 typedef struct sbIrLabel {
@@ -144,10 +145,10 @@ typedef struct sbIrChunk {
   i32 id;
   i16 num_args;
   i16 num_upvalues;
-  flag variadic;
   i32 label_count;
   i32 variable_count;
   i32 lowest_var_id;
+  i32 pipe_var_id;
   sbBuffer closed_vars;
   sbBuffer stmts;
 } sbIrChunk;

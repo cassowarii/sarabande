@@ -17,6 +17,7 @@ typedef struct varmapentry {
 static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst params, sbAst seqast);
 static sbIrChunk *new_chunk(hIrProgram ir);
 static void chunk_deinitialize(hIrChunk ck);
+static sbIrVariable *create_var(hIrChunk ck, const char *name, usize name_len);
 
 void sbIrProgram_initialize(hIrProgram ir, usize initial_arena_size) {
   *ir = (sbIrProgram) {0};
@@ -107,6 +108,14 @@ static void chunk_deinitialize(hIrChunk ck) {
   sbBuffer_deinitialize(&ck->closed_vars);
 }
 
+static sbIrVariable *var_at_index(hIrChunk ck, usize index) {
+  if (ck->program->varmapping.size / sizeof(varmapentry) > index) {
+    return BUFFER_INDEX(ck->program->varmapping, varmapentry, index).var;
+  } else {
+    return NO_VAR;
+  }
+}
+
 /* find variables that already exist */
 static sbIrVariable *existing_var(hIrChunk ck, const char *name, usize name_len, usize *index_out) {
   usize index = 0;
@@ -187,8 +196,26 @@ static sbIrVariable *bind_upvalue(hIrChunk ck, usize variable_index) {
   }
 }
 
+/* ensure a pipe variable slot is available */
+static sbIrVariable *pipe_var(hIrChunk ck) {
+  if (ck->pipe_var_id == -1) {
+    sbIrVariable *new_pipe_var = create_var(ck, "", 0);
+    ck->pipe_var_id = new_pipe_var->slot_id;
+    new_pipe_var->introduced = BY_IMPLICIT;
+    return new_pipe_var;
+  } else {
+    return var_at_index(ck, ck->pipe_var_id + ck->lowest_var_id);
+  }
+}
+
 /* to look up a variable name in source code */
 static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
+  if (name_len == 1 && name[0] == '_') {
+    /* _ variable is resolved specially depending on context... currently, this is
+     * just for the pipe variable */
+    return pipe_var(ck);
+  }
+
   usize index;
   sbIrVariable *v = existing_var(ck, name, name_len, &index);
 
@@ -206,11 +233,16 @@ static sbIrVariable *var_name(hIrChunk ck, const char *name, usize name_len) {
 
 /* we can introduce new variables into a scope using LET */
 static sbIrVariable *create_var(hIrChunk ck, const char *name, usize name_len) {
-  sbIrVariable *already_existing = existing_var(ck, name, name_len, NULL);
-  if (already_existing != NO_VAR) {
-    // TODO this should probably just be a warning
-    chunk_error(ck, "redeclaration of variable '%s'!\n", name);
-    return NO_VAR;
+  /* we can pass an empty name to create extra 'internal' variables that don't
+   * have real names, as part of a sort of desugar thing. but you have to remember
+   * their ID numbers */
+  if (name_len > 0) {
+    sbIrVariable *already_existing = existing_var(ck, name, name_len, NULL);
+    if (already_existing != NO_VAR) {
+      // TODO this should probably just be a warning
+      chunk_error(ck, "redeclaration of variable '%s'!\n", name);
+      return NO_VAR;
+    }
   }
 
   sbIrVariable *new_var = sbArena_alloc(&ck->program->arena, sizeof(sbIrVariable));
@@ -526,6 +558,9 @@ static sbIrChunk *compile_ast_function(hIrProgram ir, sbAst paramsAst, sbAst seq
 
   /* create new scope to hold function parameters */
   usize parameter_scope_level = ck->program->varmapping.size / sizeof(varmapentry);
+
+  /* we have no pipe var right now */
+  ck->pipe_var_id = -1;
 
   /* compile parameters */
   sbIrBindList *arg_binding = compile_ast_bind_list(ck, paramsAst, TRUE, BY_PARAM);
@@ -994,6 +1029,12 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
       } else {
         return expr_op(ck, AST_OP_SPLAT, compile_ast_expr(ck, node->op.left, FALSE), NULL);
       }
+    } else if (node->op.type == AST_OP_PIPE) {
+      /* assign LHS to our temporary secret pipe variable,
+       * then use RHS as our value */
+      sbIrExpr *left = compile_ast_expr(ck, node->op.left, FALSE);
+      put_assign(ck, pipe_var(ck), left);
+      return compile_ast_expr(ck, node->op.right, FALSE);
     } else {
       sbIrExpr *left = NULL, *right = NULL;
       if (node->op.left != NO_NODE) {
