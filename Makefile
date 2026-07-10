@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -g -Og -DDEBUG -fsanitize=undefined
 #CFLAGS=-Wall -O3 -flto
-LIBS=
+LIBS=-lm
 
 SRC := src
 OBJ := obj

@@ -7,23 +7,19 @@
 #include "lib/module.h"
 
 void sbLib_sys_init() {
-  sbLibTable_initialize(&g_global_module, 16, FALSE);
-
   sbLib_loadmodule_global();
-
-  sbLibTable_initialize(&g_list_methods, 16, TRUE);
-  sbLibTable_initialize(&g_string_methods, 16, TRUE);
-  sbLibTable_initialize(&g_integer_methods, 16, TRUE);
 
   sbList_create_methods();
   sbString_create_methods();
   sbInteger_create_methods();
+  sbFloat_create_methods();
 }
 
 void sbLib_sys_deinit() {
   sbLibTable_deinitialize(&g_list_methods);
   sbLibTable_deinitialize(&g_string_methods);
   sbLibTable_deinitialize(&g_integer_methods);
+  sbLibTable_deinitialize(&g_float_methods);
 
   sbLibTable_deinitialize(&g_global_module);
 }
@@ -52,6 +48,9 @@ void sbLib_resolve_method(hVm vm) {
       break;
     case IT_INTEGER:
       table_to_use = &g_integer_methods;
+      break;
+    case IT_FLOAT:
+      table_to_use = &g_float_methods;
       break;
     default:
       PANIC("Have not implemented this method table yet!");

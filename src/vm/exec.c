@@ -98,7 +98,6 @@ void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
 
   if (result == CFUNC_END) {
     /* if c_func didn't call another callback, return from it */
-    printf("returning\n");
     return_from_block(vm);
   }
 }

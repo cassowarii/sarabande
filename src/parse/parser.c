@@ -2,6 +2,7 @@
 
 #include "parse/filereader.h"
 #include "data/symbol.h"
+#include "data/integer.h"
 
 static sbAst do_parse(hParser pr);
 
@@ -226,7 +227,9 @@ static void fprint_token(FILE *out, sbLexToken t) {
   } else if (t.type == T_SYMBOL) {
     fprintf(out, " ':%s'", sbSymbol_name(t.symb));
   } else if (t.type == T_INTEGER) {
-    fprintf(out, " '%d'", t.i);
+    fprintf(out, " '");
+    sbInteger_fprint(out, t.i);
+    fprintf(out, "'");
   } else if (t.type == T_FLOAT) {
     fprintf(out, " '%g'", t.fl);
   }

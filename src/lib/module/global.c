@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include "lib/table.h"
+#include "lib/module.h"
 #include "data/list.h"
 #include "data/string.h"
 #include "data/symbol.h"
@@ -10,6 +11,8 @@ sbCFuncStatus print_cfunc(hVm vm, flag init);
 sbCFuncStatus println_cfunc(hVm vm, flag init);
 
 sbLibTable g_global_module;
+
+extern sbLibTable g_math_module;
 
 static void print(hVm vm, usize argc) {
   sbVm_push_immediate(vm, &HVINT(argc));
@@ -22,8 +25,12 @@ static void println(hVm vm, usize argc) {
 }
 
 void sbLib_loadmodule_global() {
+  sbLibTable_initialize(&g_global_module, 16, FALSE);
   REGISTER_VALUE(&g_global_module, "print", &HVBUILTIN(print));
   REGISTER_VALUE(&g_global_module, "println", &HVBUILTIN(println));
+
+  sbLib_loadmodule_math();
+  REGISTER_VALUE(&g_global_module, "math", &HVMODULE(&g_math_module));
 }
 
 /* --- */

@@ -6,6 +6,7 @@
 #define FLAG_SQUIGGLY (1ULL << 62)
 
 #define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
+#define HVFLOAT(f) ((hV) { .type = IT_FLOAT, .float_val = f })
 #define HVSTR(s) ((hV) { .type = IT_STRING, .string = s })
 #define HVSYM(s) ((hV) { .type = IT_SYMBOL, .symbol = s })
 #define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
@@ -16,8 +17,10 @@
 #define HVFUNC(i, c) ((hV) { .type = i, .closure = c })
 #define HVFUNC2(i, c) ((hV) { .type = i | FLAG_SQUIGGLY, .closure = c })
 #define HVBUILTIN(b) ((hV) { .type = IT_BUILTIN, .builtin = b })
+#define HVMODULE(m) ((hV) { .type = IT_MODULE, .module = m })
 
 struct sbVm;
+struct sbLibTable;
 
 typedef u64 hHash;
 typedef u64 hString;
@@ -37,10 +40,11 @@ enum intrinsic_type {
   IT_INTEGER = -5,     // 324892
   IT_FLOAT = -6,       // 0.0345
   IT_DATETIME = -7,    // unix timestamp
-  IT_REF = -8,         // pointer \abc
+  IT_REF = -8,         // pointer &abc
   IT_LIST = -9,        // list [1, 3, 5, 7]
   IT_HASH = -10,       // hash {a: 1, b: 2}
-  IT_BUILTIN = -12,    // c function
+  IT_BUILTIN = -11,    // c function
+  IT_MODULE = -12,     // builtin module (math, op...)
   ITX_TOMBSTONE = -13, // <hashtable_tombstone>
 };
 
@@ -57,6 +61,7 @@ typedef struct hV {
     u64 boolean;
     double float_val;
     sbBuiltinFunc builtin;
+    struct sbLibTable *module;
     u64 data;
   };
 } hV;

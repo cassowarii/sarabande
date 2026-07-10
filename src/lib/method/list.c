@@ -121,6 +121,7 @@ static void all_p(hVm vm, hV *list, usize num_params) {
 }
 
 void sbList_create_methods(void) {
+  sbLibTable_initialize(&g_list_methods, 16, TRUE);
   REGISTER_METHOD(&g_list_methods, "length", length);
   REGISTER_METHOD(&g_list_methods, "push", push);
   REGISTER_METHOD(&g_list_methods, "reverse", reverse);

@@ -74,7 +74,7 @@ flag sbV_c_eq(const hV *a, const hV *b) {
   switch (a->type) {
     case IT_NIL:
       /* if a and b share a type, and it's nil, they must be equal */
-      return TRUE; 
+      return TRUE;
     case IT_BOOLEAN:
       /* for booleans, they are equal if both zero or neither zero */
       return (a->boolean == 0 && b->boolean == 0) || (a->boolean != 0 && b->boolean != 0);
@@ -95,7 +95,7 @@ flag sbV_c_eq(const hV *a, const hV *b) {
        * right now, we'll just see if they point to the same hash ("is"). */
       return a->hash == b->hash;
     default:
-      return a == b;
+      PANIC("never implemented == for this case!");
   }
 }
 

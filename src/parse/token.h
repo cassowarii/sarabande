@@ -102,7 +102,7 @@ typedef struct sbLexToken {
         hString hstr;
         hSymbol symb;
         float fl;
-        int i;
+        hInteger i;
     };
 } sbLexToken;
 

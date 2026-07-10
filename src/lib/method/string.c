@@ -36,6 +36,7 @@ static void to_string(hVm vm, hV *target, usize num_params) {
 }
 
 void sbString_create_methods(void) {
+  sbLibTable_initialize(&g_string_methods, 16, TRUE);
   REGISTER_METHOD(&g_string_methods, "split", split);
   REGISTER_METHOD(&g_string_methods, "to_string", to_string);
 }

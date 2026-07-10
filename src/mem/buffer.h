@@ -12,6 +12,7 @@
 #define BUFFER_ITER_FROM(buf, type, var, from) \
   for (type *var = (type*)((buf).data + (from * sizeof(type))); (var) < ((type*)(buf).data + (buf).size / sizeof(type)); var ++)
 #define BUFFER_INDEX(buf, type, index) (((type*)((buf).data))[index])
+#define BUFFER_INDEX_SET(buf, type, index, value) (((type*)(buf.data))[index] = value)
 
 typedef struct sbBuffer {
     usize size;

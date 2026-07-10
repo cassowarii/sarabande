@@ -5,6 +5,7 @@
 #include "data/list.h"
 #include "data/hashtable.h"
 #include "data/string.h"
+#include "lib/table.h"
 
 hV sbV_add(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
@@ -77,6 +78,17 @@ hV sbV_lt(const hV *a, const hV *b) {
     } else {
       return HVBOOL(FALSE);
     }
+  } else if (a->type == IT_FLOAT || b->type == IT_FLOAT) {
+    if (a->type == IT_INTEGER) {
+      /* integer < float */
+      return HVBOOL(a->integer < (double)b->float_val);
+    } else if (b->type == IT_INTEGER) {
+      /* float < integer */
+      return HVBOOL(a->float_val < (double)b->integer);
+    } else {
+      /* two floats */
+      return HVBOOL(a->float_val < b->float_val);
+    }
   } else {
     PANIC("todo");
   }
@@ -88,6 +100,17 @@ hV sbV_le(const hV *a, const hV *b) {
       return HVBOOL(TRUE);
     } else {
       return HVBOOL(FALSE);
+    }
+  } else if (a->type == IT_FLOAT || b->type == IT_FLOAT) {
+    if (a->type == IT_INTEGER) {
+      /* integer <= float */
+      return HVBOOL(a->integer <= (double)b->float_val);
+    } else if (b->type == IT_INTEGER) {
+      /* float <= integer */
+      return HVBOOL(a->float_val <= (double)b->integer);
+    } else {
+      /* two floats */
+      return HVBOOL(a->float_val <= b->float_val);
     }
   } else {
     PANIC("todo");
@@ -108,6 +131,12 @@ hV *sbV_index(hV *a, hV *b) {
     return sbList_index(a->list, b->integer);
   } else if (a->type == IT_HASH) {
     return sbHash_find(a->hash, b);
+  } else if (a->type == IT_MODULE) {
+    if (b->type == IT_SYMBOL) {
+      return sbLibTable_find_value(a->module, b->symbol);
+    } else {
+      PANIC("module cannot be indexed by non-symbol");
+    }
   } else {
     PANIC("todo %lld %lld", (long long)a->type, (long long)b->type);
   }

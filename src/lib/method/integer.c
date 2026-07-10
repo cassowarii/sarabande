@@ -23,5 +23,6 @@ static void to_string(hVm vm, hV *target, usize num_params) {
 }
 
 void sbInteger_create_methods(void) {
+  sbLibTable_initialize(&g_integer_methods, 16, TRUE);
   REGISTER_METHOD(&g_integer_methods, "to_string", to_string);
 }

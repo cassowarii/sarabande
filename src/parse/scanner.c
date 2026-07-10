@@ -2,6 +2,7 @@
 
 #include "data/string.h"
 #include "data/symbol.h"
+#include "data/integer.h"
 
 /* This is like, the pre lexing stage. I mean, this does a lot of the tokenizing,
  * but it includes stuff like spaces and newlines, too. Think of this as 'normalizing'
@@ -202,7 +203,7 @@ static usize read_symbol(hScanner sc) {
 static void read_integer(hScanner sc, sbLexToken *new_token, flag negative) {
     new_token->type = T_INTEGER;
 
-    i64 intval = 0;
+    hInteger intval = 0;
     int base = 10;
     int num_done = FALSE;
     char ch = PEEK;
@@ -233,9 +234,8 @@ static void read_integer(hScanner sc, sbLexToken *new_token, flag negative) {
 
     if (!num_done) {
         do {
-            /* TODO: promote to bigint, don't allow overflow */
-            intval *= base;
-            intval += base_digit_value(ch);
+            intval = sbInteger_mul(intval, base);
+            intval = sbInteger_sum(intval, base_digit_value(ch));
             do {
                 /* skip over underscores in numeric literals */
                 ch = NEXT;
@@ -249,7 +249,7 @@ static void read_integer(hScanner sc, sbLexToken *new_token, flag negative) {
         } else {
             new_token->i = intval;
             if (negative) {
-              new_token->i *= -1;
+              new_token->i = sbInteger_mul(intval, -1);
             }
         }
     }
