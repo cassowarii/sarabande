@@ -694,8 +694,9 @@ void execute_instruction(hVm vm) {
         CHECK("internal violation: LIST_SPILL should receive an integer on top of stack");
       }
       x = sbList_get_value(v->list, &count);
-      for (usize i = 0; i < count; i++) {
+      for (usize i = count - 1; ; i--) {
         push_stack(vm, &x[i]);
+        if (i == 0) break;
       }
       res.integer += count;
       push_stack_immediate(vm, &res);

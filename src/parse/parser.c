@@ -178,6 +178,7 @@ static unop unops[] = {
   { T_MINUS, 85, AST_OP_UNMINUS },
   { T_AMPERSAND, 85, AST_OP_REF },
   { T_ASTERISK, 85, AST_OP_DEREF },
+  { T_ELLIPSIS, 85, AST_OP_SPLAT },
 };
 
 static const usize NUM_BINOPS = sizeof(binops) / sizeof(binops[0]);

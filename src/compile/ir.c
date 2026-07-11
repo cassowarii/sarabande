@@ -1032,15 +1032,25 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
     } else if (node->op.type == AST_OP_PIPE) {
       /* assign LHS to our temporary secret pipe variable,
        * then use RHS as our value */
-      sbIrExpr *left = compile_ast_expr(ck, node->op.left, FALSE);
-      put_assign(ck, pipe_var(ck), left);
-      sbIrExpr *right = compile_ast_expr(ck, node->op.right, FALSE);
-      if (!node->op.right->has_us) {
+      if (node->op.right->has_us) {
+        /* TODO: I realized this doesn't really make sense if we nest | within ().
+         * like, a | (b | c _) _ won't work properly. so really we need a whole
+         * stack of these temporary variables potentially... maybe we need to save
+         * the current pipe var here and restore it again after? also, whither
+         * something like a(b | c, d | e)? oh god... */
+        sbIrExpr *left = compile_ast_expr(ck, node->op.left, FALSE);
+        put_assign(ck, pipe_var(ck), left);
+        return compile_ast_expr(ck, node->op.right, FALSE);
+      } else {
         /* if there is no _ to the right of the "|", assume it is a function
-         * call that we are passing the left side to as a singular argument */
-        right = expr_call(ck, right, expr_list(ck, expr_var(ck, pipe_var(ck))));
+         * call that we are passing the left side to as a singular argument. this
+         * means we don't actually need a temporary variable*/
+        return expr_call(ck,
+            /* thing to call */
+            compile_ast_expr(ck, node->op.right, FALSE),
+            /* parameter list (weirdly i guess the left thing could be a splat) */
+            expr_list(ck, compile_ast_expr(ck, node->op.left, TRUE)));
       }
-      return right;
     } else {
       sbIrExpr *left = NULL, *right = NULL;
       if (node->op.left != NO_NODE) {
