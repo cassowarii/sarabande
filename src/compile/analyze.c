@@ -20,12 +20,17 @@ i32 sbAst_count_pipe_underscores(sbAst node) {
     case AST_NODE_NEXT:
     case AST_NODE_MULTIVAL:
     case AST_NODE_FUNCCALL:
-    case AST_VAL_FUNC:
-    case AST_VAL_IMFUNC:
-    case AST_VAL_OBJ:
     case AST_NODE_HASHENTRY:
+    case AST_NODE_WHILE:
+    case AST_NODE_REPEAT:
+    case AST_VAL_FUNC:
+    case AST_VAL_OBJ:
       return sbAst_count_pipe_underscores(node->seq.left)
            + sbAst_count_pipe_underscores(node->seq.right);
+    case AST_NODE_IF:
+      return sbAst_count_pipe_underscores(node->tri.left)
+           + sbAst_count_pipe_underscores(node->tri.center)
+           + sbAst_count_pipe_underscores(node->tri.right);
     case AST_NODE_OP:
       if (node->op.type == AST_OP_PIPE) {
         /* for a pipe, underscores on the right side don't count
@@ -39,14 +44,19 @@ i32 sbAst_count_pipe_underscores(sbAst node) {
       }
     case AST_NODE_ASSIGN:
     case AST_NODE_LET:
+    case AST_NODE_DEF:
       /* for declarations and assignments, we only count the expressions
        * on the right, not the things on the left (this might happen if we
        * have a pipe into a function literal that contains statements etc) */
       return sbAst_count_pipe_underscores(node->op.right);
     case AST_VAL_LIST:
     case AST_VAL_HASH:
+    case AST_NODE_RETURN:
       /* check the things inside the whatever */
       return sbAst_count_pipe_underscores(node->op.left);
+    case AST_VAL_IMFUNC:
+      /* "_" inside :{ imfunc } does not refer to pipe's "_" */
+      return 0;
     case AST_VAL_NIL:
     case AST_VAL_INT:
     case AST_VAL_STRING:
