@@ -142,6 +142,7 @@ struct sbIrProgram;
 
 typedef struct sbIrChunk {
   struct sbIrProgram *program;
+  flag pipe_var_in_use : 1;
   i32 id;
   i16 num_args;
   i16 num_upvalues;

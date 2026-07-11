@@ -15,11 +15,11 @@ def map f {
 }
 
 def sum_squares list {
-  list | (square | map) | sum
+  list.map(square) | sum
 }
 
 def square_sum list {
   list | sum | square
 }
 
-...[1, 101] | list::iota | (square_sum _) - (sum_squares _) | println
+list::iota 1, 101 | (square_sum _) - (sum_squares _) | println

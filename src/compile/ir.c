@@ -1,5 +1,6 @@
 #include "compile/ir.h"
 
+#include "compile/analyze.h"
 #include "parse/ast.h"
 #include "data/symbol.h"
 #include "data/integer.h"
@@ -1032,15 +1033,22 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
     } else if (node->op.type == AST_OP_PIPE) {
       /* assign LHS to our temporary secret pipe variable,
        * then use RHS as our value */
-      if (node->op.right->has_us) {
+      i32 num_bindings = sbAst_count_pipe_underscores(node->op.right);
+      if (num_bindings > 0) {
         /* TODO: I realized this doesn't really make sense if we nest | within ().
          * like, a | (b | c _) _ won't work properly. so really we need a whole
          * stack of these temporary variables potentially... maybe we need to save
          * the current pipe var here and restore it again after? also, whither
          * something like a(b | c, d | e)? oh god... */
+        if (ck->pipe_var_in_use || list_context) {
+          PANIC("Pipe cannot currently be used in this context. I will fix it");
+        }
         sbIrExpr *left = compile_ast_expr(ck, node->op.left, FALSE);
         put_assign(ck, pipe_var(ck), left);
-        return compile_ast_expr(ck, node->op.right, FALSE);
+        ck->pipe_var_in_use = TRUE;
+        sbIrExpr *right = compile_ast_expr(ck, node->op.right, FALSE);
+        ck->pipe_var_in_use = FALSE;
+        return right;
       } else {
         /* if there is no _ to the right of the "|", assume it is a function
          * call that we are passing the left side to as a singular argument. this
@@ -1048,8 +1056,11 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
         return expr_call(ck,
             /* thing to call */
             compile_ast_expr(ck, node->op.right, FALSE),
-            /* parameter list (weirdly i guess the left thing could be a splat) */
-            expr_list(ck, compile_ast_expr(ck, node->op.left, TRUE)));
+            /* parameter list (true = the left thing can be a splat, because it does work,
+             * but you can't have commas. but you can do ...[x, y, z] | stuff) */
+            //expr_list(ck, compile_ast_expr(ck, node->op.left, TRUE)));
+            // ok currently you can't. but we will
+            expr_list(ck, compile_ast_expr(ck, node->op.left, FALSE)));
       }
     } else {
       sbIrExpr *left = NULL, *right = NULL;
