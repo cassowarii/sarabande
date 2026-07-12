@@ -66,8 +66,8 @@ hInteger sbInteger_new(i64 value) {
       i->sign_bit = 1;
       value *= -1;
     }
-    i->buf.data[0] = (value % BIGINT_PIECE_MAX);
-    i->buf.data[1] = (value / BIGINT_PIECE_MAX);
+    ((piece*)(i->buf.data))[0] = (value % BIGINT_PIECE_MAX);
+    ((piece*)(i->buf.data))[1] = (value / BIGINT_PIECE_MAX);
 
     return i->handle;
   }

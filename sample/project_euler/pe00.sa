@@ -1,0 +1,5 @@
+list::iota1 130_000
+  | _.filter => n { not (n %% 2) }
+  | _.map => n { n * n }
+  | _.reduce 0, => a, b { a + b }
+  | println

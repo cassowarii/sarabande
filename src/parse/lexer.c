@@ -198,8 +198,6 @@ static flag is_closing_bracket(sbTokenType type) {
 /* header keywords that introduce a block and go until a { */
 static flag begins_brace_terminated_state(sbTokenType type) {
     return type == T_rDEF
-        || type == T_rIF
-        || type == T_rUNLESS
         || type == T_rWHILE
         || type == T_rUNTIL
         || type == T_rDO
@@ -209,6 +207,12 @@ static flag begins_brace_terminated_state(sbTokenType type) {
         || type == T_rWHEN
         || type == T_FATARROW /* fat arrow => a, b { ... } introduces block header also */
         || type == T_SQUIGARROW; /* squiggle arrow ~> a, b { ... } introduces block header also */
+}
+
+/* only starts BTS at start of line, not in middle of line */
+static flag begins_brace_terminated_state_at_line_start(sbTokenType type) {
+    return type == T_rIF
+        || type == T_rUNLESS;
 }
 
 /* things we can potentially insert a ( after because they may be a call */
@@ -232,19 +236,11 @@ static flag block_header_can_end_after(sbTokenType type) {
         || type == T_rDO;
 }
 
-/* these are operators that look weird if they get captured inside
- * of parentheses, and also if and unless in postfix form */
+/* close invisible parentheses before we see this token */
 static flag close_invisible_parens_before(sbTokenType type) {
-    return type == T_rAND
-        || type == T_rOR
+    return type == T_SEMICOLON
         || type == T_rIF
         || type == T_rUNLESS
-        || type == T_DOUBLEEQUALS
-        || type == T_NOTEQUALS
-        || type == T_LESS
-        || type == T_GREATER
-        || type == T_LESSEQUALS
-        || type == T_GREATEREQUALS
         || type == T_PIPE;
 }
 
@@ -394,7 +390,8 @@ static void compute_next_token(hLexer lx) {
         unstack_all_invisible_parentheses(lx);
     }
 
-    if (begins_brace_terminated_state(token.type)) {
+    if (begins_brace_terminated_state(token.type)
+        || (begins_brace_terminated_state_at_line_start(token.type) && lx->last_token_seen.type == ';')) {
         /* don't start brace-terminated state if we are directly after a '}' (otherwise it gets
          * confused by things like repeat..until */
         if (lx->last_token_seen.type != '}') {
