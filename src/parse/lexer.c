@@ -291,17 +291,6 @@ static void stack_token(hLexer lx, sbLexToken token) {
     }
 }
 
-static void unstack_one_invisible_parenthesis(hLexer lx) {
-    if (lx->brackets_stack.size == 0) return;
-
-    char top = brackets_stack_top(lx);
-    if (top == 'G' || top == 'H') {
-        sbLexToken invisible_rparen = { .type = T_RPAREN, .invisible = 1 };
-        enqueue_output_token(lx, invisible_rparen);
-        brackets_stack_pop(lx);
-    }
-}
-
 static void unstack_invisible_parentheses_of_type(hLexer lx, char type) {
     /* this happens when a real bracket closes, and also at the end of a line */
     if (lx->brackets_stack.size == 0) return;
@@ -451,44 +440,7 @@ static void compute_next_token(hLexer lx) {
             space_offset = 1;
         }
 
-        if (token.type == T_BACKSQUIGARROW) {
-            /* <~ always gets a ( after it to include its parameters, unless there's a ( immediately
-             * after it with no space. (*with* a space, we accept stuff like a <~ (b), c, d which
-             * seems likely to be more common than things like a <~(b, c, d) which is kinda wonky
-             * to begin with (probably people should just write (a <~ b, c, d) but idk) */
-            if (input_peek_ahead(lx, 0).type != T_LPAREN) {
-              enqueue_output_token(lx, invisible_lparen);
-            }
-        } else if (lx->last_token_seen.type == T_DOT && token.type == T_IDENTIFIER) {
-            /* an identifier after a dot always gets an invisible parentheses after it,
-             * unless there is a visible parentheses immediately after it. */
-            if (input_peek_ahead(lx, 0).type != T_LPAREN) {
-                enqueue_output_token(lx, invisible_lparen);
-
-                sbTokenType next_type = input_peek_ahead(lx, space_offset).type;
-                sbTokenType next_next_type = input_peek_ahead(lx, space_offset + 1).type;
-
-                if (maybe_can_start_expression(next_type)) {
-                    /* this is something like 'a.b( +c' or 'a.b( + c'. if there is a space
-                     * after the operator, or not before the operator, add an invisible ),
-                     * otherwise don't because that's the 'a.b( +c' case */
-                    if (next_next_type == T_SPACE || space_offset == 0) {
-                        unstack_one_invisible_parenthesis(lx);
-                    }
-                } else if (!can_only_start_expression(next_type, is_in_brace_terminated_state(lx))) {
-                    /* ok, so this means that we just inserted a ( in some situation like
-                     * 'a.b(.c' or 'a.b(, c' or 'a.b( % 3' -- in this situation, we need to also
-                     * add a matching invisible right parenthesis immediately. */
-
-                    /* In brace-terminated state, { doesn't count as can_only_start_expression.
-                     * So this applies before { as well: normally 'a.b {' --> 'a.b({', but
-                     * inside block headers 'a.b {' --> 'a.b() {' */
-                    unstack_one_invisible_parenthesis(lx);
-                }
-                /* if can_only_start_expression(next_type), then we don't want to add an invisible
-                 * right parenthesis because it must be a parameter. */
-            }
-        } else if (input_peek_ahead(lx, 0).type == T_SPACE || insert_paren_no_space) {
+        if (input_peek_ahead(lx, 0).type == T_SPACE || insert_paren_no_space) {
             /* suspicious... tell me more */
             if (can_only_start_expression(input_peek_ahead(lx, space_offset).type, is_in_brace_terminated_state(lx))) {
                 /* ah ! yes. insert a magic ( into the stream. */

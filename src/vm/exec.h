@@ -39,6 +39,7 @@
 typedef enum {
   CFUNC_END,
   CFUNC_NEXT,
+  CFUNC_TAILCALL,
 } sbCFuncStatus;
 
 typedef sbCFuncStatus (*sbRuntimeCFunc)(hVm, flag init);
@@ -101,6 +102,8 @@ hV *sbVm_peek(hVm vm, usize where);
 void sbVm_swap(hVm vm);
 
 void sbVm_call_func(hVm vm, hV *func);
+
+void sbVm_transfer_to_func(hVm vm, hV *func);
 
 void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func);
 

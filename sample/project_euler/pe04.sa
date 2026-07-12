@@ -1,5 +1,6 @@
 def is_palindrome num {
-  num.to_string == num.to_string.split.reverse.join
+  let string_num = num | string::from
+  string_num == string_num.split().reverse().join()
 }
 
 let max = 0

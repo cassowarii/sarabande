@@ -82,6 +82,12 @@ void sbVm_call_func(hVm vm, hV *func) {
   call_block(vm, func->type, func->closure);
 }
 
+void sbVm_transfer_to_func(hVm vm, hV *func) {
+  /* tail call */
+  return_from_block(vm);
+  call_block(vm, func->type, func->closure);
+}
+
 void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
   sbVmStackFrame frame = {
     .return_addr = vm->ip,

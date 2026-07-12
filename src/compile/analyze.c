@@ -20,6 +20,7 @@ i32 sbAst_count_pipe_underscores(sbAst node) {
     case AST_NODE_NEXT:
     case AST_NODE_MULTIVAL:
     case AST_NODE_FUNCCALL:
+    case AST_NODE_DOT:
     case AST_NODE_HASHENTRY:
     case AST_NODE_WHILE:
     case AST_NODE_REPEAT:

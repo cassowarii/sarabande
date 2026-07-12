@@ -616,30 +616,13 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
       /* . and -> parse an identifier to their right as a symbol that will
        * name the method to be called. to call a method whose name isn't
        * a symbol, you need a.[expr] or a->[expr] */
-      sbAst method_name = NO_NODE;
-      if (expect(pr, T_LBRACKET)) {
-        method_name = parse_expr(pr, 0);
-        if (!expect(pr, T_RBRACKET)) return syntax_error(pr);
-      } else {
-        method_name = parse_name_as_sym(pr);
-      }
-      if (method_name == NO_NODE) return syntax_error(pr);
-      rhs = seq_node(pr, AST_NODE_MULTIVAL, NO_NODE, method_name);
-      if (expect(pr, T_LPAREN)) {
-        rhs = parse_comma_exprs(pr, rhs);
-        if (!expect(pr, T_RPAREN)) return syntax_error(pr);
-      }
-      ast_type = AST_NODE_METHODCALL;
+      rhs = parse_name_as_sym(pr);
+      if (rhs == NO_NODE) return syntax_error(pr);
+      ast_type = AST_NODE_DOT;
       if (op.type == T_ARROW) {
         /* (whatever)->x is rewritten as (*whatever).x */
         lhs = unop_node(pr, AST_OP_DEREF, lhs);
       }
-    } else if (op.type == T_BACKSQUIGARROW) {
-      /* a <~ b, c, d can have multiple comma things on the right side */
-      if (!expect(pr, T_LPAREN)) return syntax_error(pr);
-      ast_type = AST_NODE_METHODCALL;
-      rhs = parse_comma_exprs(pr, NULL);
-      if (!expect(pr, T_RPAREN)) return syntax_error(pr);
     } else if (op.type == T_PAAMAYIM_NEKUDOTAYIM) {
       /* :: is similar to . and -> above, will parse the thing to the right
        * as a symbol unless using the syntax a::[expr] */

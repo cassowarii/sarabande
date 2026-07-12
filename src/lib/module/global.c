@@ -13,10 +13,6 @@ sbCFuncStatus println_cfunc(hVm vm, flag init);
 
 sbLibTable g_global_module;
 
-sbLibTable g_string_namespace;
-
-extern sbLibTable g_math_module;
-
 static void print(hVm vm, usize argc) {
   sbVm_push_immediate(vm, &HVINT(argc));
   sbVm_call_c_func(vm, print_cfunc);
@@ -32,9 +28,8 @@ void sbLib_loadmodule_global() {
   REGISTER_VALUE(&g_global_module, "print", &HVBUILTIN(print));
   REGISTER_VALUE(&g_global_module, "println", &HVBUILTIN(println));
 
-  sbLibTable_initialize(&g_string_namespace, 16, FALSE);
-  REGISTER_VALUE(&g_string_namespace, "convert", &HVSYM(S_OP_TO_STRING));
-  REGISTER_VALUE(&g_global_module, "string", &HVMODULE(&g_string_namespace));
+  sbLib_loadmodule_string();
+  REGISTER_VALUE(&g_global_module, "string", &HVMODULE(&g_string_module));
 
   sbLib_loadmodule_list();
   REGISTER_VALUE(&g_global_module, "list", &HVMODULE(&g_list_module));

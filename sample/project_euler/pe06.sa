@@ -10,12 +10,8 @@ def square num {
   num * num
 }
 
-def map f {
-  => l { l.map(f) }
-}
-
 def sum_squares list {
-  list.map(square) | sum
+  list | _.map(square) | sum
 }
 
 def square_sum list {
