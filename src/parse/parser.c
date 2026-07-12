@@ -637,6 +637,7 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
       if (rhs == NO_NODE) return syntax_error(pr);
     } else {
       rhs = parse_expr(pr, infix->right_precedence);
+      if (rhs == NO_NODE) return syntax_error(pr);
     }
 
     if (ast_type == AST_NODE_OP) {
