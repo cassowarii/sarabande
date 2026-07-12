@@ -7,6 +7,7 @@
 #include "lib/lib.h"
 
 void call_block(hVm vm, usize block_id, hClosure closure);
+void call_builtin(hVm vm, hV *to_call);
 void return_from_block(hVm vm);
 void execute_instruction(hVm vm);
 void push_stack(hVm vm, hV *value);
@@ -79,7 +80,11 @@ void sbVm_swap(hVm vm) {
 }
 
 void sbVm_call_func(hVm vm, hV *func) {
-  call_block(vm, func->type, func->closure);
+  if (func->type == IT_BUILTIN) {
+    call_builtin(vm, func);
+  } else {
+    call_block(vm, func->type, func->closure);
+  }
 }
 
 void sbVm_transfer_to_func(hVm vm, hV *func) {

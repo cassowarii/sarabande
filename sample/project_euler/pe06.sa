@@ -1,9 +1,5 @@
 def sum list {
-  let acc = 0
-  list.each => elem {
-    acc = acc + elem
-  }
-  acc
+  list.reduce(0, => a, b { a + b })
 }
 
 def square num {

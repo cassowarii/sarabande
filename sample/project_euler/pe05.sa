@@ -7,12 +7,4 @@ def gcd a, b {
   }
 }
 
-def lcm nums {
-  let result = 1
-  nums.each => num {
-    result = result * num // gcd(result, num)
-  }
-  result
-}
-
-println lcm list::iota 1, 21
+println list::iota(1, 21).reduce(1, => a, b { a * b // gcd(a, b) })

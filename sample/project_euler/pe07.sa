@@ -1,3 +1,4 @@
+# See Project Euler #3
 def factors num {
   let list = []
   let candidate = 2
@@ -13,7 +14,11 @@ def prime? num {
   factors(num).length() == 0
 }
 
-factors 600851475143
-  | _.filter(prime?)
-  | _.reduce(0, math::max)
-  | println
+let seen = 0
+let num = 1
+while seen < 10001 {
+  num = num + 1
+  seen = seen + 1 if prime? num
+}
+
+println num

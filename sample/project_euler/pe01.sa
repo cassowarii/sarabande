@@ -1,11 +1,4 @@
-def sum list {
-  let s = 0
-  list.each => elem {
-    s = s + elem
-  }
-  s
-}
-
-println sum list::iota(1000).filter => num {
-  [3, 5].any? => factor { num %% factor }
-}
+list::iota(1000)
+  | _.filter => num { [3, 5].any? => factor { num %% factor } }
+  | _.reduce 0, => a, b { a + b }
+  | println

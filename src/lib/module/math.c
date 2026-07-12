@@ -5,6 +5,7 @@
 #include "data/string.h"
 #include "data/symbol.h"
 #include "data/integer.h"
+#include "vm/operations.h"
 #include "vm/exec.h"
 
 #include <math.h>
@@ -29,7 +30,21 @@ static void sbsqrt(hVm vm, usize argc) {
   sbVm_push_immediate(vm, &HVFLOAT(sqrt(original_value)));
 }
 
+static void sbmax(hVm vm, usize argc) {
+  hV *result = &HVNIL;
+  while (argc > 0) {
+    argc --;
+    hV *val = sbVm_pop(vm);
+    if (result->type == IT_NIL || sbV_le(result, val).boolean) {
+      result = val;
+    }
+  }
+
+  sbVm_push_immediate(vm, result);
+}
+
 void sbLib_loadmodule_math() {
   sbLibTable_initialize(&g_math_module, 16, FALSE);
   REGISTER_VALUE(&g_math_module, "sqrt", &HVBUILTIN(sbsqrt));
+  REGISTER_VALUE(&g_math_module, "max", &HVBUILTIN(sbmax));
 }

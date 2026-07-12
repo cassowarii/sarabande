@@ -9,6 +9,7 @@
 sbCFuncStatus list_each_cfunc(hVm vm, flag init);
 sbCFuncStatus list_map_cfunc(hVm vm, flag init);
 sbCFuncStatus list_filter_cfunc(hVm vm, flag init);
+sbCFuncStatus list_reduce_cfunc(hVm vm, flag init);
 sbCFuncStatus list_any_cfunc(hVm vm, flag init);
 sbCFuncStatus list_all_cfunc(hVm vm, flag init);
 
@@ -101,6 +102,14 @@ static void filter(hVm vm, hV *list, usize num_params) {
   sbVm_call_c_func(vm, list_filter_cfunc);
 }
 
+static void reduce(hVm vm, hV *list, usize num_params) {
+  if (num_params != 2) {
+    PANIC("wrong number of arguments passed to list#reduce");
+  }
+  sbVm_push_immediate(vm, list);
+  sbVm_call_c_func(vm, list_reduce_cfunc);
+}
+
 static void any_p(hVm vm, hV *list, usize num_params) {
   if (num_params != 1) {
     PANIC("wrong number of arguments passed to list#any?");
@@ -126,6 +135,7 @@ void sbList_create_methods(void) {
   REGISTER_METHOD(&g_list_methods, "each", each);
   REGISTER_METHOD(&g_list_methods, "map", map);
   REGISTER_METHOD(&g_list_methods, "filter", filter);
+  REGISTER_METHOD(&g_list_methods, "reduce", reduce);
   REGISTER_METHOD(&g_list_methods, "any?", any_p);
   REGISTER_METHOD(&g_list_methods, "all?", all_p);
 }
@@ -234,6 +244,44 @@ sbCFuncStatus list_filter_cfunc(hVm vm, flag init) {
     return CFUNC_NEXT;
   } else {
     /* return result list */
+    sbVm_push_immediate(vm, &vm->fp->locals[3]);
+    return CFUNC_END;
+  }
+}
+
+sbCFuncStatus list_reduce_cfunc(hVm vm, flag init) {
+  if (init) {
+    /* state: list being reduced, index, callback, result */
+    sbVm_request_var_space(vm, 4);
+    hV *iterating_list = sbVm_pop(vm);
+    hV *result = sbVm_pop(vm);
+    hV *reduce_func = sbVm_pop(vm);
+    usize length;
+    sbList_get_value(iterating_list->list, &length);
+    hV index = HVINT(0);
+
+    vm->fp->locals[0] = *iterating_list;
+    vm->fp->locals[1] = index;
+    vm->fp->locals[2] = *reduce_func;
+    vm->fp->locals[3] = *result;
+  } else {
+    /* get result of reduce function */
+    hV *result = sbVm_pop(vm);
+    vm->fp->locals[3] = *result;
+  }
+
+  usize current_index = vm->fp->locals[1].integer++;
+  usize length;
+  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  if (current_index < length) {
+    /* put current result and new value on stack, then call callback function */
+    sbVm_push(vm, &vm->fp->locals[3]);
+    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push_immediate(vm, &HVINT(2));
+    sbVm_call_func(vm, &vm->fp->locals[2]);
+    return CFUNC_NEXT;
+  } else {
+    /* return result */
     sbVm_push_immediate(vm, &vm->fp->locals[3]);
     return CFUNC_END;
   }
