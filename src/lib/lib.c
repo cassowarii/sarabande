@@ -1,6 +1,8 @@
 #include "common.h"
-#include "data/symbol.h"
 #include "vm/exec.h"
+
+#include "data/symbol.h"
+#include "data/reference.h"
 
 #include "lib/table.h"
 #include "lib/sentinel.h"
@@ -96,8 +98,6 @@ void sbLib_resolve_method(hVm vm) {
  * (non-intrinsic types are always functions, so they can be resolved just by
  *  calling them)*/
 void sbLib_resolve_property(hVm vm) {
-  printf("Resolving property\n");
-  sbVm_print_stack(vm);
   hV *target = sbVm_pop(vm);
   hV *argc = sbVm_pop(vm);
   if (argc->type != IT_INTEGER) {
@@ -132,7 +132,8 @@ void sbLib_resolve_property(hVm vm) {
       } else {
         /* it is a method, but it is being called without parameters.
          * annoyingly, we need to construct a bound version of this method. */
-        PANIC("I haven't done this yet!");
+        hRef ref = sbRef_create(target);
+        sbVm_push_immediate(vm, &HVBOUNDMETHOD(method_name_val->symbol, ref));
       }
     } else {
       PANIC("invalid method name for type %lld: %s", (long long)target->type, sbSymbol_name(method_name_val->symbol));

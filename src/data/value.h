@@ -3,7 +3,7 @@
 
 #include "global.h"
 
-#define FLAG_SQUIGGLY (1ULL << 62)
+#define IT_FLAG_BOUND_METHOD (1ULL << 62)
 
 #define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
 #define HVFLOAT(f) ((hV) { .type = IT_FLOAT, .float_val = f })
@@ -15,8 +15,8 @@
 #define HVNIL ((hV) { .type = IT_NIL })
 #define HVNOTHING ((hV) {0})
 #define HVFUNC(i, c) ((hV) { .type = i, .closure = c })
-#define HVFUNC2(i, c) ((hV) { .type = i | FLAG_SQUIGGLY, .closure = c })
 #define HVBUILTIN(b) ((hV) { .type = IT_BUILTIN, .builtin = b })
+#define HVBOUNDMETHOD(m, t) ((hV) { .type = m | IT_FLAG_BOUND_METHOD, .ref = t })
 #define HVMODULE(m) ((hV) { .type = IT_MODULE, .module = m })
 
 struct sbVm;

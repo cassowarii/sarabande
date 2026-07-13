@@ -8,6 +8,7 @@
 
 void call_block(hVm vm, usize block_id, hClosure closure);
 void call_builtin(hVm vm, hV *to_call);
+void call_bound_method(hVm vm, hV *to_call);
 void return_from_block(hVm vm);
 void execute_instruction(hVm vm);
 void push_stack(hVm vm, hV *value);
@@ -82,6 +83,12 @@ void sbVm_swap(hVm vm) {
 void sbVm_call_func(hVm vm, hV *func) {
   if (func->type == IT_BUILTIN) {
     call_builtin(vm, func);
+  } else if (func->type <= 0) {
+    /* intrinsic type: resolve a property on it */
+    push_stack(vm, func);
+    sbLib_resolve_property(vm);
+  } else if (func->type & IT_FLAG_BOUND_METHOD) {
+    call_bound_method(vm, func);
   } else {
     call_block(vm, func->type, func->closure);
   }
@@ -162,6 +169,27 @@ void call_block(hVm vm, usize block_id, hClosure closure) {
   vm->fp = (sbVmStackFrame*)vm->rsp;
   vm->rsp += sizeof(sbVmStackFrame);
   vm->ip = &blk->bytecode[0];
+}
+
+void call_bound_method(hVm vm, hV *to_call) {
+  if (!(to_call->type & IT_FLAG_BOUND_METHOD)) {
+    CHECK("call_bound_method can only call bound methods!");
+  }
+
+  /* bound method is just a symbol + a closure containing one variable */
+  hSymbol sym = (hSymbol)(to_call->type & ~IT_FLAG_BOUND_METHOD);
+  hRef ref = (to_call->ref);
+
+  /* we should already have parameters, so we just need to line it back up
+   * on the stack and call the method again */
+  push_stack_immediate(vm, &HVSYM(sym));
+  swap_stack_top(vm);
+  if (peek_stack(vm, 0)->type != IT_INTEGER) {
+    CHECK("bound method call should receive an integer arg count!");
+  }
+  peek_stack(vm, 0)->integer ++;
+  push_stack(vm, sbRef_deref(ref));
+  sbLib_resolve_method(vm);
 }
 
 void return_from_block(hVm vm) {
@@ -483,15 +511,7 @@ void execute_instruction(hVm vm) {
       break;
     case BC_CALL:
       v = pop_stack(vm);
-      if (v->type == IT_BUILTIN) {
-        call_builtin(vm, v);
-      } else if (v->type <= 0) {
-        /* intrinsic type: resolve a property on it */
-        push_stack(vm, v);
-        sbLib_resolve_property(vm);
-      } else {
-        call_block(vm, v->type, v->closure);
-      }
+      sbVm_call_func(vm, v);
       break;
     case BC_SEND:
       sbLib_resolve_method(vm);
