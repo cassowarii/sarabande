@@ -95,6 +95,24 @@ i64 sbInteger_get_value(hInteger a) {
   }
 }
 
+hInteger sbInteger_parse_string(const char *string, usize length) {
+  hInteger intval = 0;
+
+  /* TODO: I'd like to be able to parse in other bases, too. */
+  const int base = 10;
+
+  for (usize i = 0; i < length; i++) {
+    char ch = string[i];
+    if (!(ch >= '0' && ch <= '9')) {
+      PANIC("Invalid character, cannot parse number: '%c'", ch);
+    }
+    intval = sbInteger_mul(intval, base);
+    intval = sbInteger_sum(intval, ch - '0');
+  }
+
+  return intval;
+}
+
 hInteger sbInteger_sum(hInteger a, hInteger b) {
   if (!is_bigint(a) && !is_bigint(b)) {
     return sbInteger_new(a + b);

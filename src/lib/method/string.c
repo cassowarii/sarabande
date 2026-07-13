@@ -3,6 +3,7 @@
 #include "lib/table.h"
 #include "lib/sentinel.h"
 #include "data/list.h"
+#include "data/integer.h"
 #include "data/string.h"
 #include "vm/exec.h"
 
@@ -26,16 +27,28 @@ static void split(hVm vm, hV *target, usize num_params) {
 }
 
 static void to_string(hVm vm, hV *target, usize num_params) {
-  if (num_params != 0) {
-    PANIC("to_string takes no parameters");
-  }
-
   /* to_string for a string just returns itself */
   sbVm_push_immediate(vm, target);
+}
+
+static void to_integer(hVm vm, hV *target, usize num_params) {
+  char scratch[8];
+  usize length;
+  const char *data = sbString_get_value(target->string, scratch, &length);
+  hInteger parsed = sbInteger_parse_string(data, length);
+  sbVm_push_immediate(vm, &HVINT(parsed));
+}
+
+static void length(hVm vm, hV *target, usize num_params) {
+  usize length;
+  sbString_get_value(target->string, NULL, &length);
+  sbVm_push_immediate(vm, &HVINT(length));
 }
 
 void sbString_create_methods(void) {
   sbLibTable_initialize(&g_string_methods, 16, TRUE);
   REGISTER_METHOD(&g_string_methods, "split", &METHOD(split, 0, 1));
+  REGISTER_METHOD(&g_string_methods, "length", &PROPERTY(length));
   REGISTER_METHOD_SYM(&g_string_methods, S_OP_TO_STRING, &PROPERTY(to_string));
+  REGISTER_METHOD_SYM(&g_string_methods, S_OP_TO_INT, &PROPERTY(to_integer));
 }

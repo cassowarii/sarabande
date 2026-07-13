@@ -8,7 +8,7 @@
 #include "data/integer.h"
 #include "vm/exec.h"
 
-sbCFuncStatus from_cfunc(hVm vm, flag init);
+static sbCFuncStatus from_cfunc(hVm vm, flag init);
 
 sbLibTable g_string_module;
 
@@ -28,7 +28,7 @@ void sbLib_loadmodule_string() {
 
 /* --- */
 
-sbCFuncStatus from_cfunc(hVm vm, flag init) {
+static sbCFuncStatus from_cfunc(hVm vm, flag init) {
   if (!init) {
     /* get value of previous to_string */
     hV *value = sbVm_peek(vm, 0);

@@ -31,6 +31,9 @@ void sbLib_loadmodule_global() {
   sbLib_loadmodule_string();
   REGISTER_VALUE(&g_global_module, "string", &HVMODULE(&g_string_module));
 
+  sbLib_loadmodule_integer();
+  REGISTER_VALUE(&g_global_module, "integer", &HVMODULE(&g_integer_module));
+
   sbLib_loadmodule_list();
   REGISTER_VALUE(&g_global_module, "list", &HVMODULE(&g_list_module));
 

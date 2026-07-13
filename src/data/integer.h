@@ -17,6 +17,8 @@ void sbInteger_retain(hInteger a);
 
 void sbInteger_release(hInteger a);
 
+hInteger sbInteger_parse_string(const char *string, usize length);
+
 hInteger sbInteger_sum(hInteger a, hInteger b);
 
 hInteger sbInteger_diff(hInteger a, hInteger b);
