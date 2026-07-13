@@ -23,13 +23,13 @@ void sbLibTable_initialize(hLibTable t, usize capacity, flag method_table);
 
 void sbLibTable_deinitialize(hLibTable t);
 
-sbLibMethod sbLibTable_find_method(hLibTable t, hSymbol key);
+sbLibMethod *sbLibTable_find_method(hLibTable t, hSymbol key);
 
 hV *sbLibTable_find_value(hLibTable t, hSymbol key);
 
-void sbLibTable_register_method(hLibTable t, const char *method_name, usize method_name_length, sbLibMethod method);
+void sbLibTable_register_method(hLibTable t, const char *method_name, usize method_name_length, sbLibMethod *method);
 
-void sbLibTable_register_method_sym(hLibTable t, hSymbol key, sbLibMethod method);
+void sbLibTable_register_method_sym(hLibTable t, hSymbol key, sbLibMethod *method);
 
 void sbLibTable_register_value(hLibTable t, const char *value_name, usize value_name_length, hV *value);
 

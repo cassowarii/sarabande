@@ -16,27 +16,18 @@ sbCFuncStatus list_all_cfunc(hVm vm, flag init);
 sbLibTable g_list_methods;
 
 static void length(hVm vm, hV *list, usize num_params) {
-  if (num_params != 0) {
-    PANIC("list#length takes no arguments!");
-  }
   usize length;
   sbList_get_value(list->list, &length);
   sbVm_push_immediate(vm, &HVINT(length));
 }
 
 static void push(hVm vm, hV *list, usize num_params) {
-  if (num_params != 1) {
-    PANIC("list#push expects 1 argument!");
-  }
   hV *to_append = sbVm_pop(vm);
   sbList_append(list->list, to_append);
   sbVm_push_immediate(vm, &HVNIL);
 }
 
 static void reverse(hVm vm, hV *list, usize num_params) {
-  if (num_params != 0) {
-    PANIC("list#reverse takes no arguments!");
-  }
   /* TODO maybe mutate in place if no other refs */
   usize length;
   hV *elems = sbList_get_value(list->list, &length);
@@ -50,9 +41,6 @@ static void reverse(hVm vm, hV *list, usize num_params) {
 }
 
 static void join(hVm vm, hV *list, usize num_params) {
-  if (num_params > 1) {
-    PANIC("list#join takes no arguments or 1 argument!");
-  }
   flag join_with = FALSE;
   hString delimiter;
   if (num_params == 1) {
@@ -79,65 +67,47 @@ static void join(hVm vm, hV *list, usize num_params) {
 }
 
 static void each(hVm vm, hV *list, usize num_params) {
-  if (num_params != 1) {
-    PANIC("wrong number of arguments passed to list#each");
-  }
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_each_cfunc);
 }
 
 static void map(hVm vm, hV *list, usize num_params) {
-  if (num_params != 1) {
-    PANIC("wrong number of arguments passed to list#map");
-  }
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_map_cfunc);
 }
 
 static void filter(hVm vm, hV *list, usize num_params) {
-  if (num_params != 1) {
-    PANIC("wrong number of arguments passed to list#filter");
-  }
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_filter_cfunc);
 }
 
 static void reduce(hVm vm, hV *list, usize num_params) {
-  if (num_params != 2) {
-    PANIC("wrong number of arguments passed to list#reduce");
-  }
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_reduce_cfunc);
 }
 
 static void any_p(hVm vm, hV *list, usize num_params) {
-  if (num_params != 1) {
-    PANIC("wrong number of arguments passed to list#any?");
-  }
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_any_cfunc);
 }
 
 static void all_p(hVm vm, hV *list, usize num_params) {
-  if (num_params != 1) {
-    PANIC("wrong number of arguments passed to list#any?");
-  }
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_all_cfunc);
 }
 
 void sbList_create_methods(void) {
   sbLibTable_initialize(&g_list_methods, 16, TRUE);
-  REGISTER_METHOD(&g_list_methods, "length", length);
-  REGISTER_METHOD(&g_list_methods, "push", push);
-  REGISTER_METHOD(&g_list_methods, "reverse", reverse);
-  REGISTER_METHOD(&g_list_methods, "join", join);
-  REGISTER_METHOD(&g_list_methods, "each", each);
-  REGISTER_METHOD(&g_list_methods, "map", map);
-  REGISTER_METHOD(&g_list_methods, "filter", filter);
-  REGISTER_METHOD(&g_list_methods, "reduce", reduce);
-  REGISTER_METHOD(&g_list_methods, "any?", any_p);
-  REGISTER_METHOD(&g_list_methods, "all?", all_p);
+  REGISTER_METHOD(&g_list_methods, "length", &PROPERTY(length));
+  REGISTER_METHOD(&g_list_methods, "push", &METHOD(push, 1, 1));
+  REGISTER_METHOD(&g_list_methods, "reverse", &METHOD(reverse, 0, 0));
+  REGISTER_METHOD(&g_list_methods, "join", &METHOD(join, 0, 1));
+  REGISTER_METHOD(&g_list_methods, "each", &METHOD(each, 1, 1));
+  REGISTER_METHOD(&g_list_methods, "map", &METHOD(map, 1, 1));
+  REGISTER_METHOD(&g_list_methods, "filter", &METHOD(filter, 1, 1));
+  REGISTER_METHOD(&g_list_methods, "reduce", &METHOD(reduce, 2, 2));
+  REGISTER_METHOD(&g_list_methods, "any?", &METHOD(any_p, 1, 1));
+  REGISTER_METHOD(&g_list_methods, "all?", &METHOD(all_p, 1, 1));
 }
 
 /* --- */

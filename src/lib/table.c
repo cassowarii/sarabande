@@ -17,7 +17,7 @@ typedef sbLibTable {
 } sbLibTable;
 */
 
-static void insert_method(hSymbol *keys, sbLibMethod *methods, usize capacity, hSymbol key, sbLibMethod method);
+static void insert_method(hSymbol *keys, sbLibMethod *methods, usize capacity, hSymbol key, sbLibMethod *method);
 static void insert_value(hSymbol *keys, hV *values, usize capacity, hSymbol key, hV *value);
 static void check_grow_table(hLibTable t);
 
@@ -46,7 +46,7 @@ void sbLibTable_deinitialize(hLibTable t) {
   *t = (sbLibTable) {0};
 }
 
-sbLibMethod sbLibTable_find_method(hLibTable t, hSymbol key) {
+sbLibMethod *sbLibTable_find_method(hLibTable t, hSymbol key) {
   if (!t->method_table) CHECK("cannot find method in non-method table");
 
   sbHashValue hash = sbHash_hash_bytes((const char*)&key, sizeof(hSymbol));
@@ -57,7 +57,7 @@ sbLibMethod sbLibTable_find_method(hLibTable t, hSymbol key) {
   }
 
   if (t->keys[index]) {
-    return t->methods[index];
+    return &t->methods[index];
   } else {
     return NULL;
   }
@@ -80,7 +80,7 @@ hV *sbLibTable_find_value(hLibTable t, hSymbol key) {
   }
 }
 
-void sbLibTable_register_method_sym(hLibTable t, hSymbol key, sbLibMethod method) {
+void sbLibTable_register_method_sym(hLibTable t, hSymbol key, sbLibMethod *method) {
   if (!t->method_table) CHECK("cannot put method in non-method table");
 
   check_grow_table(t);
@@ -89,7 +89,7 @@ void sbLibTable_register_method_sym(hLibTable t, hSymbol key, sbLibMethod method
   t->used ++;
 }
 
-void sbLibTable_register_method(hLibTable t, const char *method_name, usize method_name_length, sbLibMethod method) {
+void sbLibTable_register_method(hLibTable t, const char *method_name, usize method_name_length, sbLibMethod *method) {
   hSymbol sym = sbSymbol_from_bytes(method_name, method_name_length);
   sbLibTable_register_method_sym(t, sym, method);
 }
@@ -110,7 +110,7 @@ void sbLibTable_register_value(hLibTable t, const char *value_name, usize value_
 
 /* --- */
 
-static void insert_method(hSymbol *keys, sbLibMethod *methods, usize capacity, hSymbol key, sbLibMethod method) {
+static void insert_method(hSymbol *keys, sbLibMethod *methods, usize capacity, hSymbol key, sbLibMethod *method) {
   sbHashValue hash = sbHash_hash_bytes((const char*)&key, sizeof(hSymbol));
   usize index = hash % capacity;
 
@@ -120,7 +120,7 @@ static void insert_method(hSymbol *keys, sbLibMethod *methods, usize capacity, h
   }
 
   keys[index] = key;
-  methods[index] = method;
+  methods[index] = *method;
 }
 
 static void insert_value(hSymbol *keys, hV *values, usize capacity, hSymbol key, hV *value) {
@@ -147,7 +147,7 @@ static void check_grow_table(hLibTable t) {
 
       for (usize i = 0; i < t->capacity; i++) {
         if (t->keys[i] != 0) {
-          insert_method(new_keys, new_methods, new_capacity, t->keys[i], t->methods[i]);
+          insert_method(new_keys, new_methods, new_capacity, t->keys[i], &t->methods[i]);
         }
       }
 

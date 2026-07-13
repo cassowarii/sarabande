@@ -10,7 +10,7 @@ def factors num {
 }
 
 def prime? num {
-  factors(num).length() == 0
+  factors(num).length == 0
 }
 
 factors 600851475143

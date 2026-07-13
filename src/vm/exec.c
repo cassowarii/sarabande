@@ -486,9 +486,9 @@ void execute_instruction(hVm vm) {
       if (v->type == IT_BUILTIN) {
         call_builtin(vm, v);
       } else if (v->type <= 0) {
-        /* We need to figure out exception support or some such.
-         * User error should not panic. */
-        PANIC("attempt to call a non-function value");
+        /* intrinsic type: resolve a property on it */
+        push_stack(vm, v);
+        sbLib_resolve_property(vm);
       } else {
         call_block(vm, v->type, v->closure);
       }

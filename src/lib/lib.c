@@ -7,7 +7,8 @@
 #include "lib/method.h"
 #include "lib/module.h"
 
-sbCFuncStatus please_call_again(hVm vm, flag init);
+static sbLibTable *find_method_table(hV *target);
+static sbCFuncStatus please_call_again(hVm vm, flag init);
 
 void sbLib_sys_init() {
   sbLib_create_sentinels();
@@ -35,30 +36,19 @@ void sbLib_resolve_method(hVm vm) {
   if (argc->type != IT_INTEGER) {
     CHECK("argc of send should be integer!");
   }
+  if (argc->integer == 0) {
+    PANIC("Method selection is required!");
+  }
+  /* subtract 1 because the method name is itself a param */
+  usize num_params = argc->integer - 1;
+
   hV *method_name_val = sbVm_pop(vm);
   if (method_name_val->type != IT_SYMBOL) {
-    /* TODO this may become not true */
     PANIC("method name must be symbol!");
   }
   hSymbol method_sym = method_name_val->symbol;
 
-  /* subtract 1 because the method name is itself a param */
-  usize num_params = argc->integer - 1;
-  hLibTable table_to_use = NULL;
-  switch(target->type) {
-    case IT_LIST:
-      table_to_use = &g_list_methods;
-      break;
-    case IT_STRING:
-      table_to_use = &g_string_methods;
-      break;
-    case IT_INTEGER:
-      table_to_use = &g_integer_methods;
-      break;
-    case IT_FLOAT:
-      table_to_use = &g_float_methods;
-      break;
-  }
+  sbLibTable *table_to_use = find_method_table(target);
 
   if (table_to_use == NULL) {
     /* did not find built in method table */
@@ -78,9 +68,72 @@ void sbLib_resolve_method(hVm vm) {
     }
   } else {
     /* built in type that has a method table defined: find method */
-    sbLibMethod f = sbLibTable_find_method(table_to_use, method_name_val->symbol);
+    sbLibMethod *f = sbLibTable_find_method(table_to_use, method_name_val->symbol);
     if (f) {
-      f(vm, target, num_params);
+      if (f->is_property) {
+        /* uhhh... this is theoretically possible but weird. it's like,
+         * saying "list.length(string::convert)". fortunately we can just
+         * sort of treat it as a normal method call again */
+        f->behavior(vm, target, 0);
+        if (num_params > 0) {
+          sbVm_push(vm, &HVINT(num_params));
+          sbLib_resolve_method(vm);
+        }
+      } else {
+        if (num_params >= f->min_args && (num_params <= f->max_args || f->max_args == -1)) {
+          f->behavior(vm, target, num_params);
+        } else {
+          PANIC("Wrong number of arguments passed to method '%s'! (expected %d~%d)", sbSymbol_name(method_name_val->symbol), f->min_args, f->max_args);
+        }
+      }
+    } else {
+      PANIC("invalid method name for type %lld: %s", (long long)target->type, sbSymbol_name(method_name_val->symbol));
+    }
+  }
+}
+
+/* function that resolves constructs like 'a.b' or 'a(:b)' for intrinsic types.
+ * (non-intrinsic types are always functions, so they can be resolved just by
+ *  calling them)*/
+void sbLib_resolve_property(hVm vm) {
+  printf("Resolving property\n");
+  sbVm_print_stack(vm);
+  hV *target = sbVm_pop(vm);
+  hV *argc = sbVm_pop(vm);
+  if (argc->type != IT_INTEGER) {
+    CHECK("argc of send should be integer!");
+  }
+  if (argc->integer != 1) {
+    PANIC("Illegal number of arguments!");
+  }
+
+  hV *method_name_val = sbVm_pop(vm);
+  if (method_name_val->type != IT_SYMBOL) {
+    PANIC("method name must be symbol!");
+  }
+
+  sbLibTable *table_to_use = find_method_table(target);
+
+  if (table_to_use == NULL) {
+    /* did not find built in method table */
+    if (target->type <= 0) {
+      /* for built in type, just fail, it's not done yet */
+      PANIC("Have not implemented this method table yet! (%lld)", (long long)target->type);
+    } else {
+      CHECK("This should never be reached!");
+    }
+  } else {
+    /* built in type that has a method table defined: find method */
+    sbLibMethod *f = sbLibTable_find_method(table_to_use, method_name_val->symbol);
+    if (f) {
+      if (f->is_property) {
+        /* we found a property! great, just compute it and be done */
+        f->behavior(vm, target, 0);
+      } else {
+        /* it is a method, but it is being called without parameters.
+         * annoyingly, we need to construct a bound version of this method. */
+        PANIC("I haven't done this yet!");
+      }
     } else {
       PANIC("invalid method name for type %lld: %s", (long long)target->type, sbSymbol_name(method_name_val->symbol));
     }
@@ -102,10 +155,26 @@ void sbLib_resolve_global(hVm vm) {
 
 /* --- */
 
+/* function that looks up something in a built-in method table */
+static sbLibTable *find_method_table(hV *target) {
+  switch(target->type) {
+    case IT_LIST:
+      return &g_list_methods;
+    case IT_STRING:
+      return &g_string_methods;
+    case IT_INTEGER:
+      return &g_integer_methods;
+    case IT_FLOAT:
+      return &g_float_methods;
+    default:
+      return NULL;
+  }
+}
+
 /* function that resolves methods from BC_SEND for non intrinsic types (aka functions) */
 /* we have something like a.b(c,d,e), we need to call twice to get result of a(:b)(c,d,e) */
 /* resolve_method should have set us up so we can just call in twice */
-sbCFuncStatus please_call_again(hVm vm, flag init) {
+static sbCFuncStatus please_call_again(hVm vm, flag init) {
   hV *target = sbVm_pop(vm);
   if (target->type <= 0) {
     PANIC("i have not implemented partial methods for builtin types yet! i'll get to it");
@@ -125,3 +194,4 @@ sbCFuncStatus please_call_again(hVm vm, flag init) {
     return CFUNC_TAILCALL;
   }
 }
+
