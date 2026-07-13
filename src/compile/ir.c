@@ -1039,9 +1039,20 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
     sbIrExpr *hash = compile_ast_hash(ck, node->seq.left);
     return hash;
   } else if (node->type == AST_NODE_OP) {
-    if (node->op.type == AST_OP_SPLAT) {
+    if (node->op.type == AST_OP_RANGE) {
+      chunk_error(ck, "'..' operator not permitted in this context\n");
+      return NULL;
+    } else if (node->op.type == AST_OP_RANGEINDEX) {
+      return expr_op(ck, AST_OP_RANGEINDEX,
+          compile_ast_expr(ck, node->op.left, FALSE),
+          expr_op(ck, AST_OP_RANGE,
+            compile_ast_expr(ck, node->op.right->op.left, FALSE),
+            compile_ast_expr(ck, node->op.right->op.right, FALSE)
+          )
+        );
+    } else if (node->op.type == AST_OP_SPLAT) {
       if (!list_context) {
-        chunk_error(ck, "'...' not allowed outside a list");
+        chunk_error(ck, "'...' not allowed outside a list\n");
         return NULL;
       } else {
         return expr_op(ck, AST_OP_SPLAT, compile_ast_expr(ck, node->op.left, FALSE), NULL);

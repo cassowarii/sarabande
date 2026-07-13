@@ -142,6 +142,43 @@ hV *sbV_index(hV *a, hV *b) {
   }
 }
 
+hV sbV_rangeindex(hV *a, hV *b, hV *c) {
+  if (b->type == IT_INTEGER && c->type == IT_INTEGER) {
+    usize length;
+    i64 min = sbInteger_get_value(b->integer);
+    i64 max = sbInteger_get_value(c->integer);
+    if (a->type == IT_LIST) {
+      hV *elements = sbList_get_value(a->list, &length);
+      if (min >= max || min >= length || max < 0) {
+        /* backwards or out of range */
+        return sbV_empty_list(0);
+      } else {
+        /* now we know 0 <= max, min < max, min < length. clip min and max to bounds */
+        if (max >= length) max = length;
+        if (min < 0) min = 0;
+        return HVLIST(sbList_of(max - min, &elements[min]));
+      }
+    } else if (a->type == IT_STRING) {
+      /* substring operation */
+      char scratch[8];
+      const char *strdata = sbString_get_value(a->string, scratch, &length);
+      if (min >= max || min >= length || max < 0) {
+        /* backwards or out of range */
+        return sbV_empty_string(0);
+      } else {
+        /* now we know 0 <= max, min < max, min < length. clip min and max to bounds */
+        if (max >= length) max = length;
+        if (min < 0) min = 0;
+        return HVSTR(sbString_new(&strdata[min], max - min));
+      }
+    } else {
+      PANIC("todo %lld %lld %lld", (long long)a->type, (long long)b->type, (long long)c->type);
+    }
+  } else {
+    PANIC("Only integers are supported for range indexing!");
+  }
+}
+
 void sbV_index_set(hV *obj, hV *key, hV *value) {
   if (obj->type == IT_LIST) {
     PANIC("todo");

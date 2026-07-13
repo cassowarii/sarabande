@@ -87,6 +87,14 @@ void sbInteger_release(hInteger a) {
   }
 }
 
+i64 sbInteger_get_value(hInteger a) {
+  if (!is_bigint(a)) {
+    return a;
+  } else {
+    PANIC("Integer value out of range");
+  }
+}
+
 hInteger sbInteger_sum(hInteger a, hInteger b) {
   if (!is_bigint(a) && !is_bigint(b)) {
     return sbInteger_new(a + b);

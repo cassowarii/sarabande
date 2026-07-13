@@ -6,6 +6,8 @@ void sbList_sys_deinit();
 
 hList sbList_new(usize capacity);
 
+hList sbList_of(usize length, hV *items);
+
 void sbList_append(hList list, hV *item);
 
 hV *sbList_get_value(hList list, usize *length);

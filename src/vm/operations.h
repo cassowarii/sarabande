@@ -26,4 +26,6 @@ hV sbV_append(hV *a, hV *b);
 
 hV *sbV_index(hV *a, hV *b);
 
+hV sbV_rangeindex(hV *a, hV *b, hV *c);
+
 void sbV_index_set(hV *obj, hV *key, hV *value);

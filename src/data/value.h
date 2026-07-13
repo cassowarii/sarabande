@@ -75,6 +75,7 @@ hV sbV_int(hInteger i);
 hV sbV_boolean(flag b);
 hV sbV_empty_list(usize capacity);
 hV sbV_empty_hash(usize capacity);
+hV sbV_empty_string();
 
 flag sbV_c_eq(const hV *a, const hV *b);
 flag sbV_c_falsy(const hV *a);

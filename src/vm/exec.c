@@ -651,6 +651,14 @@ void execute_instruction(hVm vm) {
       npop_stack(vm, 2);
       push_stack(vm, x);
       break;
+    case BC_OP_RANGEINDEX:
+      v = peek_stack(vm, 2);
+      w = peek_stack(vm, 1);
+      x = peek_stack(vm, 0);
+      res = sbV_rangeindex(v, w, x);
+      npop_stack(vm, 3);
+      push_stack_immediate(vm, &res);
+      break;
     case BC_OP_DEREF:
       PANIC("todo");
     case BC_ALLOC_VARS:

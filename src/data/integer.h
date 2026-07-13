@@ -11,6 +11,8 @@ void sbInteger_sys_deinit();
 
 hInteger sbInteger_new(i64 value);
 
+i64 sbInteger_get_value(hInteger a);
+
 void sbInteger_retain(hInteger a);
 
 void sbInteger_release(hInteger a);

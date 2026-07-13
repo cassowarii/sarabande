@@ -305,15 +305,6 @@ static sbLexToken compute_next_token(hScanner sc) {
             /* ! on its own is not an operator */
             new_token.type = T_ERROR;
         }
-    } else if (ch == '~') {
-        ch = NEXT;
-        if (ch == '>') {
-            new_token.type = T_SQUIGARROW;
-            NEXT;
-        } else {
-            /* ~ on its own is not an operator */
-            new_token.type = T_ERROR;
-        }
     } else if (ch == '>') {
         ch = NEXT;
         if (ch == '>') {
@@ -345,9 +336,6 @@ static sbLexToken compute_next_token(hScanner sc) {
             NEXT;
         } else if (ch == '=') {
             new_token.type = T_LESSEQUALS;
-            NEXT;
-        } else if (ch == '~') {
-            new_token.type = T_BACKSQUIGARROW;
             NEXT;
         } else {
             new_token.type = T_LESS;

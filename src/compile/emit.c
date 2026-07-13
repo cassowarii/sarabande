@@ -435,6 +435,9 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_AND: EMIT(BC_OP_AND); break;
     case AST_OP_OR: EMIT(BC_OP_OR); break;
     case AST_OP_INDEX: EMIT(BC_OP_INDEX); break;
+    case AST_OP_RANGEINDEX: EMIT(BC_OP_RANGEINDEX); break;
+    /* op range is currently only used in rangeindex; just pass them to it directly */
+    case AST_OP_RANGE: break;
     case AST_OP_DIVBY: EMIT(BC_OP_MOD, BC_LD_IMM); EARG(0); EMIT(BC_OP_EQ); break;
     default:
       PANIC("unknown operation! (%lld / %c)", (long long)op, op);

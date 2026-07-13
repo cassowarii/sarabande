@@ -51,6 +51,7 @@ typedef enum sbOpcode {
   BC_OP_AND,            // logical and
   BC_OP_OR,             // logical or
   BC_OP_INDEX,          // index [] or ::
+  BC_OP_RANGEINDEX,     // index [a..b]
   BC_ALLOC_VARS,        // create space in rstack for local variables
   BC_CLOSURE,           // create closure from top elements of stack
   BC_LIST_GATHER,       // create list from count + list of values on stack

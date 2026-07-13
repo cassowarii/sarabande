@@ -118,8 +118,6 @@ static tokenspelling token_spellings[] = {
   { T_BACKSLASH, "'\\'" },
   { T_ARROW, "'->'" },
   { T_FATARROW, "'=>'" },
-  { T_SQUIGARROW, "'~>'" },
-  { T_BACKSQUIGARROW, "'<~'" },
   { T_COLONBRACE, "':{'" },
   { T_PAAMAYIM_NEKUDOTAYIM, "'::'" },
   { T_DOUBLEEQUALS, "'=='" },
@@ -146,7 +144,6 @@ static const char *const TOKEN_SPELLING_UNKNOWN = "<unknown-token>";
 
 static binop binops[] = {
   { T_PIPE, 6, 7, AST_OP_PIPE },
-  { T_BACKSQUIGARROW, 8, 9, AST_OP_SEND },
   { T_rOR, 15, 16, AST_OP_OR },
   { T_rAND, 20, 21, AST_OP_AND },
   { T_rIN, 25, 26, AST_OP_IN },
@@ -164,7 +161,6 @@ static binop binops[] = {
   { T_PERCENT, 60, 61, AST_OP_MOD },
   { T_DOUBLESLASH, 60, 61, AST_OP_FLDIV },
   { T_DOUBLEASTERISK, 71, 70, AST_OP_POW },
-  { T_TWODOT, 80, 81, AST_OP_RANGE },
   { T_DOT, 90, 91, AST_OP_NULL },
   { T_ARROW, 90, 91, AST_OP_NULL },
   { T_LPAREN, 90, 91, AST_OP_NULL },
@@ -531,13 +527,6 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
     if (!expect(pr, T_RPAREN)) return syntax_error(pr);
     sbAst body = parse_block(pr);
     lhs = seq_node(pr, AST_VAL_FUNC, params, body);
-  } else if (t.type == T_SQUIGARROW) {
-    next_token(pr);
-    if (!expect(pr, T_LPAREN)) return syntax_error(pr);
-    sbAst params = parse_comma_exprs(pr, NULL);
-    if (!expect(pr, T_RPAREN)) return syntax_error(pr);
-    sbAst body = parse_block(pr);
-    lhs = seq_node(pr, AST_VAL_OBJ, params, body);
   } else if (t.type == T_COLONBRACE) {
     next_token(pr);
     sbAst body = parse_stmtseq(pr);
@@ -600,6 +589,8 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
       break;
     }
 
+    sbAstOp ast_op = infix->ast_op;
+
     next_token(pr); /* consume operator token */
 
     sbAst rhs;
@@ -611,6 +602,16 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
     } else if (op.type == T_LBRACKET) {
       /* indexing */
       rhs = parse_expr(pr, 0);
+      if (rhs == NO_NODE) return syntax_error(pr);
+
+      if (expect(pr, T_TWODOT)) {
+        /* Range indexing */
+        ast_op = AST_OP_RANGEINDEX;
+        sbAst end_range = parse_expr(pr, 0);
+        if (end_range == NO_NODE) return syntax_error(pr);
+        rhs = binop_node(pr, AST_OP_RANGE, rhs, end_range);
+      }
+
       if (!expect(pr, T_RBRACKET)) return syntax_error(pr);
     } else if (op.type == T_DOT || op.type == T_ARROW) {
       /* . and -> parse an identifier to their right as a symbol that will
@@ -641,7 +642,7 @@ static sbAst parse_expr(hParser pr, u8 min_precedence) {
     }
 
     if (ast_type == AST_NODE_OP) {
-      lhs = binop_node(pr, infix->ast_op, lhs, rhs);
+      lhs = binop_node(pr, ast_op, lhs, rhs);
     } else {
       lhs = seq_node(pr, ast_type, lhs, rhs);
     }

@@ -2,6 +2,7 @@
 
 #include "gc/gcinfo.h"
 #include "vm/exec.h"
+#include "mem/debug.h"
 
 #define LIST_PER_BLOCK 256
 #define METHOD_IS(name) (!sbstrncmp(method_name, name, sizeof(name)))
@@ -30,6 +31,17 @@ hList sbList_new(usize capacity) {
   sbList *l = sbPool_alloc(&g_list_pool, &index);
   if (capacity < 4) capacity = 4;
   sbBuffer_initialize(&l->items, capacity * sizeof(hV));
+  return index;
+}
+
+hList sbList_of(usize length, hV *items) {
+  usize index;
+  usize capacity = length;
+  sbList *l = sbPool_alloc(&g_list_pool, &index);
+  if (capacity < 4) capacity = 4;
+  sbBuffer_initialize(&l->items, capacity * sizeof(hV));
+  sbBuffer_set_size(&l->items, length * sizeof(hV));
+  memcpy(l->items.data, items, length * sizeof(hV));
   return index;
 }
 
