@@ -113,7 +113,7 @@ void sbLib_resolve_property(hVm vm) {
 
   hV *method_name_val = sbVm_pop(vm);
   if (method_name_val->type != IT_SYMBOL) {
-    PANIC("method name must be symbol! (is %zd, target %zd)", method_name_val->type, target->type);
+    PANIC("method name must be symbol! (is %lld, target %lld)", (long long)method_name_val->type, (long long)target->type);
   }
 
   sbLibTable *table_to_use = find_method_table(target);

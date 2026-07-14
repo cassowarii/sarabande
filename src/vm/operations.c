@@ -44,7 +44,7 @@ hV sbV_mod(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     return sbV_int(a->integer % b->integer);
   } else {
-    PANIC("todo %zd", a->type);
+    PANIC("todo %lld", (long long)a->type);
   }
 }
 
@@ -170,7 +170,7 @@ hV sbV_rangeindex(hV *a, hV *b, hV *c) {
       const char *strdata = sbString_get_value(a->string, scratch, &length);
       if (min >= max || min >= length || max < 0) {
         /* backwards or out of range */
-        return sbV_empty_string(0);
+        return sbV_empty_string();
       } else {
         /* now we know 0 <= max, min < max, min < length. clip min and max to bounds */
         if (max >= length) max = length;
