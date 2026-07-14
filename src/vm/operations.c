@@ -91,7 +91,7 @@ hV sbV_lt(const hV *a, const hV *b) {
       return HVBOOL(a->float_val < b->float_val);
     }
   } else {
-    PANIC("todo");
+    PANIC("todo %lld", (long long)a->type);
   }
 }
 

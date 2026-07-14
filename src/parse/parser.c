@@ -250,7 +250,14 @@ static void fprint_left_error_margin(FILE *out, usize line_num) {
 static sbAst syntax_error(hParser pr) {
   if (pr->error_state) return ERROR_NODE;
 
-  sbLexToken unexpected_token = peek_ahead(pr, 0);
+  i32 peek_amount = 0;
+  sbLexToken unexpected_token;
+  do {
+    /* find first non-invisible token to report error */
+    unexpected_token = peek_ahead(pr, peek_amount);
+    peek_amount ++;
+  } while (unexpected_token.invisible);
+
   if (unexpected_token.type == T_ERROR) {
     fprintf(stderr, "syntax error: invalid character");
   } else if (unexpected_token.type == T_WRONGBRACKET) {
@@ -492,8 +499,10 @@ static sbAst parse_inside_hash(hParser pr) {
 
   do {
     sbAst key = parse_hash_key(pr);
-    if (key == NO_NODE) break;
-    if (!expect(pr, ':')) return syntax_error(pr);
+    if (!expect(pr, ':')) {
+      if (key == NO_NODE) break;
+      return syntax_error(pr);
+    }
     sbAst value = parse_expr(pr, 0);
 
     *put_here = seq_node(pr, AST_NODE_NEXT, seq_node(pr, AST_NODE_HASHENTRY, key, value), NO_NODE);

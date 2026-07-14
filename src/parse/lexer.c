@@ -144,7 +144,10 @@ static flag insert_semicolon_after(sbTokenType type) {
 
 static flag cancel_semicolon_before(sbTokenType type) {
     return type == T_DOT
-        || type == T_PIPE;
+        || type == T_PIPE
+        || type == T_RPAREN
+        || type == T_RBRACKET
+        || type == T_RBRACE;
 }
 
 /* identifier + space + one of these gets a ( inserted */

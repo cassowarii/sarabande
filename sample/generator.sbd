@@ -1,5 +1,7 @@
 let generator = (=> {
   let instance_methods = {
+    next: => f { f },
+
     filter: => f {
       => pred {
         generator => {
@@ -49,7 +51,38 @@ let generator = (=> {
           if ended {
             last = make_next(last)
           }
+
           last
+        }
+      }
+    },
+
+    continue2: => f {
+      => make_next {
+        let last1 = nil
+        let last2 = nil
+        let ended = false
+        generator => {
+          if not ended {
+            let this_one = f()
+            if this_one != nil {
+              last1 = last2
+              last2 = this_one
+            } else {
+              ended = true
+            }
+          }
+
+          if ended {
+            let this_one = nil
+            if last1 != nil and last2 != nil {
+              this_one = make_next(last1, last2)
+            }
+            last1 = last2
+            last2 = this_one
+          }
+
+          last2
         }
       }
     },
@@ -58,13 +91,35 @@ let generator = (=> {
       => cond {
         generator => {
           let result = f()
-          if result == nil or cond result {
+          if result == nil {
+            nil
+          } else if cond result {
             nil
           } else {
             result
           }
         }
       }
+    },
+
+    each: => f {
+      => callback {
+        generator => {
+          let result = f()
+          callback(result) unless result == nil
+          result
+        }
+      }
+    },
+
+    empty?: => f {
+      f() == nil
+    },
+
+    run: => f {
+      repeat {
+        let result = f()
+      } until result == nil
     },
 
     reduce: => f {
@@ -77,19 +132,14 @@ let generator = (=> {
         value
       }
     },
-
-    each: => f {
-      => callback {
-        repeat {
-          let result = f()
-          callback(result) unless result == nil
-        } while result != nil
-      }
-    },
   }
 
   let class_methods = {
     of: => ...list {
+      generator::from_list list
+    },
+
+    from_list: => list {
       let index = 0
       generator => {
         if index >= list.length {
@@ -108,21 +158,68 @@ let generator = (=> {
       class_methods(op::index)
     } else {
       => method {
-        if method == :next {
-          f
-        } else {
-          instance_methods[method](f)
-        }
+        instance_methods[method](f)
       }
     }
   }
 })()
 
-let sum_odd_squares_under_1_000_000 = generator::of(1)
-  .continue(=> a { a + 1 })
-  .map(=> a { a * a })
-  .filter(=> a { not a %% 2 })
-  .upuntil(=> a { a >= 1_000_000 })
-  .reduce(0, => a, b { a + b })
+# project euler 0
+println (
+  list::iota1 130_000
+    .filter => n { not (n %% 2) }
+    .map => n { n * n }
+    .reduce 0, => a, b { a + b }
+)
 
-println sum_odd_squares_under_1_000_000
+# project euler 1
+println (
+  generator::of 1
+    .continue => a { a + 1 }
+    .upuntil => a { a >= 1000 }
+    .filter => num { [3, 5].any? => factor { num %% factor } }
+    .reduce 0, => a, b { a + b }
+)
+
+# project euler 2
+println (
+  generator::from_list [0, 1]
+    .continue2 => a, b { a + b }
+    .upuntil => a { a >= 40_000_000 }
+    .filter => a { a %% 2 }
+    .reduce(0, => a, b { a + b })
+)
+
+# project euler 3
+def factors num {
+  generator::of 2
+    .continue => a { a + 1 }
+    .upuntil => a { a >= math::sqrt num }
+    .filter => a { num %% a }
+}
+
+println (
+  factors 600851475143
+    .filter(=> a { factors(a).empty? })
+    .reduce(0, math::max)
+)
+
+# project euler 4
+def is_palindrome num {
+  string::from num | _ == _.split().reverse().join()
+}
+
+println (
+  generator::of 999
+    .continue => a { a - 1 }
+    .upuntil => a { a < 100 }
+    .map => a {
+      generator::of 999
+        .continue => b { b - 1 }
+        .upuntil => b { b < 100 }
+        .map => b { a * b }
+        .filter => p { is_palindrome p }
+        .reduce 0, math::max
+    }
+    .reduce 0, math::max
+)
