@@ -9,8 +9,9 @@
 sbPool g_hashtable_pool = {0};
 
 typedef struct hashtbl {
-  usize size;
+  usize capacity;
   usize used;
+  usize n_elems;
   hHash handle;
   flag allocated;
   flag is_inline;
@@ -115,11 +116,16 @@ void sbHash_delete(hHash h, hV *key, hV *value) {
   delete_key(t, key);
 }
 
+usize sbHash_get_size(hHash h) {
+  hashtbl *t = find_tbl_for_handle(h);
+  return t->n_elems;
+}
+
 /* --- */
 
 static void set_hashtbl_size(hashtbl *t, usize new_size, flag rehash_all) {
   if (new_size < INLINE_TABLE_LENGTH) new_size = INLINE_TABLE_LENGTH;
-  if (new_size < t->size) PANIC("cannot shrink hashtable allocation");
+  if (new_size < t->capacity) PANIC("cannot shrink hashtable allocation");
 
   if (new_size == INLINE_TABLE_LENGTH) {
     t->is_inline = 1;
@@ -129,7 +135,7 @@ static void set_hashtbl_size(hashtbl *t, usize new_size, flag rehash_all) {
     if (rehash_all) {
       hV *current_keys, *current_values;
       get_ptrs_for_tbl(t, &current_keys, &current_values);
-      for (usize i = 0; i < t->size; i++) {
+      for (usize i = 0; i < t->capacity; i++) {
         if (current_keys[i].type == IT_NOTHING || current_keys[i].type == ITX_TOMBSTONE) continue;
         set_key_in_array(new_keys, new_values, new_size, &current_keys[i], &current_values[i]);
         /* adding a new k/v pair will retain the values, so we need to release them
@@ -148,11 +154,11 @@ static void set_hashtbl_size(hashtbl *t, usize new_size, flag rehash_all) {
     t->external.values = new_values;
     t->is_inline = 0;
   }
-  t->size = new_size;
+  t->capacity = new_size;
 }
 
 static hV *get_key_ptr_for_tbl(hashtbl *t, usize *length_out) {
-  if (length_out) *length_out = t->size;
+  if (length_out) *length_out = t->capacity;
   if (t->is_inline) {
     return t->internal.keys;
   } else {
@@ -186,7 +192,7 @@ static usize find_key_index_in_array(hV *keys, usize length, hV *key) {
 }
 
 static usize find_index_by_key(hashtbl *t, hV *key) {
-  return find_key_index_in_array(get_key_ptr_for_tbl(t, NULL), t->size, key);
+  return find_key_index_in_array(get_key_ptr_for_tbl(t, NULL), t->capacity, key);
 }
 
 static usize set_key_in_array(hV *keys, hV *values, usize length, hV *key, hV *value) {
@@ -226,8 +232,9 @@ static usize set_key(hashtbl *t, hV *key, hV *value) {
     keys[index] = *key;
     values[index] = *value;
     t->used ++;
-    if (t->used >= t->size * 3 / 4) {
-      set_hashtbl_size(t, t->size * 2, TRUE);
+    t->n_elems ++;
+    if (t->used >= t->capacity * 3 / 4) {
+      set_hashtbl_size(t, t->capacity * 3 / 2, TRUE);
     }
   } else {
     /* replacing something that already exists. we can keep
@@ -247,6 +254,7 @@ static hV delete_key(hashtbl *t, hV *key) {
   get_ptrs_for_tbl(t, &keys, &values);
   hV to_return = values[index];
   keys[index].type = ITX_TOMBSTONE;
+  t->n_elems --;
   return to_return;
 }
 

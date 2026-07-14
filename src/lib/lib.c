@@ -21,6 +21,7 @@ void sbLib_sys_init() {
   sbString_create_methods();
   sbInteger_create_methods();
   sbFloat_create_methods();
+  sbHash_create_methods();
 }
 
 void sbLib_sys_deinit() {
@@ -28,6 +29,7 @@ void sbLib_sys_deinit() {
   sbLibTable_deinitialize(&g_string_methods);
   sbLibTable_deinitialize(&g_integer_methods);
   sbLibTable_deinitialize(&g_float_methods);
+  sbLibTable_deinitialize(&g_hash_methods);
 
   sbLibTable_deinitialize(&g_global_module);
 }
@@ -85,7 +87,9 @@ void sbLib_resolve_method(hVm vm) {
         if (num_params >= f->min_args && (num_params <= f->max_args || f->max_args == -1)) {
           f->behavior(vm, target, num_params);
         } else {
-          PANIC("Wrong number of arguments passed to method '%s'! (expected %d~%d)", sbSymbol_name(method_name_val->symbol), f->min_args, f->max_args);
+          sbVm_print_stack(vm);
+          PANIC("Wrong number of arguments passed to method '%s'! (expected %d~%d, got %lld)",
+              sbSymbol_name(method_name_val->symbol), f->min_args, f->max_args, (long long)num_params);
         }
       }
     } else {
@@ -109,7 +113,7 @@ void sbLib_resolve_property(hVm vm) {
 
   hV *method_name_val = sbVm_pop(vm);
   if (method_name_val->type != IT_SYMBOL) {
-    PANIC("method name must be symbol!");
+    PANIC("method name must be symbol! (is %zd, target %zd)", method_name_val->type, target->type);
   }
 
   sbLibTable *table_to_use = find_method_table(target);
@@ -167,6 +171,8 @@ static sbLibTable *find_method_table(hV *target) {
       return &g_integer_methods;
     case IT_FLOAT:
       return &g_float_methods;
+    case IT_HASH:
+      return &g_hash_methods;
     default:
       return NULL;
   }

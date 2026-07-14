@@ -5,6 +5,7 @@
 #include "data/reference.h"
 #include "data/closure.h"
 #include "lib/lib.h"
+#include "lib/sentinel.h"
 
 void call_block(hVm vm, usize block_id, hClosure closure);
 void call_builtin(hVm vm, hV *to_call);
@@ -72,6 +73,10 @@ hV *sbVm_pop(hVm vm) {
   return pop_stack(vm);
 }
 
+hV *sbVm_npop(hVm vm, usize how_many) {
+  return npop_stack(vm, how_many);
+}
+
 hV *sbVm_peek(hVm vm, usize where) {
   return peek_stack(vm, where);
 }
@@ -97,7 +102,7 @@ void sbVm_call_func(hVm vm, hV *func) {
 void sbVm_transfer_to_func(hVm vm, hV *func) {
   /* tail call */
   return_from_block(vm);
-  call_block(vm, func->type, func->closure);
+  sbVm_call_func(vm, func);
 }
 
 void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
@@ -189,6 +194,8 @@ void call_bound_method(hVm vm, hV *to_call) {
   }
   peek_stack(vm, 0)->integer ++;
   push_stack(vm, sbRef_deref(ref));
+
+  /* resolve method normally */
   sbLib_resolve_method(vm);
 }
 
@@ -645,11 +652,7 @@ void execute_instruction(hVm vm) {
       sbV_decr(v);
       break;
     case BC_OP_INDEX:
-      v = peek_stack(vm, 1);
-      w = peek_stack(vm, 0);
-      x = sbV_index(v, w);
-      npop_stack(vm, 2);
-      push_stack(vm, x);
+      sbV_index(vm);
       break;
     case BC_OP_RANGEINDEX:
       v = peek_stack(vm, 2);

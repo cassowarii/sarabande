@@ -390,8 +390,20 @@ static void compute_next_token(hLexer lx) {
         unstack_all_invisible_parentheses(lx);
     }
 
+    flag at_line_start;
+    switch (lx->last_token_seen.type) {
+      case ';':
+      case '{':
+      case '}':
+      case T_rELSE:
+        at_line_start = TRUE;
+        break;
+      default:
+        at_line_start = FALSE;
+    }
+
     if (begins_brace_terminated_state(token.type)
-        || (begins_brace_terminated_state_at_line_start(token.type) && lx->last_token_seen.type == ';')) {
+          || (begins_brace_terminated_state_at_line_start(token.type) && at_line_start)) {
         /* don't start brace-terminated state if we are directly after a '}' (otherwise it gets
          * confused by things like repeat..until */
         if (lx->last_token_seen.type != '}') {

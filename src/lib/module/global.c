@@ -37,6 +37,9 @@ void sbLib_loadmodule_global() {
   sbLib_loadmodule_list();
   REGISTER_VALUE(&g_global_module, "list", &HVMODULE(&g_list_module));
 
+  sbLib_loadmodule_op();
+  REGISTER_VALUE(&g_global_module, "op", &HVMODULE(&g_op_module));
+
   sbLib_loadmodule_math();
   REGISTER_VALUE(&g_global_module, "math", &HVMODULE(&g_math_module));
 }

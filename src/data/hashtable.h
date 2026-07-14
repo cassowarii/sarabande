@@ -23,3 +23,5 @@ void sbHash_insert(hHash h, hV *key, hV *value);
 hV *sbHash_find_or_insert(hHash h, hV *key, hV *value);
 
 void sbHash_delete(hHash h, hV *key, hV *value);
+
+usize sbHash_get_size(hHash h);

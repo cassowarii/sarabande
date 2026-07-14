@@ -1,0 +1,128 @@
+let generator = (=> {
+  let instance_methods = {
+    filter: => f {
+      => pred {
+        generator => {
+          let result = nil
+          # boolean operators don't short circuit currently, oops
+          let done = false
+          repeat {
+            result = f()
+            if result == nil {
+              done = true
+            } else if pred result {
+              done = true
+            }
+          } while not done
+          result
+        }
+      }
+    },
+
+    map: => f {
+      => transform {
+        generator => {
+          let result = f()
+          if result != nil {
+            transform(result)
+          } else {
+            nil
+          }
+        }
+      }
+    },
+
+    continue: => f {
+      => make_next {
+        let last = nil
+        let ended = false
+        generator => {
+          if not ended {
+            let this_one = f()
+            if this_one != nil {
+              last = this_one
+            } else {
+              ended = true
+            }
+          }
+
+          if ended {
+            last = make_next(last)
+          }
+          last
+        }
+      }
+    },
+
+    upuntil: => f {
+      => cond {
+        generator => {
+          let result = f()
+          if result == nil or cond result {
+            nil
+          } else {
+            result
+          }
+        }
+      }
+    },
+
+    reduce: => f {
+      => init, combine {
+        let value = init
+        repeat {
+          let result = f()
+          value = combine(result, value) unless result == nil
+        } while result != nil
+        value
+      }
+    },
+
+    each: => f {
+      => callback {
+        repeat {
+          let result = f()
+          callback(result) unless result == nil
+        } while result != nil
+      }
+    },
+  }
+
+  let class_methods = {
+    of: => ...list {
+      let index = 0
+      generator => {
+        if index >= list.length {
+          nil
+        } else {
+          let result = list[index]
+          index = index + 1
+          result
+        }
+      }
+    }
+  }
+
+  => f {
+    if f == op::index {
+      class_methods(op::index)
+    } else {
+      => method {
+        if method == :next {
+          f
+        } else {
+          instance_methods[method](f)
+        }
+      }
+    }
+  }
+})()
+
+let sum_odd_squares_under_1_000_000 = generator::of(1)
+  .continue(=> a { a + 1 })
+  .map(=> a { a * a })
+  .filter(=> a { not a %% 2 })
+  .upuntil(=> a { a >= 1_000_000 })
+  .reduce(0, => a, b { a + b })
+
+println sum_odd_squares_under_1_000_000

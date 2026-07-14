@@ -97,6 +97,8 @@ void sbVm_push_immediate(hVm vm, hV *value);
 
 hV *sbVm_pop(hVm vm);
 
+hV *sbVm_npop(hVm vm, usize how_many);
+
 hV *sbVm_peek(hVm vm, usize where);
 
 void sbVm_swap(hVm vm);

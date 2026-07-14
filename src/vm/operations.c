@@ -6,6 +6,7 @@
 #include "data/hashtable.h"
 #include "data/string.h"
 #include "lib/table.h"
+#include "lib/sentinel.h"
 
 hV sbV_add(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
@@ -43,7 +44,7 @@ hV sbV_mod(const hV *a, const hV *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     return sbV_int(a->integer % b->integer);
   } else {
-    PANIC("todo");
+    PANIC("todo %zd", a->type);
   }
 }
 
@@ -126,19 +127,24 @@ hV sbV_append(hV *a, hV *b) {
   }
 }
 
-hV *sbV_index(hV *a, hV *b) {
+void sbV_index(hVm vm) {
+  hV *a = sbVm_peek(vm, 1);
+  hV *b = sbVm_peek(vm, 0);
   if (a->type == IT_LIST && b->type == IT_INTEGER) {
-    return sbList_index(a->list, b->integer);
-  } else if (a->type == IT_HASH) {
-    return sbHash_find(a->hash, b);
-  } else if (a->type == IT_MODULE) {
-    if (b->type == IT_SYMBOL) {
-      return sbLibTable_find_value(a->module, b->symbol);
-    } else {
-      PANIC("module cannot be indexed by non-symbol");
-    }
+    sbVm_npop(vm, 2);
+    hV *result = sbList_index(a->list, b->integer);
+    sbVm_push(vm, result);
+  } else if (a->type == IT_MODULE && b->type == IT_SYMBOL) {
+    sbVm_npop(vm, 2);
+    hV *result = sbLibTable_find_value(a->module, b->symbol);
+    sbVm_push(vm, result);
   } else {
-    PANIC("todo %lld %lld", (long long)a->type, (long long)b->type);
+    sbVm_swap(vm);                                      /* b a */
+    sbVm_push_immediate(vm, &HVSYM(S_OP_INDEX));        /* b a op::index */
+    sbVm_swap(vm);                                      /* b op::index a */
+    sbVm_push_immediate(vm, &HVINT(2));                 /* b op::index a 2 */
+    sbVm_swap(vm);                                      /* b op::index 2 a */
+    sbLib_resolve_method(vm);
   }
 }
 
