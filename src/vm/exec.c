@@ -23,13 +23,11 @@ void print_stack(hVm vm);
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
   *vm = (sbVm) {0};
   vm->vstack = malloc(stacksize);
-  vm->xstack = malloc(stacksize);
   vm->stacksize = stacksize;
   vm->rstack = malloc(rstacksize);
   vm->rstacksize = rstacksize;
 
   vm->vsp = vm->vstack;
-  vm->xsp = vm->xstack;
   vm->rsp = vm->rstack;
   vm->fp = (sbVmStackFrame*)vm->rstack;
 
@@ -38,7 +36,6 @@ void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) 
 
 void sbVm_deinitialize(hVm vm) {
   free(vm->vstack);
-  free(vm->xstack);
   free(vm->rstack);
   *vm = (sbVm) {0};
 }
@@ -183,7 +180,6 @@ void call_bound_method(hVm vm, hVal *to_call) {
 
   /* bound method is just a symbol + a closure containing one variable */
   hSymbol sym = (hSymbol)(to_call->type & ~IT_FLAG_BOUND_METHOD);
-  hRef ref = (to_call->ref);
 
   /* we should already have parameters, so we just need to line it back up
    * on the stack and call the method again */
@@ -193,7 +189,7 @@ void call_bound_method(hVm vm, hVal *to_call) {
     CHECK("bound method call should receive an integer arg count!");
   }
   peek_stack(vm, 0)->integer ++;
-  push_stack(vm, sbRef_deref(ref));
+  push_stack(vm, sbVar_get_attached_ref(to_call));
 
   /* resolve method normally */
   sbLib_resolve_method(vm);
@@ -201,15 +197,8 @@ void call_bound_method(hVm vm, hVal *to_call) {
 
 void return_from_block(hVm vm) {
   for (usize i = 0; i < vm->fp->num_locals; i++) {
-    sbV_release(&vm->fp->locals[i]);
+    sbV_release(&vm->fp->locals[i].value);
   }
-
-  /* move thing that is being returned to the xstack: if we were
-   * originally returning a local variable, we don't want it to get
-   * overwritten by a subsequent function call (and if we were
-   * already returning an immediate value, it does nothing) */
-  ((hVal*)(vm->xsp))[-1] = *((hVal**)(vm->vsp))[-1];
-  ((hVal**)(vm->vsp))[-1] = &((hVal*)(vm->xsp))[-1];
 
   sbVmStackFrame *frame = (sbVmStackFrame*)vm->fp;
 
@@ -228,75 +217,40 @@ void debug_print_hv(const hVal *value) {
 }
 
 void store_local(hVm vm, usize local_index, const hVal *value) {
-  /* release whatever was in the slot before */
-  sbV_release(&vm->fp->locals[local_index]);
-  sbV_retain(value);
-  vm->fp->locals[local_index] = *value;
+  sbVar_set_value(&vm->fp->locals[local_index], value);
 }
 
 void push_stack(hVm vm, hVal *value) {
-  *(hVal**)vm->vsp = value;
+  *(hVal*)vm->vsp = *value;
   vm->vsp += sizeof(hVal*);
-  vm->xsp += sizeof(hVal);
 }
 
 void push_stack_immediate(hVm vm, const hVal *value) {
-  /* save it on our own stack */
-  *(hVal*)vm->xsp = *value;
-  *(hVal**)vm->vsp = (hVal*)vm->xsp;
+  *(hVal*)vm->vsp = *value;
   vm->vsp += sizeof(hVal*);
-  vm->xsp += sizeof(hVal);
 }
 
 hVal *pop_stack(hVm vm) {
   vm->vsp -= sizeof(hVal*);
-  vm->xsp -= sizeof(hVal);
-  return *(hVal**)vm->vsp;
+  return (hVal*)vm->vsp;
 }
 
 hVal *npop_stack(hVm vm, usize count) {
   vm->vsp -= count * sizeof(hVal*);
-  vm->xsp -= count * sizeof(hVal);
-  return *(hVal**)vm->vsp;
+  return (hVal*)vm->vsp;
 }
 
 void swap_stack_top(hVm vm) {
-  hVal **first_v = &((hVal**)vm->vsp)[-1];
-  hVal **second_v = &((hVal**)vm->vsp)[-2];
-  hVal *first_x = &((hVal*)vm->xsp)[-1];
-  hVal *second_x = &((hVal*)vm->xsp)[-2];
+  hVal *first_v = &((hVal*)vm->vsp)[-1];
+  hVal *second_v = &((hVal*)vm->vsp)[-2];
 
-  /* if we're swapping things that are allocated on the x-stack,
-   * we have to swap their pointers as well so we don't accidentally
-   * overwrite what they're pointing to. but if they're pointing
-   * somewhere else, we don't care */
-
-  /* x2 x1    &v2 &v1 (might be &x2 &x1)*/
-
-  hVal xtmp = *second_x;
-  if (*first_v == first_x) {
-                          /* x2a x1a   &v2  &x1a */
-    *second_x = *first_x; /* x1b x1a   &v2  &x1a */
-    *first_v = second_x;  /* x1b x1a   &v2  &x1b */
-  }
-
-  if (*second_v == second_x) {
-                          /* x2a x1a   &x2a &v1  */
-    *first_x = xtmp;      /* x2a x2b   &x2a &v1  */
-    *second_v = first_x;  /* x2a x2b   &x2b &v1  */
-  }
-
-  hVal *vtmp = *first_v;    /* x2  x1    &v2  &v1  */
-  *first_v = *second_v;   /* x2  x1    &v2  &v2  */
-  *second_v = vtmp;       /* x2  x1    &v1  &v2  */
+  hVal tmp = *first_v;   /* x2  x1    &v2  &v1  */
+  *first_v = *second_v;  /* x2  x1    &v2  &v2  */
+  *second_v = tmp;       /* x2  x1    &v1  &v2  */
 }
 
 hVal *peek_stack(hVm vm, isize offset) {
-  return ((hVal**)(vm->vsp))[-offset - 1];
-}
-
-hVal *peek_xstack(hVm vm, isize offset) {
-  return &((hVal*)(vm->xsp))[-offset - 1];
+  return &((hVal*)(vm->vsp))[-offset - 1];
 }
 
 sbOpcode get_opcode(hVm vm) {
@@ -373,6 +327,7 @@ void execute_instruction(hVm vm) {
   u64 param;
   usize count;
   hVal *v, *w, *x, res;
+  sbVar *vars;
 
   switch (op) {
     case BC_NOP:
@@ -395,41 +350,32 @@ void execute_instruction(hVm vm) {
       break;
     case BC_LD_VAR:
       param = get_param(vm);
-      push_stack(vm, &vm->fp->locals[param]);
+      res = sbVar_get_value(&vm->fp->locals[param]);
+      push_stack(vm, &res);
       break;
-    case BC_LD_REF:
+    case BC_LD_LREF:
       param = get_param(vm);
-      w = &vm->fp->locals[param];
-      if (w->type == IT_NOTHING) {
-        /* create new ref */
-        store_local(vm, param, &HVREF(sbRef_create(&HVNIL)));
-        w = &vm->fp->locals[param];
-      }
-      push_stack(vm, w);
+      res = sbVar_get_lvalue_ref(&vm->fp->locals[param]);
+      push_stack(vm, &res);
+      break;
+    case BC_LD_RREF:
+      param = get_param(vm);
+      res = sbVar_get_rvalue_ref(&vm->fp->locals[param]);
+      push_stack(vm, &res);
       break;
     case BC_LD_UPVAL:
       /* Hey, was there upval in there? */
       param = get_param(vm);
-      v = sbClosure_get_var(vm->fp->block_func.closure, param);
-      push_stack(vm, v);
+      res = sbClosure_get_value(vm->fp->block_func.closure, param);
+      push_stack(vm, &res);
       break;
     case BC_LD_UPREF:
       param = get_param(vm);
-      res = sbClosure_get_ref(vm->fp->block_func.closure, param);
-      push_stack_immediate(vm, &res);
+      push_stack(vm, &HVREF(sbClosure_get_var(vm->fp->block_func.closure, param)));
       break;
     case BC_LD_BLK:
       param = get_param(vm);
       push_stack_immediate(vm, &HVFUNC(param, 0));
-      break;
-    case BC_LD_IND:
-      param = get_param(vm);
-      v = &vm->fp->locals[param];
-      if (v->type != IT_REF) {
-        CHECK("indirect variables should be of type reference! (%lld)", (long long)v->type);
-      }
-      w = sbRef_deref(v->ref);
-      push_stack(vm, w);
       break;
     case BC_LD_TRUE:
       push_stack_immediate(vm, &HVBOOL(1));
@@ -449,21 +395,7 @@ void execute_instruction(hVm vm) {
     case BC_ST_UPVAL:
       param = get_param(vm);
       v = pop_stack(vm);
-      sbClosure_set_var(vm->fp->block_func.closure, param, v);
-      break;
-    case BC_ST_IND:
-      param = get_param(vm);
-      v = &vm->fp->locals[param];
-      w = peek_stack(vm, 0);
-      if (v->type == IT_NOTHING) {
-        hRef new_ref = sbRef_create(w);
-        store_local(vm, param, &HVREF(new_ref));
-      } else if (v->type == IT_REF) {
-        sbRef_set_ref(v->ref, w);
-      } else {
-        CHECK("indirect variables should be of type reference! (%lld)", (long long)v->type);
-      }
-      pop_stack(vm);
+      sbClosure_set_value(vm->fp->block_func.closure, param, v);
       break;
     case BC_ST_ARG:
       param = get_param(vm);
@@ -479,31 +411,6 @@ void execute_instruction(hVm vm) {
       if (v->integer > 0) {
         /* if last integer, don't put the 0 count back on the stack */
         push_stack_immediate(vm, v);
-      }
-      break;
-    case BC_ST_ARG_IND:
-      param = get_param(vm);
-      x = pop_stack(vm); /* argument count */
-      if (x->type != IT_INTEGER) {
-        /* internal error! this should be generated correctly */
-        CHECK("calling convention violation: number of args should be an integer");
-      }
-
-      v = &vm->fp->locals[param];
-      w = peek_stack(vm, 0); /* argument value */
-      if (v->type == IT_NOTHING) {
-        hRef new_ref = sbRef_create(w);
-        store_local(vm, param, &HVREF(new_ref));
-      } else if (v->type == IT_REF) {
-        sbRef_set_ref(v->ref, w);
-      } else {
-        CHECK("indirect variables should be of type reference! (%lld)", (long long)v->type);
-      }
-      pop_stack(vm);
-      x->integer --;
-      if (x->integer > 0) {
-        /* if last integer, don't put the 0 count back on the stack */
-        push_stack(vm, x);
       }
       break;
     case BC_POP:
@@ -684,7 +591,7 @@ void execute_instruction(hVm vm) {
         if (w->type != IT_REF) {
           CHECK("internal violation: closure should receive a set of reference variables (got %lld)", (long long)w->type);
         }
-        sbClosure_set_ref(c, param, w);
+        sbClosure_set_var(c, param, sbVar_deref(w));
         pop_stack(vm);
       }
       v->closure = c;
@@ -735,9 +642,9 @@ void execute_instruction(hVm vm) {
         /* internal error! this should be generated correctly */
         CHECK("internal violation: LIST_SPILL should receive an integer on top of stack");
       }
-      x = sbList_get_value(v->list, &count);
+      vars = sbList_get_value(v->list, &count);
       for (usize i = count - 1; ; i--) {
-        push_stack(vm, &x[i]);
+        push_stack(vm, &vars[i].value);
         if (i == 0) break;
       }
       res.integer += count;

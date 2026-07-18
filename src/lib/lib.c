@@ -136,8 +136,9 @@ void sbLib_resolve_property(hVm vm) {
       } else {
         /* it is a method, but it is being called without parameters.
          * annoyingly, we need to construct a bound version of this method. */
-        hRef ref = sbRef_create(target);
-        sbVm_push_immediate(vm, &HVBOUNDMETHOD(method_name_val->symbol, ref));
+        hVal bound_symbol = HVBOUNDMETHOD(method_name_val->symbol);
+        sbVar_set_attached_ref(&bound_symbol, target);
+        sbVm_push_immediate(vm, &bound_symbol);
       }
     } else {
       PANIC("invalid method name for type %lld: %s", (long long)target->type, sbSymbol_name(method_name_val->symbol));

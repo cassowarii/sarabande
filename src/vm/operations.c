@@ -127,13 +127,13 @@ hVal sbV_append(hVal *a, hVal *b) {
   }
 }
 
-void sbV_index(hVm vm) {
+void sbV_index_value(hVm vm) {
   hVal *a = sbVm_peek(vm, 1);
   hVal *b = sbVm_peek(vm, 0);
   if (a->type == IT_LIST && b->type == IT_INTEGER) {
     sbVm_npop(vm, 2);
-    hVal *result = sbList_index(a->list, b->integer);
-    sbVm_push(vm, result);
+    hVal result = sbList_index_value(a->list, b->integer);
+    sbVm_push(vm, &result);
   } else if (a->type == IT_MODULE && b->type == IT_SYMBOL) {
     sbVm_npop(vm, 2);
     hVal *result = sbLibTable_find_value(a->module, b->symbol);
@@ -154,7 +154,7 @@ hVal sbV_rangeindex(hVal *a, hVal *b, hVal *c) {
     i64 min = sbInteger_get_value(b->integer);
     i64 max = sbInteger_get_value(c->integer);
     if (a->type == IT_LIST) {
-      hVal *elements = sbList_get_value(a->list, &length);
+      sbVar *elements = sbList_get_value(a->list, &length);
       if (min >= max || min >= length || max < 0) {
         /* backwards or out of range */
         return sbV_empty_list(0);

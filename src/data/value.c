@@ -1,5 +1,6 @@
 #include "data/value.h"
 
+#include "data/variable.h"
 #include "data/string.h"
 #include "data/list.h"
 #include "data/hashtable.h"
@@ -77,6 +78,9 @@ void sbV_retain(const hVal *a) {
     case IT_INTEGER:
       sbInteger_retain(a->string);
       break;
+    case ITX_HEAPVAR:
+      sbVar_retain(sbVar_deref(a));
+      break;
     default:
       /* nothing */
       break;
@@ -90,6 +94,9 @@ void sbV_release(const hVal *a) {
       break;
     case IT_INTEGER:
       sbInteger_release(a->string);
+      break;
+    case ITX_HEAPVAR:
+      sbVar_release(sbVar_deref(a));
       break;
     default:
       /* nothing */

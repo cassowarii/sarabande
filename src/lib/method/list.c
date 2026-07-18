@@ -30,10 +30,10 @@ static void push(hVm vm, hVal *list, usize num_params) {
 static void reverse(hVm vm, hVal *list, usize num_params) {
   /* TODO maybe mutate in place if no other refs */
   usize length;
-  hVal *elems = sbList_get_value(list->list, &length);
+  sbVar *elems = sbList_get_value(list->list, &length);
   hList new_list = sbList_new(length);
   for (usize i = length - 1; ; i--) {
-    sbList_append(new_list, &elems[i]);
+    sbList_append(new_list, sbVar_get_value_ptr(&elems[i]));
     if (i == 0) break;
   }
   sbList_get_value(new_list, &length);
@@ -52,13 +52,14 @@ static void join(hVm vm, hVal *list, usize num_params) {
     delimiter = delimiter_v->string;
   }
   usize length;
-  hVal *elems = sbList_get_value(list->list, &length);
+  sbVar *elems = sbList_get_value(list->list, &length);
   hString joined = sbString_new("", 0);
   for (usize i = 0; i < length; i++) {
-    if (elems[i].type != IT_STRING) {
+    hVal *v = sbVar_get_value_ptr(&elems[i]);
+    if (v->type != IT_STRING) {
       PANIC("need string to join");
     }
-    joined = sbString_concat(joined, elems[i].string);
+    joined = sbString_concat(joined, v->string);
     if (join_with && i < length - 1) {
       joined = sbString_concat(joined, delimiter);
     }
@@ -119,21 +120,21 @@ sbCFuncStatus list_each_cfunc(hVm vm, flag init) {
     hVal *iterating_list = sbVm_pop(vm);
     hVal *loop_func = sbVm_pop(vm);
     hVal index = HVINT(0);
-    vm->fp->locals[0] = *iterating_list;
-    vm->fp->locals[1] = index;
-    vm->fp->locals[2] = *loop_func;
+    vm->fp->locals[0].value = *iterating_list;
+    vm->fp->locals[1].value = index;
+    vm->fp->locals[2].value = *loop_func;
   } else {
     /* loop func must have finished, so remove its result */
     sbVm_pop(vm);
   }
 
-  usize current_index = vm->fp->locals[1].integer++;
+  usize current_index = vm->fp->locals[1].value.integer++;
   usize length;
-  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  sbVar *iter_values = sbList_get_value(vm->fp->locals[0].value.list, &length);
   if (current_index < length) {
-    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push(vm, sbVar_get_value_ptr(&iter_values[current_index]));
     sbVm_push_immediate(vm, &HVINT(1));
-    sbVm_call_func(vm, &vm->fp->locals[2]);
+    sbVm_call_func(vm, sbVar_get_value_ptr(&vm->fp->locals[2]));
     return CFUNC_NEXT;
   } else {
     /* if index was past the end, callback function won't be called, and we'll exit. return nil */
@@ -150,30 +151,29 @@ sbCFuncStatus list_map_cfunc(hVm vm, flag init) {
     hVal *map_func = sbVm_pop(vm);
     usize length;
     sbList_get_value(iterating_list->list, &length);
-    hVal index = HVINT(0);
     hVal result = sbV_empty_list(length);
 
-    vm->fp->locals[0] = *iterating_list;
-    vm->fp->locals[1] = index;
-    vm->fp->locals[2] = *map_func;
-    vm->fp->locals[3] = result;
+    vm->fp->locals[0].value = *iterating_list;
+    vm->fp->locals[1].value = HVINT(0);
+    vm->fp->locals[2].value = *map_func;
+    vm->fp->locals[3].value = result;
   } else {
     /* get result of map function and append its result to result list */
     hVal *mapped = sbVm_pop(vm);
-    sbList_append(vm->fp->locals[3].list, mapped);
+    sbList_append(vm->fp->locals[3].value.list, mapped);
   }
 
-  usize current_index = vm->fp->locals[1].integer++;
+  usize current_index = vm->fp->locals[1].value.integer++;
   usize length;
-  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  sbVar *iter_values = sbList_get_value(vm->fp->locals[0].value.list, &length);
   if (current_index < length) {
-    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push(vm, sbVar_get_value_ptr(&iter_values[current_index]));
     sbVm_push_immediate(vm, &HVINT(1));
-    sbVm_call_func(vm, &vm->fp->locals[2]);
+    sbVm_call_func(vm, &vm->fp->locals[2].value);
     return CFUNC_NEXT;
   } else {
     /* return result list */
-    sbVm_push_immediate(vm, &vm->fp->locals[3]);
+    sbVm_push_immediate(vm, &vm->fp->locals[3].value);
     return CFUNC_END;
   }
 }
@@ -189,32 +189,32 @@ sbCFuncStatus list_filter_cfunc(hVm vm, flag init) {
     hVal index = HVINT(0);
     hVal result = sbV_empty_list(length);
 
-    vm->fp->locals[0] = *iterating_list;
-    vm->fp->locals[1] = index;
-    vm->fp->locals[2] = *filter_func;
-    vm->fp->locals[3] = result;
+    vm->fp->locals[0].value = *iterating_list;
+    vm->fp->locals[1].value = index;
+    vm->fp->locals[2].value = *filter_func;
+    vm->fp->locals[3].value = result;
   } else {
     /* get result of filter function and append element to result if true */
     hVal *mapped = sbVm_pop(vm);
     hVal *element = sbVm_pop(vm);
     if (!sbV_c_falsy(mapped)) {
-      sbList_append(vm->fp->locals[3].list, element);
+      sbList_append(vm->fp->locals[3].value.list, element);
     }
   }
 
-  usize current_index = vm->fp->locals[1].integer++;
+  usize current_index = vm->fp->locals[1].value.integer++;
   usize length;
-  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  sbVar *iter_values = sbList_get_value(vm->fp->locals[0].value.list, &length);
   if (current_index < length) {
     /* put current value on stack twice: once as parameter for function, once to save for ourselves */
-    sbVm_push(vm, &iter_values[current_index]);
-    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push(vm, sbVar_get_value_ptr(&iter_values[current_index]));
+    sbVm_push(vm, sbVar_get_value_ptr(&iter_values[current_index]));
     sbVm_push_immediate(vm, &HVINT(1));
-    sbVm_call_func(vm, &vm->fp->locals[2]);
+    sbVm_call_func(vm, &vm->fp->locals[2].value);
     return CFUNC_NEXT;
   } else {
     /* return result list */
-    sbVm_push_immediate(vm, &vm->fp->locals[3]);
+    sbVm_push_immediate(vm, &vm->fp->locals[3].value);
     return CFUNC_END;
   }
 }
@@ -230,29 +230,29 @@ sbCFuncStatus list_reduce_cfunc(hVm vm, flag init) {
     sbList_get_value(iterating_list->list, &length);
     hVal index = HVINT(0);
 
-    vm->fp->locals[0] = *iterating_list;
-    vm->fp->locals[1] = index;
-    vm->fp->locals[2] = *reduce_func;
-    vm->fp->locals[3] = *result;
+    vm->fp->locals[0].value = *iterating_list;
+    vm->fp->locals[1].value = index;
+    vm->fp->locals[2].value = *reduce_func;
+    vm->fp->locals[3].value = *result;
   } else {
     /* get result of reduce function */
     hVal *result = sbVm_pop(vm);
-    vm->fp->locals[3] = *result;
+    vm->fp->locals[3].value = *result;
   }
 
-  usize current_index = vm->fp->locals[1].integer++;
+  usize current_index = vm->fp->locals[1].value.integer++;
   usize length;
-  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  sbVar *iter_values = sbList_get_value(vm->fp->locals[0].value.list, &length);
   if (current_index < length) {
     /* put current result and new value on stack, then call callback function */
-    sbVm_push(vm, &vm->fp->locals[3]);
-    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push(vm, &vm->fp->locals[3].value);
+    sbVm_push(vm, sbVar_get_value_ptr(&iter_values[current_index]));
     sbVm_push_immediate(vm, &HVINT(2));
-    sbVm_call_func(vm, &vm->fp->locals[2]);
+    sbVm_call_func(vm, &vm->fp->locals[2].value);
     return CFUNC_NEXT;
   } else {
     /* return result */
-    sbVm_push_immediate(vm, &vm->fp->locals[3]);
+    sbVm_push_immediate(vm, &vm->fp->locals[3].value);
     return CFUNC_END;
   }
 }
@@ -265,9 +265,9 @@ sbCFuncStatus list_any_cfunc(hVm vm, flag init) {
     hVal *pred_func = sbVm_pop(vm);
     hVal index = HVINT(0);
 
-    vm->fp->locals[0] = *iterating_list;
-    vm->fp->locals[1] = index;
-    vm->fp->locals[2] = *pred_func;
+    vm->fp->locals[0].value = *iterating_list;
+    vm->fp->locals[1].value = index;
+    vm->fp->locals[2].value = *pred_func;
   } else {
     /* get result of predicate function */
     hVal *mapped = sbVm_pop(vm);
@@ -279,14 +279,14 @@ sbCFuncStatus list_any_cfunc(hVm vm, flag init) {
   }
 
   /* haven't found any yet... */
-  usize current_index = vm->fp->locals[1].integer++;
+  usize current_index = vm->fp->locals[1].value.integer++;
   usize length;
-  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  sbVar *iter_values = sbList_get_value(vm->fp->locals[0].value.list, &length);
   if (current_index < length) {
     /* try next element */
-    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push(vm, sbVar_get_value_ptr(&iter_values[current_index]));
     sbVm_push_immediate(vm, &HVINT(1));
-    sbVm_call_func(vm, &vm->fp->locals[2]);
+    sbVm_call_func(vm, &vm->fp->locals[2].value);
     return CFUNC_NEXT;
   } else {
     /* no result found */
@@ -303,9 +303,9 @@ sbCFuncStatus list_all_cfunc(hVm vm, flag init) {
     hVal *pred_func = sbVm_pop(vm);
     hVal index = HVINT(0);
 
-    vm->fp->locals[0] = *iterating_list;
-    vm->fp->locals[1] = index;
-    vm->fp->locals[2] = *pred_func;
+    vm->fp->locals[0].value = *iterating_list;
+    vm->fp->locals[1].value = index;
+    vm->fp->locals[2].value = *pred_func;
   } else {
     /* get result of predicate function */
     hVal *mapped = sbVm_pop(vm);
@@ -317,14 +317,14 @@ sbCFuncStatus list_all_cfunc(hVm vm, flag init) {
   }
 
   /* all true so far */
-  usize current_index = vm->fp->locals[1].integer++;
+  usize current_index = vm->fp->locals[1].value.integer++;
   usize length;
-  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  sbVar *iter_values = sbList_get_value(vm->fp->locals[0].value.list, &length);
   if (current_index < length) {
     /* try next element */
-    sbVm_push(vm, &iter_values[current_index]);
+    sbVm_push(vm, sbVar_get_value_ptr(&iter_values[current_index]));
     sbVm_push_immediate(vm, &HVINT(1));
-    sbVm_call_func(vm, &vm->fp->locals[2]);
+    sbVm_call_func(vm, &vm->fp->locals[2].value);
     return CFUNC_NEXT;
   } else {
     /* all passed */

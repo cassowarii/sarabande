@@ -2,6 +2,7 @@
 #define __SARABANDE_DATA_H__
 
 #include "data/value.h"
+#include "data/variable.h"
 
 void data_sys_init();
 

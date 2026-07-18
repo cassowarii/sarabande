@@ -30,37 +30,50 @@ hList sbList_new(usize capacity) {
   usize index;
   sbList *l = sbPool_alloc(&g_list_pool, &index);
   if (capacity < 4) capacity = 4;
-  sbBuffer_initialize(&l->items, capacity * sizeof(hVal));
+  sbBuffer_initialize(&l->items, capacity * sizeof(sbVar));
   return index;
 }
 
-hList sbList_of(usize length, hVal *items) {
+hList sbList_of(usize length, hVar items) {
   usize index;
   usize capacity = length;
   sbList *l = sbPool_alloc(&g_list_pool, &index);
   if (capacity < 4) capacity = 4;
-  sbBuffer_initialize(&l->items, capacity * sizeof(hVal));
-  sbBuffer_set_size(&l->items, length * sizeof(hVal));
-  memcpy(l->items.data, items, length * sizeof(hVal));
+  sbBuffer_initialize(&l->items, capacity * sizeof(sbVar));
+  sbBuffer_set_size(&l->items, length * sizeof(sbVar));
+  memcpy(l->items.data, items, length * sizeof(sbVar));
   return index;
 }
 
 void sbList_append(hList list, hVal *item) {
   sbList *l = get_list_by_handle(list);
   sbV_retain(item);
-  sbBuffer_append(&l->items, item, sizeof(hVal));
+  sbVar new_var = { .value = *item };
+  sbBuffer_append(&l->items, &new_var, sizeof(sbVar));
 }
 
-hVal *sbList_get_value(hList list, usize *length) {
+sbVar *sbList_get_value(hList list, usize *length) {
   sbList *l = get_list_by_handle(list);
-  if (length) *length = l->items.size / sizeof(hVal);
-  return (hVal*)l->items.data;
+  if (length) *length = l->items.size / sizeof(sbVar);
+  return (sbVar*)l->items.data;
 }
 
-hVal *sbList_index(hList list, usize index) {
+hVal sbList_index_value(hList list, usize index) {
   sbList *l = get_list_by_handle(list);
-  hVal *item = &((hVal*)l->items.data)[index];
-  return item;
+  hVar item = &((sbVar*)l->items.data)[index];
+  return sbVar_get_value(item);
+}
+
+hVal sbList_index_lvalue_ref(hList list, usize index) {
+  sbList *l = get_list_by_handle(list);
+  hVar item = &((sbVar*)l->items.data)[index];
+  return sbVar_get_lvalue_ref(item);
+}
+
+hVal sbList_index_rvalue_ref(hList list, usize index) {
+  sbList *l = get_list_by_handle(list);
+  hVar item = &((sbVar*)l->items.data)[index];
+  return sbVar_get_rvalue_ref(item);
 }
 
 /* --- */

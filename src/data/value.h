@@ -11,16 +11,17 @@
 #define HVSYM(s) ((hVal) { .type = IT_SYMBOL, .symbol = s })
 #define HVBOOL(b) ((hVal) { .type = IT_BOOLEAN, .boolean = b })
 #define HVLIST(l) ((hVal) { .type = IT_LIST, .list = l })
-#define HVREF(r) ((hVal) { .type = IT_REF, .ref = r })
+#define HVREF(r) ((hVal) { .type = IT_REF, .ptrdata = r })
 #define HVNIL ((hVal) { .type = IT_NIL })
 #define HVNOTHING ((hVal) {0})
 #define HVFUNC(i, c) ((hVal) { .type = i, .closure = c })
 #define HVBUILTIN(b) ((hVal) { .type = IT_BUILTIN, .builtin = b })
-#define HVBOUNDMETHOD(m, t) ((hVal) { .type = m | IT_FLAG_BOUND_METHOD, .ref = t })
+#define HVBOUNDMETHOD(m) ((hVal) { .type = m | IT_FLAG_BOUND_METHOD })
 #define HVMODULE(m) ((hVal) { .type = IT_MODULE, .module = m })
 
 struct sbVm;
 struct sbLibTable;
+struct sbVar;
 
 typedef u64 hHash;
 typedef u64 hString;
@@ -46,9 +47,10 @@ enum intrinsic_type {
   IT_BUILTIN = -11,    // c function
   IT_MODULE = -12,     // builtin module (math, op...)
   ITX_TOMBSTONE = -13, // <hashtable_tombstone>
+  ITX_HEAPVAR = -14    // <hVar_moved_to_heap>
 };
 
-typedef struct hVal {
+typedef struct hval {
   i64 type;
   union {
     hString string;
@@ -57,12 +59,12 @@ typedef struct hVal {
     hList list;
     hInteger integer;
     hClosure closure;
-    hRef ref;
     u64 boolean;
     double float_val;
     sbBuiltinFunc builtin;
     struct sbLibTable *module;
     u64 data;
+    void *ptrdata;
   };
 } hVal;
 

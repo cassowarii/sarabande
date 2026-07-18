@@ -63,18 +63,16 @@ typedef struct sbVmStackFrame {
     sbRuntimeCFunc c_func;
   };
   usize num_locals;
-  hVal locals[];
+  sbVar locals[];
 } sbVmStackFrame;
 
 typedef struct sbVm {
   u8 *vstack;         /* for calculations */
-  u8 *xstack;         /* parallel to vstack, holds immediate values that are pointed to */
   u8 *rstack;         /* for locals and return addresses, like FORTH */
 
   const u8 *ip;       /* instruction pointer */
   sbVmStackFrame *fp; /* frame pointer */
   u8 *vsp;            /* vstack pointer */
-  u8 *xsp;            /* xstack pointer */
   u8 *rsp;            /* rstack pointer */
 
   usize stacksize;    /* to detect overflow, save these */
