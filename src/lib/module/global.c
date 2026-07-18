@@ -47,11 +47,11 @@ void sbLib_loadmodule_global() {
 /* --- */
 
 sbCFuncStatus print_cfunc(hVm vm, flag init) {
-  hV *args_left;
+  hVal *args_left;
 
   if (!init) {
     /* get value of previous to_string */
-    hV *value = sbVm_pop(vm);
+    hVal *value = sbVm_pop(vm);
     /* TODO: We should probably have some kind of 'implicit convert to string'
      * thing that checks that it's really a string and throws if not, that we
      * can call from multiple places  */

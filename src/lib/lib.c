@@ -9,7 +9,7 @@
 #include "lib/method.h"
 #include "lib/module.h"
 
-static sbLibTable *find_method_table(hV *target);
+static sbLibTable *find_method_table(hVal *target);
 static sbCFuncStatus please_call_again(hVm vm, flag init);
 
 void sbLib_sys_init() {
@@ -35,8 +35,8 @@ void sbLib_sys_deinit() {
 }
 
 void sbLib_resolve_method(hVm vm) {
-  hV *target = sbVm_pop(vm);
-  hV *argc = sbVm_pop(vm);
+  hVal *target = sbVm_pop(vm);
+  hVal *argc = sbVm_pop(vm);
   if (argc->type != IT_INTEGER) {
     CHECK("argc of send should be integer!");
   }
@@ -46,7 +46,7 @@ void sbLib_resolve_method(hVm vm) {
   /* subtract 1 because the method name is itself a param */
   usize num_params = argc->integer - 1;
 
-  hV *method_name_val = sbVm_pop(vm);
+  hVal *method_name_val = sbVm_pop(vm);
   if (method_name_val->type != IT_SYMBOL) {
     PANIC("method name must be symbol!");
   }
@@ -102,8 +102,8 @@ void sbLib_resolve_method(hVm vm) {
  * (non-intrinsic types are always functions, so they can be resolved just by
  *  calling them)*/
 void sbLib_resolve_property(hVm vm) {
-  hV *target = sbVm_pop(vm);
-  hV *argc = sbVm_pop(vm);
+  hVal *target = sbVm_pop(vm);
+  hVal *argc = sbVm_pop(vm);
   if (argc->type != IT_INTEGER) {
     CHECK("argc of send should be integer!");
   }
@@ -111,7 +111,7 @@ void sbLib_resolve_property(hVm vm) {
     PANIC("Illegal number of arguments!");
   }
 
-  hV *method_name_val = sbVm_pop(vm);
+  hVal *method_name_val = sbVm_pop(vm);
   if (method_name_val->type != IT_SYMBOL) {
     PANIC("method name must be symbol! (is %lld, target %lld)", (long long)method_name_val->type, (long long)target->type);
   }
@@ -146,11 +146,11 @@ void sbLib_resolve_property(hVm vm) {
 }
 
 void sbLib_resolve_global(hVm vm) {
-  hV *target = sbVm_pop(vm);
+  hVal *target = sbVm_pop(vm);
   if (target->type != IT_SYMBOL) {
     CHECK("global lookup must be symbol!");
   }
-  hV *v = sbLibTable_find_value(&g_global_module, target->symbol);
+  hVal *v = sbLibTable_find_value(&g_global_module, target->symbol);
   if (v) {
     sbVm_push_immediate(vm, v);
   } else {
@@ -161,7 +161,7 @@ void sbLib_resolve_global(hVm vm) {
 /* --- */
 
 /* function that looks up something in a built-in method table */
-static sbLibTable *find_method_table(hV *target) {
+static sbLibTable *find_method_table(hVal *target) {
   switch(target->type) {
     case IT_LIST:
       return &g_list_methods;
@@ -182,7 +182,7 @@ static sbLibTable *find_method_table(hV *target) {
 /* we have something like a.b(c,d,e), we need to call twice to get result of a(:b)(c,d,e) */
 /* resolve_method should have set us up so we can just call in twice */
 static sbCFuncStatus please_call_again(hVm vm, flag init) {
-  hV *target = sbVm_pop(vm);
+  hVal *target = sbVm_pop(vm);
   if (target->type <= 0) {
     PANIC("i have not implemented partial methods for builtin types yet! i'll get to it");
   }

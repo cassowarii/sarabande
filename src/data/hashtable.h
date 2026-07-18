@@ -12,16 +12,16 @@ void sbHash_sys_deinit();
 
 sbHashValue sbHash_hash_bytes(const char *bytes, usize length);
 
-sbHashValue sbHash_hash_obj(hV *obj);
+sbHashValue sbHash_hash_obj(hVal *obj);
 
 hHash sbHash_create(usize initial_size);
 
-hV *sbHash_find(hHash h, hV *key);
+hVal *sbHash_find(hHash h, hVal *key);
 
-void sbHash_insert(hHash h, hV *key, hV *value);
+void sbHash_insert(hHash h, hVal *key, hVal *value);
 
-hV *sbHash_find_or_insert(hHash h, hV *key, hV *value);
+hVal *sbHash_find_or_insert(hHash h, hVal *key, hVal *value);
 
-void sbHash_delete(hHash h, hV *key, hV *value);
+void sbHash_delete(hHash h, hVal *key, hVal *value);
 
 usize sbHash_get_size(hHash h);

@@ -31,7 +31,7 @@ void sbLib_loadmodule_integer() {
 static sbCFuncStatus from_cfunc(hVm vm, flag init) {
   if (!init) {
     /* get value of previous integer::convert */
-    hV *value = sbVm_peek(vm, 0);
+    hVal *value = sbVm_peek(vm, 0);
     if (value->type != IT_INTEGER) {
       PANIC("integer::convert needs to return an integer");
     }

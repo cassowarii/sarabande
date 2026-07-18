@@ -8,19 +8,19 @@
 
 sbLibTable g_hash_methods;
 
-static void to_hash(hVm vm, hV *target, usize num_params) {
+static void to_hash(hVm vm, hVal *target, usize num_params) {
   /* to_hash for a hash just returns itself */
   sbVm_push_immediate(vm, target);
 }
 
-static void length(hVm vm, hV *target, usize num_params) {
+static void length(hVm vm, hVal *target, usize num_params) {
   usize length = sbHash_get_size(target->hash);
   sbVm_push_immediate(vm, &HVINT(length));
 }
 
-static void get_index(hVm vm, hV *target, usize num_params) {
-  hV *key = sbVm_pop(vm);
-  hV *result = sbHash_find(target->hash, key);
+static void get_index(hVm vm, hVal *target, usize num_params) {
+  hVal *key = sbVm_pop(vm);
+  hVal *result = sbHash_find(target->hash, key);
   if (result == IT_NOTHING) {
     sbVm_push_immediate(vm, &HVNIL);
   } else {

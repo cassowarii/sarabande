@@ -7,71 +7,25 @@
 
 #define FLAG_NONINTRINSIC (1ULL << 63)
 
-hV sbV_nil() {
-  return (hV) {0};
-}
-
-hV sbV_boolean(flag value) {
-  return (hV) {
-    .type = IT_BOOLEAN,
-    .boolean = (value == 0) ? 0 : 1,
-  };
-}
-
-hV sbV_string(hString str) {
-  return (hV) {
-    .type = IT_STRING,
-    .string = str,
-  };
-}
-
-hV sbV_symbol(hSymbol sym) {
-  return (hV) {
-    .type = IT_SYMBOL,
-    .symbol = sym,
-  };
-}
-
-hV sbV_float(double fl) {
-  return (hV) {
-    .type = IT_FLOAT,
-    .float_val = fl,
-  };
-}
-
-hV sbV_hash(hHash hash) {
-  return (hV) {
-    .type = IT_HASH,
-    .hash = hash,
-  };
-}
-
-hV sbV_int(hInteger i) {
-  return (hV) {
-    .type = IT_INTEGER,
-    .integer = i,
-  };
-}
-
-hV sbV_empty_list(usize capacity) {
-  return (hV) {
+hVal sbV_empty_list(usize capacity) {
+  return (hVal) {
     .type = IT_LIST,
     .list = sbList_new(capacity),
   };
 }
 
-hV sbV_empty_hash(usize capacity) {
-  return (hV) {
+hVal sbV_empty_hash(usize capacity) {
+  return (hVal) {
     .type = IT_HASH,
     .hash = sbHash_create(capacity),
   };
 }
 
-hV sbV_empty_string() {
-  return sbV_string((hString)0);
+hVal sbV_empty_string() {
+  return HVSTR((hString)0);
 }
 
-flag sbV_c_eq(const hV *a, const hV *b) {
+flag sbV_c_eq(const hVal *a, const hVal *b) {
   if (a->type != b->type) return FALSE;
   if (a->type == ITX_TOMBSTONE || b->type == ITX_TOMBSTONE) return FALSE;
   if (a->type == IT_NOTHING || b->type == IT_NOTHING) return FALSE;
@@ -104,14 +58,14 @@ flag sbV_c_eq(const hV *a, const hV *b) {
   }
 }
 
-flag sbV_c_falsy(const hV *a) {
+flag sbV_c_falsy(const hVal *a) {
   /* only nil and boolean false are false */
   if (a->type == IT_NIL) return TRUE;
   if (a->type == IT_BOOLEAN && !a->boolean) return TRUE;
   return FALSE;
 }
 
-void sbV_retain(const hV *a) {
+void sbV_retain(const hVal *a) {
   /* for some classes (e.g. nil, float), we don't need to retain them at all
    * because they are trivially copiable. some classes (integer, string) need
    * to sometimes be retained but sometimes not, so we delegate to them to
@@ -129,7 +83,7 @@ void sbV_retain(const hV *a) {
   }
 }
 
-void sbV_release(const hV *a) {
+void sbV_release(const hVal *a) {
   switch (a->type) {
     case IT_STRING:
       sbString_release(a->string);
@@ -145,6 +99,6 @@ void sbV_release(const hV *a) {
 
 /* --- */
 
-flag val_is_intrinsic(hV val) {
+flag val_is_intrinsic(hVal val) {
   return (val.type & FLAG_NONINTRINSIC) != 0;
 }

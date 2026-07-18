@@ -9,7 +9,7 @@
 
 sbLibTable g_integer_methods;
 
-static void to_string(hVm vm, hV *target, usize num_params) {
+static void to_string(hVm vm, hVal *target, usize num_params) {
   char stackbuf[1024];
   char *buf = stackbuf;
   usize length = sbInteger_snprint(buf, 1024, target->integer);

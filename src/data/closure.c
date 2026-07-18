@@ -41,7 +41,7 @@ hClosure sbClosure_create(usize num_vars) {
 }
 
 /* set the variable in the closure behind the pointer */
-void sbClosure_set_var(hClosure which, usize index, hV *what) {
+void sbClosure_set_var(hClosure which, usize index, hVal *what) {
   sbClosure *c = find_closure_by_handle(which);
   if (c->num_vars <= INLINE_VAR_COUNT) {
     sbRef_set_ref(c->internal_vars[index], what);
@@ -51,7 +51,7 @@ void sbClosure_set_var(hClosure which, usize index, hV *what) {
 }
 
 /* set the pointer itself */
-void sbClosure_set_ref(hClosure which, usize index, hV *what) {
+void sbClosure_set_ref(hClosure which, usize index, hVal *what) {
   if (what->type != IT_REF) {
     PANIC("must pass an indirect variable to be the subject of a closure");
   }
@@ -63,7 +63,7 @@ void sbClosure_set_ref(hClosure which, usize index, hV *what) {
   }
 }
 
-hV *sbClosure_get_var(hClosure which, usize index) {
+hVal *sbClosure_get_var(hClosure which, usize index) {
   sbClosure *c = find_closure_by_handle(which);
   if (c->num_vars <= INLINE_VAR_COUNT) {
     return sbRef_deref(c->internal_vars[index]);
@@ -72,7 +72,7 @@ hV *sbClosure_get_var(hClosure which, usize index) {
   }
 }
 
-hV sbClosure_get_ref(hClosure which, usize index) {
+hVal sbClosure_get_ref(hClosure which, usize index) {
   sbClosure *c = find_closure_by_handle(which);
   if (c->num_vars <= INLINE_VAR_COUNT) {
     return HVREF(c->internal_vars[index]);

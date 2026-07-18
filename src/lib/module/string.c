@@ -31,7 +31,7 @@ void sbLib_loadmodule_string() {
 static sbCFuncStatus from_cfunc(hVm vm, flag init) {
   if (!init) {
     /* get value of previous to_string */
-    hV *value = sbVm_peek(vm, 0);
+    hVal *value = sbVm_peek(vm, 0);
     /* TODO: We should probably have some kind of 'implicit convert to string'
      * thing that checks that it's really a string and throws if not, that we
      * can call from multiple places  */

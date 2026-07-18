@@ -35,10 +35,10 @@ usize sbVmCompiler_get_position(sbVmCompiler *cm) {
   return cm->bytecode.size;
 }
 
-u32 sbVmCompiler_add_constant(sbVmCompiler *cm, hV *constant) {
+u32 sbVmCompiler_add_constant(sbVmCompiler *cm, hVal *constant) {
   sbV_retain(constant);
-  sbBuffer_append(&cm->constants, constant, sizeof(hV));
-  return cm->constants.size / sizeof(hV) - 1;
+  sbBuffer_append(&cm->constants, constant, sizeof(hVal));
+  return cm->constants.size / sizeof(hVal) - 1;
 }
 
 void sbVmProgram_initialize(sbVmProgram *pm, usize initial_arena_size) {
@@ -73,8 +73,8 @@ sbBlockId sbVmProgram_add_block(sbVmProgram *pm, sbVmCompiler *cm) {
   sbVmBlock bk = {
     .bytecode = bytecode,
     .bytecode_end = bytecode + bytecode_length,
-    .constants = (hV*)constants,
-    .constants_count = constants_length / sizeof(hV),
+    .constants = (hVal*)constants,
+    .constants_count = constants_length / sizeof(hVal),
   };
 
   if (pm->block_count >= pm->block_capacity) {

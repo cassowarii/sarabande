@@ -17,25 +17,25 @@ typedef struct hashtbl {
   flag is_inline;
   union {
     struct {
-      hV keys[INLINE_TABLE_LENGTH];
-      hV values[INLINE_TABLE_LENGTH];
+      hVal keys[INLINE_TABLE_LENGTH];
+      hVal values[INLINE_TABLE_LENGTH];
     } internal;
     struct {
-      hV *keys;
-      hV *values;
+      hVal *keys;
+      hVal *values;
     } external;
   };
 } hashtbl;
 
 static hashtbl *new_tbl(usize initial_size);
-static hV *get_key_ptr_for_tbl(hashtbl *t, usize *length_out);
-static void get_ptrs_for_tbl(hashtbl *t, hV **keys, hV **values);
+static hVal *get_key_ptr_for_tbl(hashtbl *t, usize *length_out);
+static void get_ptrs_for_tbl(hashtbl *t, hVal **keys, hVal **values);
 static hashtbl *find_tbl_for_handle(hHash handle);
-static usize set_key(hashtbl *t, hV *key, hV *value);
-static hV delete_key(hashtbl *t, hV *key);
+static usize set_key(hashtbl *t, hVal *key, hVal *value);
+static hVal delete_key(hashtbl *t, hVal *key);
 static void set_hashtbl_size(hashtbl *t, usize new_size, flag rehash_all);
-static usize set_key_in_array(hV *keys, hV *values, usize length, hV *key, hV *value);
-static usize find_index_by_key(hashtbl *t, hV *key);
+static usize set_key_in_array(hVal *keys, hVal *values, usize length, hVal *key, hVal *value);
+static usize find_index_by_key(hashtbl *t, hVal *key);
 
 void sbHash_sys_init() {
   sbPool_initialize(&g_hashtable_pool, sizeof(hashtbl), HASHES_PER_BLOCK);
@@ -57,7 +57,7 @@ sbHashValue sbHash_hash_bytes(const char *bytes, usize length) {
   return result;
 }
 
-flag is_flatly_hashable(hV *obj) {
+flag is_flatly_hashable(hVal *obj) {
   return obj->type == IT_NIL
       || obj->type == IT_BOOLEAN
       || obj->type == IT_INTEGER /* todo: wrong for bigints */
@@ -65,7 +65,7 @@ flag is_flatly_hashable(hV *obj) {
       || obj->type == IT_SYMBOL;
 }
 
-sbHashValue sbHash_hash_obj(hV *obj) {
+sbHashValue sbHash_hash_obj(hVal *obj) {
   if (is_flatly_hashable(obj)) {
     return sbHash_hash_bytes((char*)obj, sizeof(*obj));
   } else if (obj->type == IT_STRING) {
@@ -83,15 +83,15 @@ hHash sbHash_create(usize initial_size) {
   return t->handle;
 }
 
-void sbHash_insert(hHash h, hV *key, hV *value) {
+void sbHash_insert(hHash h, hVal *key, hVal *value) {
   hashtbl *t = find_tbl_for_handle(h);
   set_key(t, key, value);
 }
 
-hV *sbHash_find(hHash h, hV *key) {
+hVal *sbHash_find(hHash h, hVal *key) {
   hashtbl *t = find_tbl_for_handle(h);
   usize index = find_index_by_key(t, key);
-  hV *keys, *values;
+  hVal *keys, *values;
   get_ptrs_for_tbl(t, &keys, &values);
   if (keys[index].type == IT_NOTHING) {
     return NULL;
@@ -100,10 +100,10 @@ hV *sbHash_find(hHash h, hV *key) {
   }
 }
 
-hV *sbHash_find_or_insert(hHash h, hV *key, hV *value) {
+hVal *sbHash_find_or_insert(hHash h, hVal *key, hVal *value) {
   hashtbl *t = find_tbl_for_handle(h);
   usize index = find_index_by_key(t, key);
-  hV *keys, *values;
+  hVal *keys, *values;
   get_ptrs_for_tbl(t, &keys, &values);
   if (keys[index].type == IT_NOTHING) {
     values[index] = *value;
@@ -111,7 +111,7 @@ hV *sbHash_find_or_insert(hHash h, hV *key, hV *value) {
   return &values[index];
 }
 
-void sbHash_delete(hHash h, hV *key, hV *value) {
+void sbHash_delete(hHash h, hVal *key, hVal *value) {
   hashtbl *t = find_tbl_for_handle(h);
   delete_key(t, key);
 }
@@ -130,10 +130,10 @@ static void set_hashtbl_size(hashtbl *t, usize new_size, flag rehash_all) {
   if (new_size == INLINE_TABLE_LENGTH) {
     t->is_inline = 1;
   } else {
-    hV *new_keys = calloc(new_size, sizeof(hV));
-    hV *new_values = calloc(new_size, sizeof(hV));
+    hVal *new_keys = calloc(new_size, sizeof(hVal));
+    hVal *new_values = calloc(new_size, sizeof(hVal));
     if (rehash_all) {
-      hV *current_keys, *current_values;
+      hVal *current_keys, *current_values;
       get_ptrs_for_tbl(t, &current_keys, &current_values);
       for (usize i = 0; i < t->capacity; i++) {
         if (current_keys[i].type == IT_NOTHING || current_keys[i].type == ITX_TOMBSTONE) continue;
@@ -157,7 +157,7 @@ static void set_hashtbl_size(hashtbl *t, usize new_size, flag rehash_all) {
   t->capacity = new_size;
 }
 
-static hV *get_key_ptr_for_tbl(hashtbl *t, usize *length_out) {
+static hVal *get_key_ptr_for_tbl(hashtbl *t, usize *length_out) {
   if (length_out) *length_out = t->capacity;
   if (t->is_inline) {
     return t->internal.keys;
@@ -166,7 +166,7 @@ static hV *get_key_ptr_for_tbl(hashtbl *t, usize *length_out) {
   }
 }
 
-static void get_ptrs_for_tbl(hashtbl *t, hV **keys, hV **values) {
+static void get_ptrs_for_tbl(hashtbl *t, hVal **keys, hVal **values) {
   if (t->is_inline) {
     if (keys) *keys = t->internal.keys;
     if (values) *values = t->internal.values;
@@ -176,7 +176,7 @@ static void get_ptrs_for_tbl(hashtbl *t, hV **keys, hV **values) {
   }
 }
 
-static usize find_key_index_in_array(hV *keys, usize length, hV *key) {
+static usize find_key_index_in_array(hVal *keys, usize length, hVal *key) {
   sbHashValue hash = sbHash_hash_obj(key);
   u32 start = (hash & 0xFFFFFFFF);
   u32 move = (hash >> 32);
@@ -191,11 +191,11 @@ static usize find_key_index_in_array(hV *keys, usize length, hV *key) {
   return index;
 }
 
-static usize find_index_by_key(hashtbl *t, hV *key) {
+static usize find_index_by_key(hashtbl *t, hVal *key) {
   return find_key_index_in_array(get_key_ptr_for_tbl(t, NULL), t->capacity, key);
 }
 
-static usize set_key_in_array(hV *keys, hV *values, usize length, hV *key, hV *value) {
+static usize set_key_in_array(hVal *keys, hVal *values, usize length, hVal *key, hVal *value) {
   usize index = find_key_index_in_array(keys, length, key);
 
   /* now, we either found the current entry for this key,
@@ -217,10 +217,10 @@ static usize set_key_in_array(hV *keys, hV *values, usize length, hV *key, hV *v
   return index;
 }
 
-static usize set_key(hashtbl *t, hV *key, hV *value) {
+static usize set_key(hashtbl *t, hVal *key, hVal *value) {
   usize index = find_index_by_key(t, key);
 
-  hV *keys, *values;
+  hVal *keys, *values;
   get_ptrs_for_tbl(t, &keys, &values);
 
   /* now, we either found the current entry for this key,
@@ -248,11 +248,11 @@ static usize set_key(hashtbl *t, hV *key, hV *value) {
   return index;
 }
 
-static hV delete_key(hashtbl *t, hV *key) {
+static hVal delete_key(hashtbl *t, hVal *key) {
   usize index = find_index_by_key(t, key);
-  hV *keys, *values;
+  hVal *keys, *values;
   get_ptrs_for_tbl(t, &keys, &values);
-  hV to_return = values[index];
+  hVal to_return = values[index];
   keys[index].type = ITX_TOMBSTONE;
   t->n_elems --;
   return to_return;

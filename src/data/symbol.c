@@ -13,16 +13,16 @@ sbArena symbol_text_arena;
 hSymbol new_symbol(const char *name, usize length);
 
 hSymbol sbSymbol_from_bytes(const char *text, usize length) {
-  hV symkey = {
+  hVal symkey = {
     .type = IT_STRING,
     .string = sbString_new(text, length),
   };
 
-  hV *result = sbHash_find(symbol_table, &symkey);
+  hVal *result = sbHash_find(symbol_table, &symkey);
 
   if (result == NULL) {
     /* add new symbol */
-    hV symval = {
+    hVal symval = {
       .type = IT_SYMBOL,
       .symbol = new_symbol(text, length),
     };

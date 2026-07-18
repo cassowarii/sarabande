@@ -15,7 +15,7 @@ void list_all_cfunc(hVm vm, flag init);
 
 sbLibTable g_string_methods;
 
-static void split(hVm vm, hV *target, usize num_params) {
+static void split(hVm vm, hVal *target, usize num_params) {
   usize length;
   char scratch[8];
   const char *buf = sbString_get_value(target->string, scratch, &length);
@@ -26,12 +26,12 @@ static void split(hVm vm, hV *target, usize num_params) {
   sbVm_push_immediate(vm, &HVLIST(l));
 }
 
-static void to_string(hVm vm, hV *target, usize num_params) {
+static void to_string(hVm vm, hVal *target, usize num_params) {
   /* to_string for a string just returns itself */
   sbVm_push_immediate(vm, target);
 }
 
-static void to_integer(hVm vm, hV *target, usize num_params) {
+static void to_integer(hVm vm, hVal *target, usize num_params) {
   char scratch[8];
   usize length;
   const char *data = sbString_get_value(target->string, scratch, &length);
@@ -39,7 +39,7 @@ static void to_integer(hVm vm, hV *target, usize num_params) {
   sbVm_push_immediate(vm, &HVINT(parsed));
 }
 
-static void length(hVm vm, hV *target, usize num_params) {
+static void length(hVm vm, hVal *target, usize num_params) {
   usize length;
   sbString_get_value(target->string, NULL, &length);
   sbVm_push_immediate(vm, &HVINT(length));

@@ -19,7 +19,7 @@ static void do_iota(hVm vm, usize argc, i32 offset) {
     }
   }
 
-  hV *first = sbVm_pop(vm);
+  hVal *first = sbVm_pop(vm);
 
   hInteger min, max;
   if (argc == 1) {
@@ -33,7 +33,7 @@ static void do_iota(hVm vm, usize argc, i32 offset) {
     min = offset;
     max = first->integer + offset;
   } else {
-    hV *second = sbVm_pop(vm);
+    hVal *second = sbVm_pop(vm);
     if (first->type != IT_INTEGER || second->type != IT_INTEGER) {
       if (offset == 1) {
         PANIC("list::iota1's arguments must be integers!");

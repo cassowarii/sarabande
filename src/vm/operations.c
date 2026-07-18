@@ -8,47 +8,47 @@
 #include "lib/table.h"
 #include "lib/sentinel.h"
 
-hV sbV_add(const hV *a, const hV *b) {
+hVal sbV_add(const hVal *a, const hVal *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
-    return sbV_int(sbInteger_sum(a->integer, b->integer));
+    return HVINT(sbInteger_sum(a->integer, b->integer));
   } else {
     PANIC("todo (add type %lld and type %lld)", (long long)a->type, (long long)b->type);
   }
 }
 
-hV sbV_sub(const hV *a, const hV *b) {
+hVal sbV_sub(const hVal *a, const hVal *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
-    return sbV_int(sbInteger_diff(a->integer, b->integer));
+    return HVINT(sbInteger_diff(a->integer, b->integer));
   } else {
     PANIC("todo (subtract type %llu minus %llu)", (long long)a->type, (long long)b->type);
   }
 }
 
-hV sbV_mul(const hV *a, const hV *b) {
+hVal sbV_mul(const hVal *a, const hVal *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
-    return sbV_int(sbInteger_mul(a->integer, b->integer));
+    return HVINT(sbInteger_mul(a->integer, b->integer));
   } else {
     PANIC("todo");
   }
 }
 
-hV sbV_floordiv(const hV *a, const hV *b) {
+hVal sbV_floordiv(const hVal *a, const hVal *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
-    return sbV_int(sbInteger_floordiv(a->integer, b->integer));
+    return HVINT(sbInteger_floordiv(a->integer, b->integer));
   } else {
     PANIC("todo");
   }
 }
 
-hV sbV_mod(const hV *a, const hV *b) {
+hVal sbV_mod(const hVal *a, const hVal *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
-    return sbV_int(a->integer % b->integer);
+    return HVINT(a->integer % b->integer);
   } else {
     PANIC("todo %lld", (long long)a->type);
   }
 }
 
-void sbV_incr(hV *a) {
+void sbV_incr(hVal *a) {
   if (a->type == IT_INTEGER) {
     a->integer += 1;
   } else {
@@ -56,7 +56,7 @@ void sbV_incr(hV *a) {
   }
 }
 
-void sbV_decr(hV *a) {
+void sbV_decr(hVal *a) {
   if (a->type == IT_INTEGER) {
     a->integer -= 1;
   } else {
@@ -64,7 +64,7 @@ void sbV_decr(hV *a) {
   }
 }
 
-hV sbV_eq(const hV *a, const hV *b) {
+hVal sbV_eq(const hVal *a, const hVal *b) {
   if (sbV_c_eq(a, b)) {
     return HVBOOL(TRUE);
   } else {
@@ -72,7 +72,7 @@ hV sbV_eq(const hV *a, const hV *b) {
   }
 }
 
-hV sbV_lt(const hV *a, const hV *b) {
+hVal sbV_lt(const hVal *a, const hVal *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     if (a->integer < b->integer) {
       return HVBOOL(TRUE);
@@ -95,7 +95,7 @@ hV sbV_lt(const hV *a, const hV *b) {
   }
 }
 
-hV sbV_le(const hV *a, const hV *b) {
+hVal sbV_le(const hVal *a, const hVal *b) {
   if (a->type == IT_INTEGER && b->type == IT_INTEGER) {
     if (a->integer <= b->integer) {
       return HVBOOL(TRUE);
@@ -118,7 +118,7 @@ hV sbV_le(const hV *a, const hV *b) {
   }
 }
 
-hV sbV_append(hV *a, hV *b) {
+hVal sbV_append(hVal *a, hVal *b) {
   if (a->type == IT_LIST) {
     sbList_append(a->list, b);
     return HVNIL;
@@ -128,15 +128,15 @@ hV sbV_append(hV *a, hV *b) {
 }
 
 void sbV_index(hVm vm) {
-  hV *a = sbVm_peek(vm, 1);
-  hV *b = sbVm_peek(vm, 0);
+  hVal *a = sbVm_peek(vm, 1);
+  hVal *b = sbVm_peek(vm, 0);
   if (a->type == IT_LIST && b->type == IT_INTEGER) {
     sbVm_npop(vm, 2);
-    hV *result = sbList_index(a->list, b->integer);
+    hVal *result = sbList_index(a->list, b->integer);
     sbVm_push(vm, result);
   } else if (a->type == IT_MODULE && b->type == IT_SYMBOL) {
     sbVm_npop(vm, 2);
-    hV *result = sbLibTable_find_value(a->module, b->symbol);
+    hVal *result = sbLibTable_find_value(a->module, b->symbol);
     sbVm_push(vm, result);
   } else {
     sbVm_swap(vm);                                      /* b a */
@@ -148,13 +148,13 @@ void sbV_index(hVm vm) {
   }
 }
 
-hV sbV_rangeindex(hV *a, hV *b, hV *c) {
+hVal sbV_rangeindex(hVal *a, hVal *b, hVal *c) {
   if (b->type == IT_INTEGER && c->type == IT_INTEGER) {
     usize length;
     i64 min = sbInteger_get_value(b->integer);
     i64 max = sbInteger_get_value(c->integer);
     if (a->type == IT_LIST) {
-      hV *elements = sbList_get_value(a->list, &length);
+      hVal *elements = sbList_get_value(a->list, &length);
       if (min >= max || min >= length || max < 0) {
         /* backwards or out of range */
         return sbV_empty_list(0);
@@ -185,7 +185,7 @@ hV sbV_rangeindex(hV *a, hV *b, hV *c) {
   }
 }
 
-void sbV_index_set(hV *obj, hV *key, hV *value) {
+void sbV_index_set(hVal *obj, hVal *key, hVal *value) {
   if (obj->type == IT_LIST) {
     PANIC("todo");
   } else if (obj->type == IT_HASH) {

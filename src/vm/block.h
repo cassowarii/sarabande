@@ -7,7 +7,7 @@
     .bytecode = bc, \
     .bytecode_length = sizeof(bc), \
     .constants = cn, \
-    .constants_count = sizeof(cn)/sizeof(hV) \
+    .constants_count = sizeof(cn)/sizeof(hVal) \
   })
 
 /* dynamic sized block that we can more easily add
@@ -23,7 +23,7 @@ typedef struct sbVmCompiler {
 typedef struct sbVmBlock {
   const u8 *bytecode;
   const u8 *bytecode_end;
-  const hV *constants;
+  const hVal *constants;
   usize constants_count;
 } sbVmBlock;
 
@@ -48,7 +48,7 @@ void sbVmCompiler_overwrite_code_at(sbVmCompiler *cm, usize offset, const u8 *da
 
 usize sbVmCompiler_get_position(sbVmCompiler *cm);
 
-u32 sbVmCompiler_add_constant(sbVmCompiler *cm, hV *constant);
+u32 sbVmCompiler_add_constant(sbVmCompiler *cm, hVal *constant);
 
 void sbVmProgram_initialize(sbVmProgram *pm, usize initial_arena_size);
 

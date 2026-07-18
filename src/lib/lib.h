@@ -5,7 +5,7 @@
 #define PROPERTY(f) (sbLibMethod) { .behavior = f, .is_property = TRUE }
 
 typedef struct sbLibMethod {
-  void (*behavior)(hVm, hV*, usize);
+  void (*behavior)(hVm, hVal*, usize);
   flag is_property : 1;
   i16 min_args : 15;
   i16 max_args;

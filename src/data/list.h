@@ -6,12 +6,12 @@ void sbList_sys_deinit();
 
 hList sbList_new(usize capacity);
 
-hList sbList_of(usize length, hV *items);
+hList sbList_of(usize length, hVal *items);
 
-void sbList_append(hList list, hV *item);
+void sbList_append(hList list, hVal *item);
 
-hV *sbList_get_value(hList list, usize *length);
+hVal *sbList_get_value(hList list, usize *length);
 
-hV *sbList_index(hList list, usize index);
+hVal *sbList_index(hList list, usize index);
 
 void sbList_method(hVm vm);

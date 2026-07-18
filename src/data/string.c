@@ -236,17 +236,17 @@ usize sbString_get_length(hString handle) {
 }
 
 void sbString_method(hVm vm) {
-  hV *target = sbVm_pop(vm);
+  hVal *target = sbVm_pop(vm);
   if (target->type != IT_STRING) {
     CHECK("can't call sbString_method on something that isn't a string");
   }
-  hV *argc = sbVm_pop(vm);
+  hVal *argc = sbVm_pop(vm);
   if (argc->type != IT_INTEGER) {
     CHECK("argc of send should be integer!");
   }
   /* subtract 1 because the method name is itself a param */
   usize num_params = argc->integer - 1;
-  hV *method_name_val = sbVm_peek(vm, num_params);
+  hVal *method_name_val = sbVm_peek(vm, num_params);
   if (method_name_val->type != IT_SYMBOL) {
     /* TODO this may become not true */
     PANIC("method name for string must be symbol!");

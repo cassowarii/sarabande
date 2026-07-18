@@ -57,7 +57,7 @@ void sbIrProgram_compile_ast(hIrProgram ir, sbAst ast) {
 
 static sbIrExpr SENTINEL_NIL_EXPR = {
   .type = IR_E_VALUE,
-  .value = (hV) { .type = IT_NIL }
+  .value = (hVal) { .type = IT_NIL }
 };
 static sbIrStmt SENTINEL_NO_STMT = {0};
 static sbIrVariable SENTINEL_NO_VAR = {0};
@@ -305,7 +305,7 @@ static sbIrExpr *expr_context(hIrChunk ck, hSymbol symbol) {
   });
 }
 
-static sbIrExpr *expr_value(hIrChunk ck, hV *value) {
+static sbIrExpr *expr_value(hIrChunk ck, hVal *value) {
   return new_expr(ck, &(sbIrExpr) {
     .type = IR_E_VALUE,
     .value = *value,

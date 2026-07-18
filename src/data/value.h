@@ -5,19 +5,19 @@
 
 #define IT_FLAG_BOUND_METHOD (1ULL << 62)
 
-#define HVINT(n) ((hV) { .type = IT_INTEGER, .integer = n })
-#define HVFLOAT(f) ((hV) { .type = IT_FLOAT, .float_val = f })
-#define HVSTR(s) ((hV) { .type = IT_STRING, .string = s })
-#define HVSYM(s) ((hV) { .type = IT_SYMBOL, .symbol = s })
-#define HVBOOL(b) ((hV) { .type = IT_BOOLEAN, .boolean = b })
-#define HVLIST(l) ((hV) { .type = IT_LIST, .list = l })
-#define HVREF(r) ((hV) { .type = IT_REF, .ref = r })
-#define HVNIL ((hV) { .type = IT_NIL })
-#define HVNOTHING ((hV) {0})
-#define HVFUNC(i, c) ((hV) { .type = i, .closure = c })
-#define HVBUILTIN(b) ((hV) { .type = IT_BUILTIN, .builtin = b })
-#define HVBOUNDMETHOD(m, t) ((hV) { .type = m | IT_FLAG_BOUND_METHOD, .ref = t })
-#define HVMODULE(m) ((hV) { .type = IT_MODULE, .module = m })
+#define HVINT(n) ((hVal) { .type = IT_INTEGER, .integer = n })
+#define HVFLOAT(f) ((hVal) { .type = IT_FLOAT, .float_val = f })
+#define HVSTR(s) ((hVal) { .type = IT_STRING, .string = s })
+#define HVSYM(s) ((hVal) { .type = IT_SYMBOL, .symbol = s })
+#define HVBOOL(b) ((hVal) { .type = IT_BOOLEAN, .boolean = b })
+#define HVLIST(l) ((hVal) { .type = IT_LIST, .list = l })
+#define HVREF(r) ((hVal) { .type = IT_REF, .ref = r })
+#define HVNIL ((hVal) { .type = IT_NIL })
+#define HVNOTHING ((hVal) {0})
+#define HVFUNC(i, c) ((hVal) { .type = i, .closure = c })
+#define HVBUILTIN(b) ((hVal) { .type = IT_BUILTIN, .builtin = b })
+#define HVBOUNDMETHOD(m, t) ((hVal) { .type = m | IT_FLAG_BOUND_METHOD, .ref = t })
+#define HVMODULE(m) ((hVal) { .type = IT_MODULE, .module = m })
 
 struct sbVm;
 struct sbLibTable;
@@ -48,7 +48,7 @@ enum intrinsic_type {
   ITX_TOMBSTONE = -13, // <hashtable_tombstone>
 };
 
-typedef struct hV {
+typedef struct hVal {
   i64 type;
   union {
     hString string;
@@ -64,23 +64,16 @@ typedef struct hV {
     struct sbLibTable *module;
     u64 data;
   };
-} hV;
+} hVal;
 
-hV sbV_nil();
-hV sbV_string(hString str);
-hV sbV_symbol(hSymbol sym);
-hV sbV_float(double fl);
-hV sbV_hash(hHash hash);
-hV sbV_int(hInteger i);
-hV sbV_boolean(flag b);
-hV sbV_empty_list(usize capacity);
-hV sbV_empty_hash(usize capacity);
-hV sbV_empty_string();
+hVal sbV_empty_list(usize capacity);
+hVal sbV_empty_hash(usize capacity);
+hVal sbV_empty_string();
 
-flag sbV_c_eq(const hV *a, const hV *b);
-flag sbV_c_falsy(const hV *a);
+flag sbV_c_eq(const hVal *a, const hVal *b);
+flag sbV_c_falsy(const hVal *a);
 
-void sbV_retain(const hV *a);
-void sbV_release(const hV *a);
+void sbV_retain(const hVal *a);
+void sbV_release(const hVal *a);
 
 #endif

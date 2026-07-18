@@ -15,22 +15,22 @@ sbCFuncStatus list_all_cfunc(hVm vm, flag init);
 
 sbLibTable g_list_methods;
 
-static void length(hVm vm, hV *list, usize num_params) {
+static void length(hVm vm, hVal *list, usize num_params) {
   usize length;
   sbList_get_value(list->list, &length);
   sbVm_push_immediate(vm, &HVINT(length));
 }
 
-static void push(hVm vm, hV *list, usize num_params) {
-  hV *to_append = sbVm_pop(vm);
+static void push(hVm vm, hVal *list, usize num_params) {
+  hVal *to_append = sbVm_pop(vm);
   sbList_append(list->list, to_append);
   sbVm_push_immediate(vm, &HVNIL);
 }
 
-static void reverse(hVm vm, hV *list, usize num_params) {
+static void reverse(hVm vm, hVal *list, usize num_params) {
   /* TODO maybe mutate in place if no other refs */
   usize length;
-  hV *elems = sbList_get_value(list->list, &length);
+  hVal *elems = sbList_get_value(list->list, &length);
   hList new_list = sbList_new(length);
   for (usize i = length - 1; ; i--) {
     sbList_append(new_list, &elems[i]);
@@ -40,11 +40,11 @@ static void reverse(hVm vm, hV *list, usize num_params) {
   sbVm_push_immediate(vm, &HVLIST(new_list));
 }
 
-static void join(hVm vm, hV *list, usize num_params) {
+static void join(hVm vm, hVal *list, usize num_params) {
   flag join_with = FALSE;
   hString delimiter;
   if (num_params == 1) {
-    hV *delimiter_v = sbVm_pop(vm);
+    hVal *delimiter_v = sbVm_pop(vm);
     if (delimiter_v->type != IT_STRING) {
       PANIC("list#join parameter should be string!");
     }
@@ -52,7 +52,7 @@ static void join(hVm vm, hV *list, usize num_params) {
     delimiter = delimiter_v->string;
   }
   usize length;
-  hV *elems = sbList_get_value(list->list, &length);
+  hVal *elems = sbList_get_value(list->list, &length);
   hString joined = sbString_new("", 0);
   for (usize i = 0; i < length; i++) {
     if (elems[i].type != IT_STRING) {
@@ -66,32 +66,32 @@ static void join(hVm vm, hV *list, usize num_params) {
   sbVm_push_immediate(vm, &HVSTR(joined));
 }
 
-static void each(hVm vm, hV *list, usize num_params) {
+static void each(hVm vm, hVal *list, usize num_params) {
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_each_cfunc);
 }
 
-static void map(hVm vm, hV *list, usize num_params) {
+static void map(hVm vm, hVal *list, usize num_params) {
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_map_cfunc);
 }
 
-static void filter(hVm vm, hV *list, usize num_params) {
+static void filter(hVm vm, hVal *list, usize num_params) {
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_filter_cfunc);
 }
 
-static void reduce(hVm vm, hV *list, usize num_params) {
+static void reduce(hVm vm, hVal *list, usize num_params) {
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_reduce_cfunc);
 }
 
-static void any_p(hVm vm, hV *list, usize num_params) {
+static void any_p(hVm vm, hVal *list, usize num_params) {
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_any_cfunc);
 }
 
-static void all_p(hVm vm, hV *list, usize num_params) {
+static void all_p(hVm vm, hVal *list, usize num_params) {
   sbVm_push_immediate(vm, list);
   sbVm_call_c_func(vm, list_all_cfunc);
 }
@@ -116,9 +116,9 @@ sbCFuncStatus list_each_cfunc(hVm vm, flag init) {
   if (init) {
     /* store three state variables: the list we're iterating, the index into it, and the callback function */
     sbVm_request_var_space(vm, 3);
-    hV *iterating_list = sbVm_pop(vm);
-    hV *loop_func = sbVm_pop(vm);
-    hV index = HVINT(0);
+    hVal *iterating_list = sbVm_pop(vm);
+    hVal *loop_func = sbVm_pop(vm);
+    hVal index = HVINT(0);
     vm->fp->locals[0] = *iterating_list;
     vm->fp->locals[1] = index;
     vm->fp->locals[2] = *loop_func;
@@ -129,7 +129,7 @@ sbCFuncStatus list_each_cfunc(hVm vm, flag init) {
 
   usize current_index = vm->fp->locals[1].integer++;
   usize length;
-  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
   if (current_index < length) {
     sbVm_push(vm, &iter_values[current_index]);
     sbVm_push_immediate(vm, &HVINT(1));
@@ -146,12 +146,12 @@ sbCFuncStatus list_map_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being mapped, index, callback, result */
     sbVm_request_var_space(vm, 4);
-    hV *iterating_list = sbVm_pop(vm);
-    hV *map_func = sbVm_pop(vm);
+    hVal *iterating_list = sbVm_pop(vm);
+    hVal *map_func = sbVm_pop(vm);
     usize length;
     sbList_get_value(iterating_list->list, &length);
-    hV index = HVINT(0);
-    hV result = sbV_empty_list(length);
+    hVal index = HVINT(0);
+    hVal result = sbV_empty_list(length);
 
     vm->fp->locals[0] = *iterating_list;
     vm->fp->locals[1] = index;
@@ -159,13 +159,13 @@ sbCFuncStatus list_map_cfunc(hVm vm, flag init) {
     vm->fp->locals[3] = result;
   } else {
     /* get result of map function and append its result to result list */
-    hV *mapped = sbVm_pop(vm);
+    hVal *mapped = sbVm_pop(vm);
     sbList_append(vm->fp->locals[3].list, mapped);
   }
 
   usize current_index = vm->fp->locals[1].integer++;
   usize length;
-  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
   if (current_index < length) {
     sbVm_push(vm, &iter_values[current_index]);
     sbVm_push_immediate(vm, &HVINT(1));
@@ -182,12 +182,12 @@ sbCFuncStatus list_filter_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being filtered, index, callback, result */
     sbVm_request_var_space(vm, 4);
-    hV *iterating_list = sbVm_pop(vm);
-    hV *filter_func = sbVm_pop(vm);
+    hVal *iterating_list = sbVm_pop(vm);
+    hVal *filter_func = sbVm_pop(vm);
     usize length;
     sbList_get_value(iterating_list->list, &length);
-    hV index = HVINT(0);
-    hV result = sbV_empty_list(length);
+    hVal index = HVINT(0);
+    hVal result = sbV_empty_list(length);
 
     vm->fp->locals[0] = *iterating_list;
     vm->fp->locals[1] = index;
@@ -195,8 +195,8 @@ sbCFuncStatus list_filter_cfunc(hVm vm, flag init) {
     vm->fp->locals[3] = result;
   } else {
     /* get result of filter function and append element to result if true */
-    hV *mapped = sbVm_pop(vm);
-    hV *element = sbVm_pop(vm);
+    hVal *mapped = sbVm_pop(vm);
+    hVal *element = sbVm_pop(vm);
     if (!sbV_c_falsy(mapped)) {
       sbList_append(vm->fp->locals[3].list, element);
     }
@@ -204,7 +204,7 @@ sbCFuncStatus list_filter_cfunc(hVm vm, flag init) {
 
   usize current_index = vm->fp->locals[1].integer++;
   usize length;
-  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
   if (current_index < length) {
     /* put current value on stack twice: once as parameter for function, once to save for ourselves */
     sbVm_push(vm, &iter_values[current_index]);
@@ -223,12 +223,12 @@ sbCFuncStatus list_reduce_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being reduced, index, callback, result */
     sbVm_request_var_space(vm, 4);
-    hV *iterating_list = sbVm_pop(vm);
-    hV *result = sbVm_pop(vm);
-    hV *reduce_func = sbVm_pop(vm);
+    hVal *iterating_list = sbVm_pop(vm);
+    hVal *result = sbVm_pop(vm);
+    hVal *reduce_func = sbVm_pop(vm);
     usize length;
     sbList_get_value(iterating_list->list, &length);
-    hV index = HVINT(0);
+    hVal index = HVINT(0);
 
     vm->fp->locals[0] = *iterating_list;
     vm->fp->locals[1] = index;
@@ -236,13 +236,13 @@ sbCFuncStatus list_reduce_cfunc(hVm vm, flag init) {
     vm->fp->locals[3] = *result;
   } else {
     /* get result of reduce function */
-    hV *result = sbVm_pop(vm);
+    hVal *result = sbVm_pop(vm);
     vm->fp->locals[3] = *result;
   }
 
   usize current_index = vm->fp->locals[1].integer++;
   usize length;
-  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
   if (current_index < length) {
     /* put current result and new value on stack, then call callback function */
     sbVm_push(vm, &vm->fp->locals[3]);
@@ -261,16 +261,16 @@ sbCFuncStatus list_any_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being filtered, index, callback */
     sbVm_request_var_space(vm, 3);
-    hV *iterating_list = sbVm_pop(vm);
-    hV *pred_func = sbVm_pop(vm);
-    hV index = HVINT(0);
+    hVal *iterating_list = sbVm_pop(vm);
+    hVal *pred_func = sbVm_pop(vm);
+    hVal index = HVINT(0);
 
     vm->fp->locals[0] = *iterating_list;
     vm->fp->locals[1] = index;
     vm->fp->locals[2] = *pred_func;
   } else {
     /* get result of predicate function */
-    hV *mapped = sbVm_pop(vm);
+    hVal *mapped = sbVm_pop(vm);
     if (!sbV_c_falsy(mapped)) {
       /* one was true! return true */
       sbVm_push_immediate(vm, &HVBOOL(TRUE));
@@ -281,7 +281,7 @@ sbCFuncStatus list_any_cfunc(hVm vm, flag init) {
   /* haven't found any yet... */
   usize current_index = vm->fp->locals[1].integer++;
   usize length;
-  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
   if (current_index < length) {
     /* try next element */
     sbVm_push(vm, &iter_values[current_index]);
@@ -299,16 +299,16 @@ sbCFuncStatus list_all_cfunc(hVm vm, flag init) {
   if (init) {
     /* state: list being filtered, index, callback */
     sbVm_request_var_space(vm, 3);
-    hV *iterating_list = sbVm_pop(vm);
-    hV *pred_func = sbVm_pop(vm);
-    hV index = HVINT(0);
+    hVal *iterating_list = sbVm_pop(vm);
+    hVal *pred_func = sbVm_pop(vm);
+    hVal index = HVINT(0);
 
     vm->fp->locals[0] = *iterating_list;
     vm->fp->locals[1] = index;
     vm->fp->locals[2] = *pred_func;
   } else {
     /* get result of predicate function */
-    hV *mapped = sbVm_pop(vm);
+    hVal *mapped = sbVm_pop(vm);
     if (sbV_c_falsy(mapped)) {
       /* one was false; return false */
       sbVm_push_immediate(vm, &HVBOOL(FALSE));
@@ -319,7 +319,7 @@ sbCFuncStatus list_all_cfunc(hVm vm, flag init) {
   /* all true so far */
   usize current_index = vm->fp->locals[1].integer++;
   usize length;
-  hV *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
+  hVal *iter_values = sbList_get_value(vm->fp->locals[0].list, &length);
   if (current_index < length) {
     /* try next element */
     sbVm_push(vm, &iter_values[current_index]);

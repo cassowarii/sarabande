@@ -16,7 +16,7 @@ static void sbsqrt(hVm vm, usize argc) {
   if (argc != 1) {
     PANIC("math::sqrt takes one argument");
   }
-  hV *argument = sbVm_pop(vm);
+  hVal *argument = sbVm_pop(vm);
 
   double original_value;
   if (argument->type == IT_INTEGER) {
@@ -31,10 +31,10 @@ static void sbsqrt(hVm vm, usize argc) {
 }
 
 static void sbmax(hVm vm, usize argc) {
-  hV *result = &HVNIL;
+  hVal *result = &HVNIL;
   while (argc > 0) {
     argc --;
-    hV *val = sbVm_pop(vm);
+    hVal *val = sbVm_pop(vm);
     if (result->type == IT_NIL || sbV_le(result, val).boolean) {
       result = val;
     }

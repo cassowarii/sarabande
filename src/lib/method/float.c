@@ -8,7 +8,7 @@
 
 sbLibTable g_float_methods;
 
-static void to_string(hVm vm, hV *target, usize num_params) {
+static void to_string(hVm vm, hVal *target, usize num_params) {
   char stackbuf[1024];
   char *buf = stackbuf;
   usize length = snprintf(buf, 1024, "%g", target->float_val);

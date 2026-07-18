@@ -8,15 +8,15 @@
 #include "lib/sentinel.h"
 
 void call_block(hVm vm, usize block_id, hClosure closure);
-void call_builtin(hVm vm, hV *to_call);
-void call_bound_method(hVm vm, hV *to_call);
+void call_builtin(hVm vm, hVal *to_call);
+void call_bound_method(hVm vm, hVal *to_call);
 void return_from_block(hVm vm);
 void execute_instruction(hVm vm);
-void push_stack(hVm vm, hV *value);
-void push_stack_immediate(hVm vm, const hV *value);
-hV *pop_stack(hVm vm);
-hV *npop_stack(hVm vm, usize count);
-hV *peek_stack(hVm vm, isize offset);
+void push_stack(hVm vm, hVal *value);
+void push_stack_immediate(hVm vm, const hVal *value);
+hVal *pop_stack(hVm vm);
+hVal *npop_stack(hVm vm, usize count);
+hVal *peek_stack(hVm vm, isize offset);
 void swap_stack_top(hVm vm);
 void print_stack(hVm vm);
 
@@ -61,23 +61,23 @@ sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm) {
   return VM_STAT_SUCCESS;
 }
 
-void sbVm_push(hVm vm, hV *value) {
+void sbVm_push(hVm vm, hVal *value) {
   push_stack(vm, value);
 }
 
-void sbVm_push_immediate(hVm vm, hV *value) {
+void sbVm_push_immediate(hVm vm, hVal *value) {
   push_stack_immediate(vm, value);
 }
 
-hV *sbVm_pop(hVm vm) {
+hVal *sbVm_pop(hVm vm) {
   return pop_stack(vm);
 }
 
-hV *sbVm_npop(hVm vm, usize how_many) {
+hVal *sbVm_npop(hVm vm, usize how_many) {
   return npop_stack(vm, how_many);
 }
 
-hV *sbVm_peek(hVm vm, usize where) {
+hVal *sbVm_peek(hVm vm, usize where) {
   return peek_stack(vm, where);
 }
 
@@ -85,7 +85,7 @@ void sbVm_swap(hVm vm) {
   swap_stack_top(vm);
 }
 
-void sbVm_call_func(hVm vm, hV *func) {
+void sbVm_call_func(hVm vm, hVal *func) {
   if (func->type == IT_BUILTIN) {
     call_builtin(vm, func);
   } else if (func->type <= 0) {
@@ -99,7 +99,7 @@ void sbVm_call_func(hVm vm, hV *func) {
   }
 }
 
-void sbVm_transfer_to_func(hVm vm, hV *func) {
+void sbVm_transfer_to_func(hVm vm, hVal *func) {
   /* tail call */
   return_from_block(vm);
   sbVm_call_func(vm, func);
@@ -128,8 +128,8 @@ void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func) {
 void sbVm_request_var_space(hVm vm, usize amount) {
   /* have to set new rstack space to 0 so we don't accidentally decrement
    * the ref count of variables from a previous stack frame (or of just garbage)  */
-  memset(vm->rsp, 0, amount * sizeof(hV));
-  vm->rsp += amount * sizeof(hV);
+  memset(vm->rsp, 0, amount * sizeof(hVal));
+  vm->rsp += amount * sizeof(hVal);
   vm->fp->num_locals += amount;
 }
 
@@ -141,18 +141,18 @@ void sbVm_print_stack(hVm vm) {
 
 void print_stack(hVm vm) {
   debug("Stack: ");
-  for (hV **p = (hV**)vm->vstack; p < (hV**)vm->vsp; p++) {
+  for (hVal **p = (hVal**)vm->vstack; p < (hVal**)vm->vsp; p++) {
     debug("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
   }
   debug("\n");
 }
 
-void call_builtin(hVm vm, hV *to_call) {
+void call_builtin(hVm vm, hVal *to_call) {
   if (to_call->type != IT_BUILTIN) {
     CHECK("call_builtin can only call builtins!");
   }
 
-  hV *argc = sbVm_pop(vm);
+  hVal *argc = sbVm_pop(vm);
   if (argc->type != IT_INTEGER) {
     CHECK("argc to builtin needs to be integer!");
   }
@@ -176,7 +176,7 @@ void call_block(hVm vm, usize block_id, hClosure closure) {
   vm->ip = &blk->bytecode[0];
 }
 
-void call_bound_method(hVm vm, hV *to_call) {
+void call_bound_method(hVm vm, hVal *to_call) {
   if (!(to_call->type & IT_FLAG_BOUND_METHOD)) {
     CHECK("call_bound_method can only call bound methods!");
   }
@@ -208,8 +208,8 @@ void return_from_block(hVm vm) {
    * originally returning a local variable, we don't want it to get
    * overwritten by a subsequent function call (and if we were
    * already returning an immediate value, it does nothing) */
-  ((hV*)(vm->xsp))[-1] = *((hV**)(vm->vsp))[-1];
-  ((hV**)(vm->vsp))[-1] = &((hV*)(vm->xsp))[-1];
+  ((hVal*)(vm->xsp))[-1] = *((hVal**)(vm->vsp))[-1];
+  ((hVal**)(vm->vsp))[-1] = &((hVal*)(vm->xsp))[-1];
 
   sbVmStackFrame *frame = (sbVmStackFrame*)vm->fp;
 
@@ -223,48 +223,48 @@ void return_from_block(hVm vm) {
   }
 }
 
-void debug_print_hv(const hV *value) {
+void debug_print_hv(const hVal *value) {
   debug("%016llx %016llx\n", *(long long*)value, *((long long*)value+1));
 }
 
-void store_local(hVm vm, usize local_index, const hV *value) {
+void store_local(hVm vm, usize local_index, const hVal *value) {
   /* release whatever was in the slot before */
   sbV_release(&vm->fp->locals[local_index]);
   sbV_retain(value);
   vm->fp->locals[local_index] = *value;
 }
 
-void push_stack(hVm vm, hV *value) {
-  *(hV**)vm->vsp = value;
-  vm->vsp += sizeof(hV*);
-  vm->xsp += sizeof(hV);
+void push_stack(hVm vm, hVal *value) {
+  *(hVal**)vm->vsp = value;
+  vm->vsp += sizeof(hVal*);
+  vm->xsp += sizeof(hVal);
 }
 
-void push_stack_immediate(hVm vm, const hV *value) {
+void push_stack_immediate(hVm vm, const hVal *value) {
   /* save it on our own stack */
-  *(hV*)vm->xsp = *value;
-  *(hV**)vm->vsp = (hV*)vm->xsp;
-  vm->vsp += sizeof(hV*);
-  vm->xsp += sizeof(hV);
+  *(hVal*)vm->xsp = *value;
+  *(hVal**)vm->vsp = (hVal*)vm->xsp;
+  vm->vsp += sizeof(hVal*);
+  vm->xsp += sizeof(hVal);
 }
 
-hV *pop_stack(hVm vm) {
-  vm->vsp -= sizeof(hV*);
-  vm->xsp -= sizeof(hV);
-  return *(hV**)vm->vsp;
+hVal *pop_stack(hVm vm) {
+  vm->vsp -= sizeof(hVal*);
+  vm->xsp -= sizeof(hVal);
+  return *(hVal**)vm->vsp;
 }
 
-hV *npop_stack(hVm vm, usize count) {
-  vm->vsp -= count * sizeof(hV*);
-  vm->xsp -= count * sizeof(hV);
-  return *(hV**)vm->vsp;
+hVal *npop_stack(hVm vm, usize count) {
+  vm->vsp -= count * sizeof(hVal*);
+  vm->xsp -= count * sizeof(hVal);
+  return *(hVal**)vm->vsp;
 }
 
 void swap_stack_top(hVm vm) {
-  hV **first_v = &((hV**)vm->vsp)[-1];
-  hV **second_v = &((hV**)vm->vsp)[-2];
-  hV *first_x = &((hV*)vm->xsp)[-1];
-  hV *second_x = &((hV*)vm->xsp)[-2];
+  hVal **first_v = &((hVal**)vm->vsp)[-1];
+  hVal **second_v = &((hVal**)vm->vsp)[-2];
+  hVal *first_x = &((hVal*)vm->xsp)[-1];
+  hVal *second_x = &((hVal*)vm->xsp)[-2];
 
   /* if we're swapping things that are allocated on the x-stack,
    * we have to swap their pointers as well so we don't accidentally
@@ -273,7 +273,7 @@ void swap_stack_top(hVm vm) {
 
   /* x2 x1    &v2 &v1 (might be &x2 &x1)*/
 
-  hV xtmp = *second_x;
+  hVal xtmp = *second_x;
   if (*first_v == first_x) {
                           /* x2a x1a   &v2  &x1a */
     *second_x = *first_x; /* x1b x1a   &v2  &x1a */
@@ -286,17 +286,17 @@ void swap_stack_top(hVm vm) {
     *second_v = first_x;  /* x2a x2b   &x2b &v1  */
   }
 
-  hV *vtmp = *first_v;    /* x2  x1    &v2  &v1  */
+  hVal *vtmp = *first_v;    /* x2  x1    &v2  &v1  */
   *first_v = *second_v;   /* x2  x1    &v2  &v2  */
   *second_v = vtmp;       /* x2  x1    &v1  &v2  */
 }
 
-hV *peek_stack(hVm vm, isize offset) {
-  return ((hV**)(vm->vsp))[-offset - 1];
+hVal *peek_stack(hVm vm, isize offset) {
+  return ((hVal**)(vm->vsp))[-offset - 1];
 }
 
-hV *peek_xstack(hVm vm, isize offset) {
-  return &((hV*)(vm->xsp))[-offset - 1];
+hVal *peek_xstack(hVm vm, isize offset) {
+  return &((hVal*)(vm->xsp))[-offset - 1];
 }
 
 sbOpcode get_opcode(hVm vm) {
@@ -372,7 +372,7 @@ void execute_instruction(hVm vm) {
   if (vm->debugmode) debug("op %02X ", op);
   u64 param;
   usize count;
-  hV *v, *w, *x, res;
+  hVal *v, *w, *x, res;
 
   switch (op) {
     case BC_NOP:

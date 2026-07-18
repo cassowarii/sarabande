@@ -85,7 +85,7 @@ typedef struct sbIrJump {
 typedef struct sbIrExpr {
   sbIrExprType type;
   union {
-    hV value;
+    hVal value;
     sbIrVariable *var;
     hSymbol symbol;
     struct {

@@ -63,7 +63,7 @@ typedef struct sbVmStackFrame {
     sbRuntimeCFunc c_func;
   };
   usize num_locals;
-  hV locals[];
+  hVal locals[];
 } sbVmStackFrame;
 
 typedef struct sbVm {
@@ -91,21 +91,21 @@ void sbVm_deinitialize(hVm vm);
 
 sbVmStatus sbVm_execute(hVm vm, sbVmProgram *pm);
 
-void sbVm_push(hVm vm, hV *value);
+void sbVm_push(hVm vm, hVal *value);
 
-void sbVm_push_immediate(hVm vm, hV *value);
+void sbVm_push_immediate(hVm vm, hVal *value);
 
-hV *sbVm_pop(hVm vm);
+hVal *sbVm_pop(hVm vm);
 
-hV *sbVm_npop(hVm vm, usize how_many);
+hVal *sbVm_npop(hVm vm, usize how_many);
 
-hV *sbVm_peek(hVm vm, usize where);
+hVal *sbVm_peek(hVm vm, usize where);
 
 void sbVm_swap(hVm vm);
 
-void sbVm_call_func(hVm vm, hV *func);
+void sbVm_call_func(hVm vm, hVal *func);
 
-void sbVm_transfer_to_func(hVm vm, hV *func);
+void sbVm_transfer_to_func(hVm vm, hVal *func);
 
 void sbVm_call_c_func(hVm vm, sbRuntimeCFunc func);
 
