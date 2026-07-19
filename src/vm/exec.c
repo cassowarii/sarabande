@@ -258,13 +258,6 @@ sbOpcode get_opcode(hVm vm) {
   return *(vm->ip++);
 }
 
-void next_byte(hVm vm, u64 *result) {
-  u8 byte = *(vm->ip++);
-  if (vm->debugmode) debug("%02X ", byte);
-  *result <<= 8;
-  *result |= byte;
-}
-
 /* small numbers that are parameters to opcodes can
  * just be encoded directly as 1 byte. numbers of 16-bit
  * scale can be encoded as FC + bytebyte, numbers of
@@ -272,40 +265,16 @@ void next_byte(hVm vm, u64 *result) {
  * 64 bit can be FE + bytebytebytebytebytebytebytebyte,
  * in big-endian format */
 i64 get_param(hVm vm) {
-  u64 result = *((u8*)vm->ip++);
+  u64 result = *(vm->ip++);
   if (vm->debugmode) debug("%02llX ", (long long)result);
-  i64 signed_result;
 
   if (result == BC_LONG_NUM) {
-    result = 0;
-    next_byte(vm, &result);
-    next_byte(vm, &result);
-    signed_result = result;
-    if (result & (1 << 15)) signed_result = result - (1 << 16);
-  } else if (result == BC_VLONG_NUM) {
-    result = 0;
-    next_byte(vm, &result); // 0
-    next_byte(vm, &result); // 1
-    next_byte(vm, &result); // 2
-    next_byte(vm, &result); // 3
-    signed_result = result;
-    if (result & (1L << 31)) signed_result = result - (1L << 32);
-  } else if (result == BC_VVLONG_NUM) {
-    result = 0;
-    next_byte(vm, &result); // 0
-    next_byte(vm, &result); // 1
-    next_byte(vm, &result); // 2
-    next_byte(vm, &result); // 3
-    next_byte(vm, &result); // 4
-    next_byte(vm, &result); // 5
-    next_byte(vm, &result); // 6
-    next_byte(vm, &result); // 7
-    signed_result = (i64)result;
-  } else {
-    signed_result = (i64)result;
+    result = *(vm->ip++);
+    result <<= 32;
+    result |= *(vm->ip++);
   }
 
-  return signed_result;
+  return (i64)result;
 }
 
 /* execute one instruction! wow! */
@@ -651,7 +620,6 @@ void execute_instruction(hVm vm) {
       push_stack_immediate(vm, &res);
       break;
     case BC_LONG_NUM:
-    case BC_VLONG_NUM:
       PANIC("illegal opcode $%02X at position $%016zX", op, (usize)vm->ip);
     default:
       PANIC("unrecognized opcode $%02X at position $%016zX", op, (usize)vm->ip);

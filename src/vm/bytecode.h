@@ -57,10 +57,8 @@ typedef enum sbOpcode {
   BC_LIST_GATHER,       // create list from count + list of values on stack
   BC_HASH_GATHER,       // create hash from count + list of pairs of keys/values on stack
   BC_LIST_SPILL,        // splat a list into a context with a count
-  BC_LONG_NUM   = 0xFC, // next two bytes are a 16-bit number
-  BC_VLONG_NUM  = 0xFD, // next four bytes are a 32-bit number
-  BC_VVLONG_NUM = 0xFE, // next four bytes are a 32-bit number
   BC_HALT       = 0xFF, // terminate execution
+  BC_LONG_NUM   = 0x80000000, // next 8 bytes are a 64-bit number
 } sbOpcode;
 
 #endif

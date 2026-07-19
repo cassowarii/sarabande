@@ -22,17 +22,17 @@ void sbVmCompiler_deinitialize(sbVmCompiler *cm) {
   sbBuffer_deinitialize(&cm->label_positions);
 }
 
-void sbVmCompiler_write_code(sbVmCompiler *cm, const u8 *data, usize length) {
-  sbBuffer_append(&cm->bytecode, data, length);
+void sbVmCompiler_write_code(sbVmCompiler *cm, const u32 *data, usize length) {
+  sbBuffer_append(&cm->bytecode, data, length * sizeof(u32));
 }
 
-void sbVmCompiler_overwrite_code_at(sbVmCompiler *cm, usize offset, const u8 *data, usize length) {
+void sbVmCompiler_overwrite_code_at(sbVmCompiler *cm, usize offset, const u32 *data, usize length) {
   if (offset + length > cm->bytecode.size) PANIC("buffer overflow with overwrite_code_at!");
-  memcpy(&cm->bytecode.data[offset], data, length);
+  memcpy(&((u32*)cm->bytecode.data)[offset], data, length * sizeof(u32));
 }
 
 usize sbVmCompiler_get_position(sbVmCompiler *cm) {
-  return cm->bytecode.size;
+  return cm->bytecode.size / sizeof(u32);
 }
 
 u32 sbVmCompiler_add_constant(sbVmCompiler *cm, hVal *constant) {
@@ -60,12 +60,14 @@ void sbVmProgram_deinitialize(sbVmProgram *pm) {
 sbBlockId sbVmProgram_add_block(sbVmProgram *pm, sbVmCompiler *cm) {
   usize bytecode_length = cm->bytecode.size;
   usize constants_length = cm->constants.size;
+
+  /* padding to align constants on 8 byte boundary */
   while (bytecode_length % 8 != 0) bytecode_length ++;
 
   u8 *block_data = sbArena_alloc(&pm->arena, bytecode_length + constants_length);
 
-  u8 *bytecode = &block_data[0];
-  memcpy(bytecode, cm->bytecode.data, bytecode_length);
+  u32 *bytecode = (u32*)&block_data[0];
+  memcpy(bytecode, cm->bytecode.data, cm->bytecode.size);
 
   u8 *constants = &block_data[bytecode_length];
   memcpy(constants, cm->constants.data, constants_length);

@@ -21,8 +21,8 @@ typedef struct sbVmCompiler {
 
 /* fixed size / frozen block of bytecode */
 typedef struct sbVmBlock {
-  const u8 *bytecode;
-  const u8 *bytecode_end;
+  const u32 *bytecode;
+  const u32 *bytecode_end;
   const hVal *constants;
   usize constants_count;
 } sbVmBlock;
@@ -42,9 +42,9 @@ void sbVmCompiler_reset(sbVmCompiler *pb);
 
 void sbVmCompiler_deinitialize(sbVmCompiler *pb);
 
-void sbVmCompiler_write_code(sbVmCompiler *pb, const u8 *data, usize length);
+void sbVmCompiler_write_code(sbVmCompiler *pb, const u32 *data, usize length);
 
-void sbVmCompiler_overwrite_code_at(sbVmCompiler *cm, usize offset, const u8 *data, usize length);
+void sbVmCompiler_overwrite_code_at(sbVmCompiler *cm, usize offset, const u32 *data, usize length);
 
 usize sbVmCompiler_get_position(sbVmCompiler *cm);
 

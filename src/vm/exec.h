@@ -51,7 +51,7 @@ typedef enum sbVmStatus {
 } sbVmStatus;
 
 typedef struct sbVmStackFrame {
-  const u8 *return_addr;
+  const u32 *return_addr;
   struct sbVmStackFrame *last_fp;
   u8 *last_rp;
   flag is_c_func;
@@ -70,7 +70,7 @@ typedef struct sbVm {
   u8 *vstack;         /* for calculations */
   u8 *rstack;         /* for locals and return addresses, like FORTH */
 
-  const u8 *ip;       /* instruction pointer */
+  const u32 *ip;      /* instruction pointer */
   sbVmStackFrame *fp; /* frame pointer */
   u8 *vsp;            /* vstack pointer */
   u8 *rsp;            /* rstack pointer */

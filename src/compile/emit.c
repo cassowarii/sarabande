@@ -4,7 +4,8 @@
 #define STRING2(...) STRING1(__VA_ARGS__)
 #define EMIT(...) do { \
   if (cm->debugmode) debug(STRING2(__VA_ARGS__) "\n"); \
-  sbVmCompiler_write_code(cm, (u8[]) { __VA_ARGS__ }, sizeof((u8[]) { __VA_ARGS__ })); \
+  sbVmCompiler_write_code(cm, (u32[]) { __VA_ARGS__ }, sizeof((u32[]) { __VA_ARGS__ }) / sizeof(u32)); \
+  if (cm->debugmode) debug("%08x ", __VA_ARGS__); \
 } while (0)
 #define EARG(x) (emit_arg(cm, x))
 
@@ -38,41 +39,20 @@ void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir, flag debugmode) {
 void emit_arg(sbVmCompiler *cm, i64 actual_number) {
   if (cm->debugmode) debug("    arg %lld\n", (long long)actual_number);
 
-  u8 buf[9];
+  u32 buf[3];
   u64 number = actual_number;
-  if (0 <= actual_number && actual_number < 253) {
-    buf[0] = number;
-    sbVmCompiler_write_code(cm, buf, 1);
-  } else if (-32768 < actual_number && actual_number < 32768) {
-    buf[0] = BC_LONG_NUM;
-    if (actual_number < 0) {
-      number = actual_number + 65536;
-    }
-    buf[1] = (number >>  8) & 0xFF;
-    buf[2] = (number >>  0) & 0xFF;
-    sbVmCompiler_write_code(cm, buf, 3);
-  } else if (-(1L << 31) < actual_number && actual_number < (1L << 31)) {
-    buf[0] = BC_VLONG_NUM;
+  if (-(1L << 31) < actual_number && actual_number < (1L << 31)) {
     if (actual_number < 0) {
       number = actual_number + (1LL << 32);
     }
-    buf[1] = (number >> 24) & 0xFF;
-    buf[2] = (number >> 16) & 0xFF;
-    buf[3] = (number >>  8) & 0xFF;
-    buf[4] = (number >>  0) & 0xFF;
-    sbVmCompiler_write_code(cm, buf, 5);
+    buf[0] = (u32)number;
+    sbVmCompiler_write_code(cm, buf, 1);
   } else {
-    buf[0] = BC_VVLONG_NUM;
+    buf[0] = BC_LONG_NUM;
     number = (u64)actual_number;
-    buf[1] = (number >> 56) & 0xFF;
-    buf[2] = (number >> 48) & 0xFF;
-    buf[3] = (number >> 40) & 0xFF;
-    buf[4] = (number >> 32) & 0xFF;
-    buf[5] = (number >> 24) & 0xFF;
-    buf[6] = (number >> 16) & 0xFF;
-    buf[7] = (number >>  8) & 0xFF;
-    buf[8] = (number >>  0) & 0xFF;
-    sbVmCompiler_write_code(cm, buf, 9);
+    buf[1] = (number >> 32);
+    buf[2] = (number & 0xFFFFFFFF);
+    sbVmCompiler_write_code(cm, buf, 3);
   }
 }
 
@@ -107,17 +87,10 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk) {
 
   /* Go back and fill in locations for forward jumps, whose
    * positions we now know. */
-  usize nlabelpos = cm->label_positions.size / sizeof(struct labelpos);
-  for (int i = 0; i < nlabelpos; i++) {
-    struct labelpos lp = ((struct labelpos*)cm->label_positions.data)[i];
-    u8 location_bytes[4];
-    u32 position = lp.label->block_position;
-    if (cm->debugmode) debug("now we know that the jump at %d should go to %d\n", lp.offset - 2, position);
-    location_bytes[0] = (position >> 24) & 0xFF;
-    location_bytes[1] = (position >> 16) & 0xFF;
-    location_bytes[2] = (position >>  8) & 0xFF;
-    location_bytes[3] = (position >>  0) & 0xFF;
-    sbVmCompiler_overwrite_code_at(cm, lp.offset, location_bytes, 4);
+  BUFFER_ITER(cm->label_positions, struct labelpos, lp) {
+    u32 position = lp->label->block_position;
+    if (cm->debugmode) debug("now we know that the jump at %d should go to %d\n", lp->offset - 2, position);
+    sbVmCompiler_overwrite_code_at(cm, lp->offset, &position, 1);
   }
   sbBuffer_set_size(&cm->label_positions, 0);
 }
@@ -158,13 +131,12 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       if (stmt->jump.label->found_yet) {
         EARG(stmt->jump.label->block_position);
       } else {
-        EMIT(BC_VLONG_NUM);
         /* we have to remember to come back and fill in the address later when we
          * know where this label is! */
         record_labelpos(cm, stmt->jump.label, sbVmCompiler_get_position(cm));
         /* leave behind four zeroes at this offset that we can later put the
          * address into */
-        EMIT(0, 0, 0, 0);
+        EMIT(0);
       }
       break;
     case IR_S_LABEL:
@@ -232,7 +204,7 @@ void compile_list(sbVmCompiler *cm, sbIrExpr *expr) {
        * by one */
       compile_expr(cm, elem);
       /* swap to put the number on top, then increment */
-      EMIT(BC_SWAP, BC_OP_INCR);
+      EMIT(BC_SWAP); EMIT(BC_OP_INCR);
     } else {
       /* blissfully unaware of the splat */
       compile_expr(cm, elem);
@@ -402,11 +374,11 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_FLDIV: EMIT(BC_OP_FLDIV); break;
     case AST_OP_MOD: EMIT(BC_OP_MOD); break;
     case AST_OP_EQ: EMIT(BC_OP_EQ); break;
-    case AST_OP_NE: EMIT(BC_OP_EQ, BC_OP_NOT); break;
+    case AST_OP_NE: EMIT(BC_OP_EQ); EMIT(BC_OP_NOT); break;
     case AST_OP_LT: EMIT(BC_OP_LT); break;
-    case AST_OP_GT: EMIT(BC_OP_LE, BC_OP_NOT); break;
+    case AST_OP_GT: EMIT(BC_OP_LE); EMIT(BC_OP_NOT); break;
     case AST_OP_LE: EMIT(BC_OP_LE); break;
-    case AST_OP_GE: EMIT(BC_OP_LT, BC_OP_NOT); break;
+    case AST_OP_GE: EMIT(BC_OP_LT); EMIT(BC_OP_NOT); break;
     case AST_OP_NOT: EMIT(BC_OP_NOT); break;
     case AST_OP_AND: EMIT(BC_OP_AND); break;
     case AST_OP_OR: EMIT(BC_OP_OR); break;
@@ -414,7 +386,7 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_RANGEINDEX: EMIT(BC_OP_RANGEINDEX); break;
     /* op range is currently only used in rangeindex; just pass them to it directly */
     case AST_OP_RANGE: break;
-    case AST_OP_DIVBY: EMIT(BC_OP_MOD, BC_LD_IMM); EARG(0); EMIT(BC_OP_EQ); break;
+    case AST_OP_DIVBY: EMIT(BC_OP_MOD); EMIT(BC_LD_IMM); EARG(0); EMIT(BC_OP_EQ); break;
     default:
       PANIC("unknown operation! (%lld / %c)", (long long)op, op);
   }
