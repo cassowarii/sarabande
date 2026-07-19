@@ -28,14 +28,14 @@ void sbIrProgram_print(hIrProgram ir) {
 /* --- */
 
 static void print_var(sbIrVariable *v) {
-  if (v->closed_over) {
+  if (v->is_reference) {
     debug("special ");
   }
 
   if (v->is_upvalue) {
-    debug("upvalue %zu", v->slot_id);
+    debug("upvalue %d", v->slot_id);
   } else {
-    debug("variable %zu", v->slot_id);
+    debug("variable %d", v->slot_id);
   }
 }
 
@@ -134,10 +134,10 @@ static void print_stmt(sbIrStmt *s) {
       debug("]\n");
       break;
     case IR_S_LABEL:
-      debug("label %zu:\n", s->label->id);
+      debug("label %d:\n", s->label->id);
       break;
     case IR_S_JUMP:
-      debug("  jump to label %zu", s->jump.label->id);
+      debug("  jump to label %d", s->jump.label->id);
       if (s->jump.condition) {
         if (s->jump.inverted) {
           debug(" unless ");
@@ -164,9 +164,9 @@ static void print_stmt(sbIrStmt *s) {
       break;
     case IR_S_ASSIGN:
       debug("  ");
-      print_var(s->assign.var);
+      print_expr(s->assign.where);
       debug(" = ");
-      print_expr(s->assign.expr);
+      print_expr(s->assign.value);
       debug("\n");
       break;
     default:

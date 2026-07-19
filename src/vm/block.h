@@ -13,7 +13,7 @@
 /* dynamic sized block that we can more easily add
  * things to while compiling */
 typedef struct sbVmCompiler {
-  flag debugmode;
+  flag debugmode : 1;
   sbBuffer bytecode;
   sbBuffer constants;
   sbBuffer label_positions;

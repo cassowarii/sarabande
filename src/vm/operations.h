@@ -29,3 +29,7 @@ void sbV_index_value(hVm vm);
 hVal sbV_rangeindex(hVal *a, hVal *b, hVal *c);
 
 void sbV_index_set(hVal *obj, hVal *key, hVal *value);
+
+void sbV_deref(hVm vm);
+
+void sbV_refput(hVm vm);

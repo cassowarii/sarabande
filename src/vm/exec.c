@@ -432,6 +432,9 @@ void execute_instruction(hVm vm) {
     case BC_SEND:
       sbLib_resolve_method(vm);
       break;
+    case BC_REF_PUT:
+      sbV_refput(vm);
+      break;
     case BC_NUMARG:
       param = get_param(vm);
       v = pop_stack(vm);
@@ -572,7 +575,8 @@ void execute_instruction(hVm vm) {
       push_stack_immediate(vm, &res);
       break;
     case BC_OP_DEREF:
-      PANIC("todo");
+      sbV_deref(vm);
+      break;
     case BC_ALLOC_VARS:
       /* TODO check for overflow */
       param = get_param(vm);

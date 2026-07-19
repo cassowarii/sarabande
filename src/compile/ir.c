@@ -142,8 +142,9 @@ static sbIrVariable *create_upvalue(sbIrChunk *ck, sbIrVariable *v, usize slot_i
    * scope. */
   new_var->introduced = v->introduced;
 
-  /* Upvalues actually can be closed over, but when initially created they won't be. */
-  new_var->closed_over = FALSE;
+  /* An upvalue can be to a refaliased variable! So we have to remember to treat it
+   * specially too, just like the original */
+  new_var->is_reference = v->is_reference;
 
   /* This tells us where in the sequence of nested scopes this variable exists. */
   new_var->mapping_index = v->mapping_index;
@@ -158,7 +159,6 @@ static sbIrVariable *create_upvalue(sbIrChunk *ck, sbIrVariable *v, usize slot_i
  * value with that variable's value */
 static sbIrVariable *register_upvalue(hIrChunk ck, usize variable_index) {
   varmapentry *e = &BUFFER_INDEX(ck->program->varmapping, varmapentry, variable_index);
-  e->var->closed_over = TRUE;
 
   sbIrVariable *existing_upvalue = NULL;
   BUFFER_ITER(ck->closed_vars, sbIrVariable*, var) {
@@ -315,12 +315,8 @@ static sbIrExpr *expr_value(hIrChunk ck, hVal *value) {
 static sbIrExpr *expr_func(hIrChunk ck, sbIrChunk *func) {
   /* when creating a 'literal' of a function 'func' inside another chunk 'ck',
    * 'func' tells us which variables it closes over from the outer scope. we need
-   * to convert these into references to variables in ck's scope so that it knows
-   * which of its variables to save for this particular function. (it also knows
-   * to heap-allocate those variables as sbRef because their closed_over flag is
-   * set, but if we have multiple functions closing over different variables we
-   * need to know which is which, and also these closed variables might be upvalues
-   * to ck as well. */
+   * to remember to move these variables to the heap and provide them when a
+   * closure is created (if any). */
   sbIrExpr *e = new_expr(ck, &(sbIrExpr) {
     .type = IR_E_FUNC,
     .func.chunk = func,
@@ -490,11 +486,11 @@ static void put_expr(hIrChunk ck, sbIrExpr *expr) {
   });
 }
 
-static void put_assign(hIrChunk ck, sbIrVariable *var, sbIrExpr *expr) {
+static void put_assign(hIrChunk ck, sbIrExpr *where, sbIrExpr *value) {
   put_ir_stmt(ck, &(sbIrStmt) {
     .type = IR_S_ASSIGN,
-    .assign.var = var,
-    .assign.expr = expr,
+    .assign.where = where,
+    .assign.value = value,
   });
 }
 
@@ -619,7 +615,7 @@ static usize compile_ast_stmtseq_open(hIrChunk ck, sbAst seqast, flag implicit_r
       sbIrVariable *V1 = lookup_node_var(ck, node->seq.left);
       sbIrChunk *C1 = compile_ast_function(ck->program, params, body);
       sbIrExpr *E1 = expr_func(ck, C1);
-      put_assign(ck, V1, E1);
+      put_assign(ck, expr_var(ck, V1), E1);
     }
 
     if (node->type == AST_NODE_LET) {
@@ -704,9 +700,8 @@ static void compile_ast_stmtseq(hIrChunk ck, sbAst seqast, flag implicit_return)
 }
 
 static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
-  sbIrExpr *E1;
+  sbIrExpr *E1, *E2;
   sbIrLabel *L1, *L2;
-  sbIrVariable *V1;
   sbAst N1, N2;
   switch (node->type) {
     case AST_NODE_RETURN:
@@ -768,9 +763,9 @@ static void compile_ast_stmt(hIrChunk ck, sbAst node, flag implicit_return) {
       N1 = node->seq.left;  /* things to bind to */
       N2 = node->seq.right; /* values to assign */
       while (N1 != NO_NODE && N2 != NO_NODE) {
-        V1 = compile_ast_var(ck, N1->seq.right);
-        E1 = compile_ast_expr(ck, N2->seq.right, TRUE);
-        put_assign(ck, V1, E1);
+        E1 = compile_ast_expr(ck, N1->seq.right, TRUE);
+        E2 = compile_ast_expr(ck, N2->seq.right, TRUE);
+        put_assign(ck, E1, E2);
         N1 = N1->seq.left;
         N2 = N2->seq.left;
       }
@@ -944,9 +939,9 @@ static sbIrExpr *compile_ast_hash(hIrChunk ck, sbAst node) {
   return list;
 }
 
-/* compile one individual element to bind to: might be a bare variable name,
- * or might be "...name", or might be some other expression, in which case
- * we bind by matching it exactly? (TODO) */
+/* compile one individual element to bind to: might be a bare variable name, or might
+ * be "...name" or "&name", or might be some other expression, in which case we bind
+ * by matching it exactly? (TODO) */
 static sbIrExpr *compile_ast_binding(hIrChunk ck, sbAst node, flag should_create_var, sbIrNameIntroduceType type) {
   if (node->type == AST_NODE_NAME) {
     sbIrVariable *V1;
@@ -957,6 +952,22 @@ static sbIrExpr *compile_ast_binding(hIrChunk ck, sbAst node, flag should_create
     }
     V1->introduced = type;
     return expr_var(ck, V1);
+  } else if (node->type == AST_NODE_OP && node->op.type == AST_OP_REF) {
+    /* let &a = f() or some such: this actually makes 'a' a different type
+     * of variable, which is aliased to whatever the reference is. so,
+     * assigning to a for example is more like *a = whatever. so we actually
+     * have to save the reference itself in this variable slot, and remember
+     * that assigning to it, etc., does something different */
+    sbIrExpr *ref_to = compile_ast_binding(ck, node->op.left, should_create_var, type);
+    if (ref_to->type == IR_E_VAR) {
+      /* from the declaration, we know this variable is a reference-variable.
+       * so we can rewrite assignments etc to it at the EMIT stage. */
+      ref_to->var->is_reference = TRUE;
+      return expr_op(ck, AST_OP_REF, ref_to, NULL);
+    } else {
+      chunk_error(ck, "cannot destructure into a `&<...>`");
+      return NULL;
+    }
   } else if (node->type == AST_NODE_OP) {
     sbIrExpr *left = NULL, *right = NULL;
     if (node->op.left != NO_NODE) {
@@ -1071,7 +1082,7 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
           PANIC("Pipe cannot currently be used in this context. I will fix it");
         }
         sbIrExpr *left = compile_ast_expr(ck, node->op.left, FALSE);
-        put_assign(ck, pipe_var(ck), left);
+        put_assign(ck, expr_var(ck, pipe_var(ck)), left);
         ck->pipe_var_in_use = TRUE;
         sbIrExpr *right = compile_ast_expr(ck, node->op.right, FALSE);
         ck->pipe_var_in_use = FALSE;

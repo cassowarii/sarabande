@@ -194,3 +194,35 @@ void sbV_index_set(hVal *obj, hVal *key, hVal *value) {
     PANIC("todo %lld", (long long)obj->type);
   }
 }
+
+void sbV_deref(hVm vm) {
+  hVal *a = sbVm_peek(vm, 0);
+  if (a->type == IT_REF) {
+    hVar v = sbVar_deref(a);
+    sbVm_pop(vm);
+    hVal *result = sbVar_get_value_ptr(v);
+    sbVm_push(vm, result);
+  } else {
+    sbVm_push_immediate(vm, &HVSYM(S_OP_DEREF));        /* a op::deref */
+    sbVm_swap(vm);                                      /* op::deref a */
+    sbVm_push_immediate(vm, &HVINT(1));                 /* op::deref a 1 */
+    sbVm_swap(vm);                                      /* op::deref 1 a */
+    sbLib_resolve_method(vm);
+  }
+}
+
+void sbV_refput(hVm vm) {
+  hVal *ref = sbVm_peek(vm, 0);
+  hVal *val = sbVm_peek(vm, 1);
+  if (ref->type == IT_REF) {
+    hVar v = sbVar_deref(ref);
+    sbVar_set_value(v, val);
+    sbVm_npop(vm, 2);
+  } else {
+    sbVm_push_immediate(vm, &HVSYM(S_OP_REFSET));       /* val ref op::refset */
+    sbVm_swap(vm);                                      /* val op::refset ref */
+    sbVm_push_immediate(vm, &HVINT(2));                 /* val op::refset ref 2 */
+    sbVm_swap(vm);                                      /* val op::refset 2 a */
+    sbLib_resolve_method(vm);
+  }
+}

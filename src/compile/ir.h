@@ -62,18 +62,18 @@ typedef enum sbIrNameIntroduceType {
 } sbIrNameIntroduceType;
 
 typedef struct sbIrLabel {
-  flag found_yet;
+  flag found_yet : 1;
+  i32 id : 31;
   struct sbIrLabel *aliased_to;
-  usize id;
-  usize block_position;
+  i32 block_position;
 } sbIrLabel;
 
 typedef struct sbIrVariable {
-  usize slot_id;
-  sbIrNameIntroduceType introduced;
-  flag closed_over;
-  flag is_upvalue;
-  usize mapping_index;
+  flag is_reference : 1;
+  flag is_upvalue : 1;
+  sbIrNameIntroduceType introduced : 4;
+  i32 mapping_index : 26;
+  i32 slot_id;
 } sbIrVariable;
 
 typedef struct sbIrJump {
@@ -113,8 +113,8 @@ typedef struct sbIrExpr {
 } sbIrExpr;
 
 typedef struct sbIrAssign {
-  sbIrVariable *var;
-  sbIrExpr *expr;
+  sbIrExpr *where;
+  sbIrExpr *value;
 } sbIrAssign;
 
 typedef struct sbIrBindList {
@@ -143,7 +143,7 @@ struct sbIrProgram;
 typedef struct sbIrChunk {
   struct sbIrProgram *program;
   flag pipe_var_in_use : 1;
-  i32 id;
+  i32 id : 31;
   i16 num_args;
   i16 num_upvalues;
   i32 label_count;

@@ -5,6 +5,7 @@
 hSymbol S_OP_ADD, S_OP_SUB, S_OP_MUL, S_OP_DIV, S_OP_INTDIV, S_OP_MOD;
 hSymbol S_OP_EQ, S_OP_LT, S_OP_LE;
 hSymbol S_OP_CALL, S_OP_SET, S_OP_INDEX, S_OP_SETINDEX, S_OP_RANGEINDEX, S_OP_SETRANGEINDEX;
+hSymbol S_OP_DEREF, S_OP_REFSET;
 hSymbol S_OP_TO_STRING, S_OP_TO_INT, S_OP_TO_FLOAT, S_OP_TO_LIST, S_OP_TO_HASH;
 
 void sbLib_create_sentinels() {
@@ -19,6 +20,8 @@ void sbLib_create_sentinels() {
   S_OP_LE = SENTINEL("<op::le>");
   S_OP_CALL = SENTINEL("<op::call>");
   S_OP_SET = SENTINEL("<op::set>");
+  S_OP_DEREF = SENTINEL("<op::deref>");
+  S_OP_REFSET = SENTINEL("<op::refset>");
   S_OP_INDEX = SENTINEL("<op::index>");
   S_OP_SETINDEX = SENTINEL("<op::setindex>");
   S_OP_RANGEINDEX = SENTINEL("<op::rangeindex>");

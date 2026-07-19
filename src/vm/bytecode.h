@@ -31,6 +31,7 @@ typedef enum sbOpcode {
   BC_JT,                // jump if true
   BC_JF,                // jump if false
   BC_SEND,              // like call, but jump to object method
+  BC_REF_PUT,           // assign through pointer
   BC_OP_EQ,             // ==
   BC_OP_NOT,            // boolean not
   BC_OP_ADD,            // add

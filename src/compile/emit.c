@@ -173,13 +173,40 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       if (cm->debugmode) debug("\n");
       break;
     case IR_S_ASSIGN:
-      compile_expr(cm, stmt->assign.expr);
-      if (stmt->assign.var->is_upvalue) {
-        EMIT(BC_ST_UPVAL);
+      compile_expr(cm, stmt->assign.value);
+      if (stmt->assign.where->type == IR_E_VAR) {
+        /* direct assignment to some variable name or other */
+        sbIrVariable *var = stmt->assign.where->var;
+        if (var->is_reference) {
+          if (!var->is_upvalue) {
+            /* let &a = &b; a = 5 # <-- should set b, too! */
+            EMIT(BC_LD_VAR);
+          } else {
+            /* same, but for upvalue */
+            EMIT(BC_LD_UPVAL);
+          }
+          EARG(var->slot_id);
+          EMIT(BC_REF_PUT);
+        } else {
+          if (!var->is_upvalue) {
+            /* normal assignment to normal variable */
+            EMIT(BC_ST_VAR);
+          } else {
+            /* assignment to normal upvalue variable */
+            EMIT(BC_ST_UPVAL);
+          }
+          EARG(var->slot_id);
+        }
+      } else if (stmt->assign.where->type == IR_E_OP && stmt->assign.where->op.type == AST_OP_DEREF) {
+        /* assignment to like *<....> = <....> */
+        compile_expr(cm, stmt->assign.where->op.left);
+        /* this should leave us with a pointer to expr on top of stack */
+        EMIT(BC_REF_PUT);
       } else {
-        EMIT(BC_ST_VAR);
+        /* TODO: Now we can support stuff like index-assignment also if we want to.
+         * Probably do this next */
+        PANIC("This type of assignment operation is not supported!");
       }
-      EARG(stmt->assign.var->slot_id);
       break;
     case IR_S_BIND:
       if (stmt->bind.values) {
@@ -270,30 +297,42 @@ void compile_hash(sbVmCompiler *cm, sbIrExpr *expr) {
 void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
   for (sbIrBindList *considering = list; considering; considering = considering->next) {
     sbIrExpr *elem = considering->this;
-    if (elem->type == IR_E_OP && elem->op.type == AST_OP_SPLAT) {
-      /* okay. we want to leave some number of elements on the stack
-       * for whatever other arguments there are. currently we have the
-       * total count on top of the stack. so, we'll reduce the count
-       * by the number we want to save, gather into a list, and assign
-       * to that, then replace the count we wanted to keep on the stack */
-      if (list->pre_splat_count > 0) {
-        EMIT(BC_LD_IMM);
-        EARG(list->pre_splat_count);
-        EMIT(BC_OP_SUB);
-      }
-      /* create list of this length and store in thing */
-      EMIT(BC_LIST_GATHER);
-      /* TODO actually, vv THIS vv should be a recursive call. otherwise,
-       * we don't actually check that it's a variable that the "..." is
-       * attached to, and we may fail in weird cases like "...2". but we
-       * need to restructure the BindList data structure. */
-      EMIT(BC_ST_VAR);
-      EARG(elem->op.left->var->slot_id);
-      if (list->pre_splat_count > 0) {
-        /* put pre splat count back if we need it, to bind the rest of
-         * the variables */
-        EMIT(BC_LD_IMM);
-        EARG(list->pre_splat_count);
+    if (elem->type == IR_E_OP) {
+      if (elem->op.type == AST_OP_SPLAT) {
+        /* okay. we want to leave some number of elements on the stack
+         * for whatever other arguments there are. currently we have the
+         * total count on top of the stack. so, we'll reduce the count
+         * by the number we want to save, gather into a list, and assign
+         * to that, then replace the count we wanted to keep on the stack */
+        if (list->pre_splat_count > 0) {
+          EMIT(BC_LD_IMM);
+          EARG(list->pre_splat_count);
+          EMIT(BC_OP_SUB);
+        }
+        /* create list of this length and store in thing */
+        EMIT(BC_LIST_GATHER);
+        /* TODO actually, vv THIS vv should be a recursive call. otherwise,
+         * we don't actually check that it's a variable that the "..." is
+         * attached to, and we may fail in weird cases like "...2". but we
+         * need to restructure the BindList data structure. */
+        EMIT(BC_ST_VAR);
+        EARG(elem->op.left->var->slot_id);
+        if (list->pre_splat_count > 0) {
+          /* put pre splat count back if we need it, to bind the rest of
+           * the variables */
+          EMIT(BC_LD_IMM);
+          EARG(list->pre_splat_count);
+        }
+      } else if (elem->op.type == AST_OP_REF) {
+        /* this should also probably be some kind of recursive thing, to handle
+         * situations like let &&a = whatever. (if that's even doable...?)
+         * but right now we just only permit & before variable names on the
+         * left side of a let */
+        /* storing here is the same as normal, because the actual variable
+         * slot saves the reference. however, assignment etc. is statically
+         * known to work differently so we will adjust those */
+        EMIT(BC_ST_ARG);
+        EARG(elem->op.left->var->slot_id);
       }
     } else if (elem->type == IR_E_VAR) {
       /* normal sequence, no splat (so far): top thing goes in this
@@ -306,15 +345,20 @@ void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
   }
 }
 
+void compile_ref(sbVmCompiler *cm, sbIrExpr *expr);
 void compile_op(sbVmCompiler *cm, sbAstOp op);
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
   switch(expr->type) {
     case IR_E_OP:
-      compile_expr(cm, expr->op.left);
-      if (expr->op.right) {
-        compile_expr(cm, expr->op.right);
+      if (expr->op.type == AST_OP_REF) {
+        compile_ref(cm, expr->op.left);
+      } else {
+        compile_expr(cm, expr->op.left);
+        if (expr->op.right) {
+          compile_expr(cm, expr->op.right);
+        }
+        compile_op(cm, expr->op.type);
       }
-      compile_op(cm, expr->op.type);
       break;
     case IR_E_CALL:
       /* calling convention: store argument count on stack */
@@ -338,6 +382,12 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
         EMIT(BC_LD_VAR);
       }
       EARG(expr->var->slot_id);
+
+      /* when a variable that is_reference is referenced
+       * in non-assignment context, it automatically dereferences */
+      if (expr->var->is_reference) {
+        EMIT(BC_OP_DEREF);
+      }
       break;
     case IR_E_FUNC:
       if (expr->func.bound.size > 0) {
@@ -346,12 +396,10 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
             /* BC_LD_UPREF: closed over variables are always on
              * the heap, so all upval refs are rrefs */
             EMIT(BC_LD_UPREF);
-          } else if ((*var)->closed_over) {
+          } else {
             /* BC_LD_RREF: everything we are closing over from the
              * current scope needs to move to the heap */
             EMIT(BC_LD_RREF);
-          } else {
-            PANIC("cannot have a direct variable in closure!");
           }
           EARG((*var)->slot_id);
         }
@@ -394,6 +442,23 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
   }
 }
 
+/* compiling the left hand side of an assignment (that isn't straightforwardly
+ * a variable) to return some kind of reference */
+void compile_assign_left(sbVmCompiler *cm, sbIrExpr *expr) {
+}
+
+/* when we see an expression of the form '&expr', we have to
+ * handle this specially depending on what 'expr' is (and sometimes
+ * we just aren't allowed to do it) */
+void compile_ref(sbVmCompiler *cm, sbIrExpr *expr) {
+  if (expr->type == IR_E_VAR) {
+    EMIT(BC_LD_RREF);
+    EARG(expr->var->slot_id);
+  } else {
+    PANIC("cannot & non-variable-name! (todo)");
+  }
+}
+
 void compile_op(sbVmCompiler *cm, sbAstOp op) {
   switch (op) {
     case AST_OP_ADD: EMIT(BC_OP_ADD); break;
@@ -412,6 +477,7 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_OR: EMIT(BC_OP_OR); break;
     case AST_OP_INDEX: EMIT(BC_OP_INDEXVAL); break;
     case AST_OP_RANGEINDEX: EMIT(BC_OP_RANGEINDEX); break;
+    case AST_OP_DEREF: EMIT(BC_OP_DEREF); break;
     /* op range is currently only used in rangeindex; just pass them to it directly */
     case AST_OP_RANGE: break;
     case AST_OP_DIVBY: EMIT(BC_OP_MOD, BC_LD_IMM); EARG(0); EMIT(BC_OP_EQ); break;

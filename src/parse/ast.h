@@ -54,7 +54,6 @@ typedef enum sbAstOp {
   AST_OP_LT = '<',
   AST_OP_GT = '>',
   AST_OP_REF = '&',
-  AST_OP_DEREF = '*',
   AST_OP_PIPE = '|',
   AST_OP_LE = 128,
   AST_OP_GE,
@@ -76,6 +75,7 @@ typedef enum sbAstOp {
   AST_OP_IN,
   AST_OP_SEND,
   AST_OP_SPLAT,
+  AST_OP_DEREF,
 } sbAstOp;
 
 typedef struct sbAstNode {
