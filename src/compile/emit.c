@@ -176,8 +176,6 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
       compile_expr(cm, stmt->assign.expr);
       if (stmt->assign.var->is_upvalue) {
         EMIT(BC_ST_UPVAL);
-      } else if (stmt->assign.var->closed_over) {
-        EMIT(BC_ST_IND);
       } else {
         EMIT(BC_ST_VAR);
       }
@@ -289,11 +287,7 @@ void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
        * we don't actually check that it's a variable that the "..." is
        * attached to, and we may fail in weird cases like "...2". but we
        * need to restructure the BindList data structure. */
-      if (elem->op.left->var->closed_over) {
-        EMIT(BC_ST_IND);
-      } else {
-        EMIT(BC_ST_VAR);
-      }
+      EMIT(BC_ST_VAR);
       EARG(elem->op.left->var->slot_id);
       if (list->pre_splat_count > 0) {
         /* put pre splat count back if we need it, to bind the rest of
@@ -304,11 +298,7 @@ void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
     } else if (elem->type == IR_E_VAR) {
       /* normal sequence, no splat (so far): top thing goes in this
        * variable using ST_ARG */
-      if (elem->var->closed_over) {
-        EMIT(BC_ST_ARG_IND);
-      } else {
-        EMIT(BC_ST_ARG);
-      }
+      EMIT(BC_ST_ARG);
       EARG(elem->var->slot_id);
     } else {
       PANIC("bind todo!");
@@ -344,8 +334,6 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
     case IR_E_VAR:
       if (expr->var->is_upvalue) {
         EMIT(BC_LD_UPVAL);
-      } else if (expr->var->closed_over) {
-        EMIT(BC_LD_IND);
       } else {
         EMIT(BC_LD_VAR);
       }
@@ -355,25 +343,13 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
       if (expr->func.bound.size > 0) {
         BUFFER_ITER(expr->func.bound, sbIrVariable*, var) {
           if ((*var)->is_upvalue) {
-            /* the closure-generator expects a series of values
-             * of type reference to close over. BC_LD_UPVAL normally
-             * pushes whatever is *behind* the reference, which we
-             * don't want. UPREF will push the reference value
-             * itself from the closure so we can close over it
-             * a second time */
+            /* BC_LD_UPREF: closed over variables are always on
+             * the heap, so all upval refs are rrefs */
             EMIT(BC_LD_UPREF);
           } else if ((*var)->closed_over) {
-            /* note: BC_LD_REF here, not BC_LD_IND! this will push
-             * the pointer value, not the variable itself, because
-             * we want to put the pointer (well, the sbRef) inside
-             * the closure, not the value */
-            /* BC_LD_REF is actually almost the same as BC_LD_VAR,
-             * except that if a variable hasn't been initialized
-             * it will create a new reference to nil. (this is
-             * necessary for mutually calling functions, who want to
-             * close over each other before all of them have been
-             * defined.) */
-            EMIT(BC_LD_REF);
+            /* BC_LD_RREF: everything we are closing over from the
+             * current scope needs to move to the heap */
+            EMIT(BC_LD_RREF);
           } else {
             PANIC("cannot have a direct variable in closure!");
           }
@@ -434,7 +410,7 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_NOT: EMIT(BC_OP_NOT); break;
     case AST_OP_AND: EMIT(BC_OP_AND); break;
     case AST_OP_OR: EMIT(BC_OP_OR); break;
-    case AST_OP_INDEX: EMIT(BC_OP_INDEX); break;
+    case AST_OP_INDEX: EMIT(BC_OP_INDEXVAL); break;
     case AST_OP_RANGEINDEX: EMIT(BC_OP_RANGEINDEX); break;
     /* op range is currently only used in rangeindex; just pass them to it directly */
     case AST_OP_RANGE: break;

@@ -20,8 +20,8 @@ static void length(hVm vm, hVal *target, usize num_params) {
 
 static void get_index(hVm vm, hVal *target, usize num_params) {
   hVal *key = sbVm_pop(vm);
-  hVal *result = sbHash_find(target->hash, key);
-  if (result == IT_NOTHING) {
+  hVal *result = sbHash_find_value(target->hash, key);
+  if (result == NULL) {
     sbVm_push_immediate(vm, &HVNIL);
   } else {
     sbVm_push(vm, result);

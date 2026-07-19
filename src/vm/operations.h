@@ -24,7 +24,7 @@ hVal sbV_le(const hVal *a, const hVal *b);
 
 hVal sbV_append(hVal *a, hVal *b);
 
-void sbV_index(hVm vm);
+void sbV_index_value(hVm vm);
 
 hVal sbV_rangeindex(hVal *a, hVal *b, hVal *c);
 

@@ -89,16 +89,16 @@ void sbHash_insert(hHash h, hVal *key, hVal *value) {
   set_key(t, key, value);
 }
 
-hVal sbHash_find_value(hHash h, hVal *key) {
+hVal *sbHash_find_value(hHash h, hVal *key) {
   hashtbl *t = find_tbl_for_handle(h);
   usize index = find_index_by_key(t, key);
   hVal *keys;
   sbVar *values;
   get_ptrs_for_tbl(t, &keys, &values);
   if (keys[index].type == IT_NOTHING) {
-    return HVNOTHING;
+    return NULL;
   } else {
-    return sbVar_get_value(&values[index]);
+    return sbVar_get_value_ptr(&values[index]);
   }
 }
 

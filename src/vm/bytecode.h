@@ -9,8 +9,8 @@ typedef enum sbOpcode {
   BC_LD_CONST,          // push constants[index] to stack
   BC_LD_CTX,            // look up key in context object and push result
   BC_LD_VAR,            // push value onto stack from variable
-  BC_LD_LREF,           // push lvalue reference onto stack from variable
-  BC_LD_RREF,           // push rvalue reference onto stack from variable
+  BC_LD_LREF,           // push lref to variable onto stack
+  BC_LD_RREF,           // push rref to variable onto stack
   BC_LD_UPVAL,          // push value onto stack from closure
   BC_LD_UPREF,          // push pointer to closure value onto stack (to close over again)
   BC_LD_BLK,            // push reference to function onto stack
@@ -48,7 +48,9 @@ typedef enum sbOpcode {
   BC_OP_LE,             // less than or equal to
   BC_OP_AND,            // logical and
   BC_OP_OR,             // logical or
-  BC_OP_INDEX,          // index [] or ::
+  BC_OP_INDEXVAL,       // a[...]
+  BC_OP_INDEXLREF,      // a[...] = ...
+  BC_OP_INDEXRREF,      // &a[...]
   BC_OP_RANGEINDEX,     // index [a..b]
   BC_ALLOC_VARS,        // create space in rstack for local variables
   BC_CLOSURE,           // create closure from top elements of stack

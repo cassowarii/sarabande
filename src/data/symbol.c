@@ -18,7 +18,7 @@ hSymbol sbSymbol_from_bytes(const char *text, usize length) {
     .string = sbString_new(text, length),
   };
 
-  hVal *result = sbHash_find(symbol_table, &symkey);
+  hVal *result = sbHash_find_value(symbol_table, &symkey);
 
   if (result == NULL) {
     /* add new symbol */

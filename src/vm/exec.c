@@ -558,8 +558,8 @@ void execute_instruction(hVm vm) {
       v = peek_stack(vm, 0);
       sbV_decr(v);
       break;
-    case BC_OP_INDEX:
-      sbV_index(vm);
+    case BC_OP_INDEXVAL:
+      sbV_index_value(vm);
       break;
     case BC_OP_RANGEINDEX:
       v = peek_stack(vm, 2);

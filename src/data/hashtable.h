@@ -16,7 +16,11 @@ sbHashValue sbHash_hash_obj(hVal *obj);
 
 hHash sbHash_create(usize initial_size);
 
-hVal *sbHash_find(hHash h, hVal *key);
+hVal *sbHash_find_value(hHash h, hVal *key);
+
+hVal sbHash_find_lvalue_ref(hHash h, hVal *key);
+
+hVal sbHash_find_rvalue_ref(hHash h, hVal *key);
 
 void sbHash_insert(hHash h, hVal *key, hVal *value);
 
