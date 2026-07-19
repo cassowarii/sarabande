@@ -20,13 +20,15 @@ void swap_stack_top(hVm vm);
 void print_stack(hVm vm);
 
 void sbVm_initialize(hVm vm, usize stacksize, usize rstacksize, flag debugmode) {
-  *vm = (sbVm) {0};
-  vm->vstack = malloc(stacksize);
-  vm->stacksize = stacksize;
-  vm->rstack = malloc(rstacksize);
-  vm->rstacksize = rstacksize;
+  *vm = (sbVm) {
+    .stacksize = stacksize,
+    .rstacksize = rstacksize,
+    .debugmode = debugmode,
+  };
 
+  vm->vstack = malloc(stacksize);
   vm->vsp = vm->vstack;
+  vm->rstack = malloc(rstacksize);
   vm->rsp = vm->rstack;
   vm->fp = (sbVmStackFrame*)vm->rstack;
 
