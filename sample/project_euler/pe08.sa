@@ -4,5 +4,3 @@ let span = 13
 println list::iota(0, digits.length - span + 1).map(=> index {
   digits[index..index + span].split().map(integer::from).reduce(1, => a, b { a * b })
 }).reduce(0, math::max)
-
-println list::iota(0, digits.length - span + 1).map(| digits[_.._ + span].split().map(integer::from).reduce(1, {*})).reduce(0, math::max)

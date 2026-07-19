@@ -1,24 +1,8 @@
-# See Project Euler #3
-def factors num {
-  let list = []
-  let candidate = 2
-  let max = math::sqrt num
-  while candidate <= max {
-    list.push candidate if num %% candidate
-    candidate = candidate + 1
-  }
-  list
-}
-
-def prime? num {
-  factors(num).length() == 0
-}
-
-let seen = 0
 let num = 1
-while seen < 10001 {
+let primes = []
+while primes.length < 10001 {
   num = num + 1
-  seen = seen + 1 if prime? num
+  primes.push num unless primes.any? => p { num %% p }
 }
 
-println num
+println primes[primes.length - 1]
