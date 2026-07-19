@@ -2,9 +2,13 @@
 
 This is a little dynamically-typed programming language I've been working on.
 
-It supports lists, hash tables, anonymous functions, and lexical closures, and it compiles down to a bytecode that's interpreted by a virtual machine.
+It supports lists and hash tables. It has a sort of simple object system based around the concept of lexical closures,
+and an execution model based on value semantics with explicit references. (will probably add these next)
 
-It is still extremely a work in progress, but we can already do some little basic test math programs:
+It compiles down to a bytecode that's interpreted by a virtual machine.
+It's not the fastest in the world, but performance is within spitting distance of the average scripting language.
+
+It's still a work in progress, but it is starting to come together.
 
 ```
 println `Hello, world!`
