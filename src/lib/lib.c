@@ -2,7 +2,6 @@
 #include "vm/exec.h"
 
 #include "data/symbol.h"
-#include "data/reference.h"
 
 #include "lib/table.h"
 #include "lib/sentinel.h"

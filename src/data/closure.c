@@ -1,6 +1,5 @@
 #include "data/closure.h"
 
-#include "data/reference.h"
 #include "gc/gcinfo.h"
 
 #define FLAG_REAL (1ULL << 63)

@@ -2,7 +2,6 @@
 
 #include "vm/operations.h"
 #include "data/list.h"
-#include "data/reference.h"
 #include "data/closure.h"
 #include "lib/lib.h"
 #include "lib/sentinel.h"
