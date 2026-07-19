@@ -60,12 +60,12 @@ void sbClosure_set_var(hClosure which, usize index, hVar what) {
   }
 }
 
-hVal sbClosure_get_value(hClosure which, usize index) {
+hVal *sbClosure_get_value(hClosure which, usize index) {
   sbClosure *c = find_closure_by_handle(which);
   if (c->num_vars <= INLINE_VAR_COUNT) {
-    return sbVar_get_value(&c->internal_vars[index]);
+    return sbVar_get_value_ptr(&c->internal_vars[index]);
   } else {
-    return sbVar_get_value(&c->external_vars[index]);
+    return sbVar_get_value_ptr(&c->external_vars[index]);
   }
 }
 

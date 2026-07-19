@@ -7,6 +7,10 @@ typedef struct sbVar {
 
 typedef sbVar *hVar;
 
+void sbVar_sys_init();
+
+void sbVar_sys_deinit();
+
 hVal sbVar_get_value(hVar v);
 
 hVal *sbVar_get_value_ptr(hVar v);

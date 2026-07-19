@@ -73,8 +73,8 @@ int main(int argc, char **argv) {
 
     if (vm.debugmode) {
       printf("Stack result: ");
-      for (hVal **p = (hVal**)vm.vstack; p < (hVal**)vm.vsp; p++) {
-        printf("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
+      for (hVal *p = (hVal*)vm.vstack; p < (hVal*)vm.vsp; p++) {
+        printf("%16llx %16llx ", (long long)p->type, (long long)p->data);
       }
       printf("\n");
     }

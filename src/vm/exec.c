@@ -138,8 +138,8 @@ void sbVm_print_stack(hVm vm) {
 
 void print_stack(hVm vm) {
   debug("Stack: ");
-  for (hVal **p = (hVal**)vm->vstack; p < (hVal**)vm->vsp; p++) {
-    debug("%16llx %16llx ", (long long)(*p)->type, (long long)(*p)->data);
+  for (hVal *p = (hVal*)vm->vstack; p < (hVal*)vm->vsp; p++) {
+    debug("%16llx %16llx ", (long long)p->type, (long long)p->data);
   }
   debug("\n");
 }
@@ -180,6 +180,7 @@ void call_bound_method(hVm vm, hVal *to_call) {
 
   /* bound method is just a symbol + a closure containing one variable */
   hSymbol sym = (hSymbol)(to_call->type & ~IT_FLAG_BOUND_METHOD);
+  hVal *ref = sbVar_get_attached_ref(to_call);
 
   /* we should already have parameters, so we just need to line it back up
    * on the stack and call the method again */
@@ -189,7 +190,7 @@ void call_bound_method(hVm vm, hVal *to_call) {
     CHECK("bound method call should receive an integer arg count!");
   }
   peek_stack(vm, 0)->integer ++;
-  push_stack(vm, sbVar_get_attached_ref(to_call));
+  push_stack(vm, ref);
 
   /* resolve method normally */
   sbLib_resolve_method(vm);
@@ -222,21 +223,21 @@ void store_local(hVm vm, usize local_index, const hVal *value) {
 
 void push_stack(hVm vm, hVal *value) {
   *(hVal*)vm->vsp = *value;
-  vm->vsp += sizeof(hVal*);
+  vm->vsp += sizeof(hVal);
 }
 
 void push_stack_immediate(hVm vm, const hVal *value) {
   *(hVal*)vm->vsp = *value;
-  vm->vsp += sizeof(hVal*);
+  vm->vsp += sizeof(hVal);
 }
 
 hVal *pop_stack(hVm vm) {
-  vm->vsp -= sizeof(hVal*);
+  vm->vsp -= sizeof(hVal);
   return (hVal*)vm->vsp;
 }
 
 hVal *npop_stack(hVm vm, usize count) {
-  vm->vsp -= count * sizeof(hVal*);
+  vm->vsp -= count * sizeof(hVal);
   return (hVal*)vm->vsp;
 }
 
@@ -366,8 +367,8 @@ void execute_instruction(hVm vm) {
     case BC_LD_UPVAL:
       /* Hey, was there upval in there? */
       param = get_param(vm);
-      res = sbClosure_get_value(vm->fp->block_func.closure, param);
-      push_stack(vm, &res);
+      v = sbClosure_get_value(vm->fp->block_func.closure, param);
+      push_stack(vm, v);
       break;
     case BC_LD_UPREF:
       param = get_param(vm);
@@ -378,10 +379,10 @@ void execute_instruction(hVm vm) {
       push_stack_immediate(vm, &HVFUNC(param, 0));
       break;
     case BC_LD_TRUE:
-      push_stack_immediate(vm, &HVBOOL(1));
+      push_stack_immediate(vm, &HVBOOL(TRUE));
       break;
     case BC_LD_FALSE:
-      push_stack_immediate(vm, &HVBOOL(0));
+      push_stack_immediate(vm, &HVBOOL(FALSE));
       break;
     case BC_LD_NIL:
       push_stack_immediate(vm, &HVNIL);

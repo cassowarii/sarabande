@@ -7,6 +7,7 @@
 #include "data/list.h"
 #include "data/reference.h"
 #include "data/closure.h"
+#include "data/variable.h"
 
 #include "lib/lib.h"
 
@@ -20,6 +21,7 @@ void data_sys_init() {
   sbInteger_sys_init();
   sbClosure_sys_init();
   sbList_sys_init();
+  sbVar_sys_init();
 
   sbLib_sys_init();
 }
@@ -27,6 +29,7 @@ void data_sys_init() {
 void data_sys_deinit() {
   sbLib_sys_deinit();
 
+  sbVar_sys_deinit();
   sbList_sys_deinit();
   sbClosure_sys_deinit();
   sbInteger_sys_deinit();

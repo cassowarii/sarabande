@@ -18,6 +18,10 @@ void sbVar_sys_init() {
   sbPool_initialize(&g_heapvar_pool, sizeof(HeapVar), VARS_PER_BLOCK);
 }
 
+void sbVar_sys_deinit() {
+  //sbPool_deinitialize(&g_heapvar_pool, sizeof(HeapVar), VARS_PER_BLOCK);
+}
+
 hVal sbVar_get_value(hVar v) {
   if (v->value.type == ITX_HEAPVAR) {
     return ((HeapVar*)v->value.ptrdata)->value;
@@ -77,7 +81,10 @@ hVar sbVar_deref(const hVal *v) {
 }
 
 sbVar sbVar_retain(hVar v) {
-  sbVar_move_to_heap(v);
+  if (v->value.type != ITX_HEAPVAR) {
+    sbVar_move_to_heap(v);
+  }
+
   ((HeapVar*)v->value.ptrdata)->gcinfo.refcount ++;
   return *v;
 }

@@ -10,6 +10,6 @@ void sbClosure_set_value(hClosure which, usize index, hVal *var);
 
 void sbClosure_set_var(hClosure which, usize index, hVar what);
 
-hVal sbClosure_get_value(hClosure which, usize index);
+hVal *sbClosure_get_value(hClosure which, usize index);
 
 hVar sbClosure_get_var(hClosure which, usize index);

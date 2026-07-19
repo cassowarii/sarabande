@@ -95,7 +95,7 @@ void sbV_release(const hVal *a) {
     case IT_INTEGER:
       sbInteger_release(a->string);
       break;
-    case ITX_HEAPVAR:
+    case IT_REF:
       sbVar_release(sbVar_deref(a));
       break;
     default:
