@@ -16,6 +16,8 @@ struct labelpos {
 void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk);
 void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt);
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr);
+void compile_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref);
+void compile_op(sbVmCompiler *cm, sbAstOp op);
 
 void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir, flag debugmode) {
   sbVmCompiler cm = sbVmCompiler_create(4096, 4096, debugmode);
@@ -202,9 +204,21 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
         compile_expr(cm, stmt->assign.where->op.left);
         /* this should leave us with a pointer to expr on top of stack */
         EMIT(BC_REF_PUT);
+      } else if (stmt->assign.where->type == IR_E_OP && stmt->assign.where->op.type == AST_OP_INDEX) {
+        /* a[b] = whatever, a::b = whatever */
+        /* there is an IMPLICIT DEREFERENCE that occurs here. op::refindex returns an LREF,
+         * then we assign through the reference we receive, i.e.
+         *    a[b] = c
+         * really means
+         *    *(a{op::refindex}(b)) = c
+         * The reason for this has to do with assigning through nested data structures.
+         * Doing it this way just makes the whole semantics feel more natural. It's similar
+         * to returning a reference from indexing in C++, I guess. */
+        compile_ref(cm, stmt->assign.where->op.left, TRUE); /* thing we are indexing into */
+        compile_expr(cm, stmt->assign.where->op.right);     /* index we are using */
+        EMIT(BC_OP_INDEXLREF);
+        EMIT(BC_REF_PUT);
       } else {
-        /* TODO: Now we can support stuff like index-assignment also if we want to.
-         * Probably do this next */
         PANIC("This type of assignment operation is not supported!");
       }
       break;
@@ -345,13 +359,11 @@ void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
   }
 }
 
-void compile_ref(sbVmCompiler *cm, sbIrExpr *expr);
-void compile_op(sbVmCompiler *cm, sbAstOp op);
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
   switch(expr->type) {
     case IR_E_OP:
       if (expr->op.type == AST_OP_REF) {
-        compile_ref(cm, expr->op.left);
+        compile_ref(cm, expr->op.left, FALSE);
       } else {
         compile_expr(cm, expr->op.left);
         if (expr->op.right) {
@@ -442,18 +454,30 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
   }
 }
 
-/* compiling the left hand side of an assignment (that isn't straightforwardly
- * a variable) to return some kind of reference */
-void compile_assign_left(sbVmCompiler *cm, sbIrExpr *expr) {
-}
-
 /* when we see an expression of the form '&expr', we have to
  * handle this specially depending on what 'expr' is (and sometimes
- * we just aren't allowed to do it) */
-void compile_ref(sbVmCompiler *cm, sbIrExpr *expr) {
+ * we just aren't allowed to do it). this is also used for compiling
+ * certain indexing structures on the left side of assignment operators */
+void compile_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref) {
   if (expr->type == IR_E_VAR) {
-    EMIT(BC_LD_RREF);
+    if (expr->var->is_upvalue) {
+      EMIT(BC_LD_UPREF);
+    } else if (is_lref) {
+      EMIT(BC_LD_LREF);
+    } else {
+      EMIT(BC_LD_RREF);
+    }
     EARG(expr->var->slot_id);
+  } else if (expr->type == IR_E_OP && expr->op.type == AST_OP_INDEX) {
+    compile_ref(cm, expr->op.left, is_lref);  /* thing we are indexing into */
+    compile_expr(cm, expr->op.right);         /* index we are using */
+    if (is_lref) {
+      /* a[0] = ? / a::b = ? */
+      EMIT(BC_OP_INDEXLREF);
+    } else {
+      /* &a[0] / &a::b */
+      EMIT(BC_OP_INDEXRREF);
+    }
   } else {
     PANIC("cannot & non-variable-name! (todo)");
   }

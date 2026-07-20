@@ -3,6 +3,7 @@
 #include "vm/operations.h"
 #include "data/list.h"
 #include "data/closure.h"
+#include "data/symbol.h"
 #include "lib/lib.h"
 #include "lib/sentinel.h"
 
@@ -137,10 +138,41 @@ void sbVm_print_stack(hVm vm) {
 
 /* --- */
 
+void print_val(hVal *p) {
+  if (p->type == IT_NIL) {
+    debug("nil");
+  } else if (p->type == IT_BOOLEAN && p->boolean) {
+    debug("true");
+  } else if (p->type == IT_BOOLEAN) {
+    debug("false");
+  } else if (p->type == IT_REF) {
+    debug("&(");
+    print_val(sbVar_get_value_ptr(sbVar_deref(p)));
+    debug(")");
+  } else if (p->type == IT_SYMBOL) {
+    debug(":%s", sbSymbol_name(p->symbol));
+  } else if (p->type == IT_INTEGER) {
+    debug("%lld", (long long)p->integer);
+  } else if (p->type == IT_LIST) {
+    debug("[...]");
+  } else if (p->type == IT_HASH) {
+    debug("{...}");
+  } else if (p->type > 0 && (p->type & IT_FLAG_BOUND_METHOD)) {
+    debug("(bound method #%lld:%lld)", (long long)p->type, (long long)(p->closure & ~0x80000000000000));
+  } else if (p->type > 0 && p->closure > 0) {
+    debug("(closure #%lld:%lld)", (long long)p->type, (long long)(p->closure & ~0x8000000000000000));
+  } else if (p->type > 0) {
+    debug("(block #%lld)", (long long)p->type);
+  } else {
+    debug("%16llx %16llx", (long long)p->type, (long long)p->data);
+  }
+}
+
 void print_stack(hVm vm) {
   debug("Stack: ");
   for (hVal *p = (hVal*)vm->vstack; p < (hVal*)vm->vsp; p++) {
-    debug("%16llx %16llx ", (long long)p->type, (long long)p->data);
+    print_val(p);
+    debug(" ");
   }
   debug("\n");
 }
