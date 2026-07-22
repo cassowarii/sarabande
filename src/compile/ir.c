@@ -331,38 +331,12 @@ static sbIrExpr *expr_func(hIrChunk ck, sbIrChunk *func) {
   return e;
 }
 
-static flag int_constant_fold(sbAstOp op, hInteger left, hInteger right, hInteger *result) {
-  switch (op) {
-    case AST_OP_ADD:
-      *result = sbInteger_sum(left, right);
-      break;
-    case AST_OP_SUB:
-      *result = sbInteger_diff(left, right);
-      break;
-    case AST_OP_MUL:
-      *result = sbInteger_mul(left, right);
-      break;
-    case AST_OP_FLDIV:
-      *result = sbInteger_floordiv(left, right);
-      break;
-    case AST_OP_MOD:
-      *result = left % right;
-      break;
-    case AST_OP_UNMINUS:
-      *result = -left;
-      break;
-    default:
-      return FALSE;
-  }
-  return TRUE;
-}
-
 static sbIrExpr *expr_op(hIrChunk ck, sbAstOp op, sbIrExpr *left, sbIrExpr *right) {
   if (left->type == IR_E_VALUE && left->value.type == IT_INTEGER
         && (!right || (right->type == IR_E_VALUE && right->value.type == IT_INTEGER))) {
     /* Try constant folding */
     hInteger result;
-    flag folded = int_constant_fold(op, left->value.integer, right ? right->value.integer : 0, &result);
+    flag folded = sbIr_constant_fold(op, left->value.integer, right ? right->value.integer : 0, &result);
     if (folded) {
       return new_expr(ck, &(sbIrExpr) {
         .type = IR_E_VALUE,
@@ -966,7 +940,7 @@ static sbIrExpr *compile_ast_binding(hIrChunk ck, sbAst node, flag should_create
       return expr_op(ck, AST_OP_REF, ref_to, NULL);
     } else {
       chunk_error(ck, "cannot destructure into a `&<...>`");
-      return NULL;
+      return NIL_EXPR;
     }
   } else if (node->type == AST_NODE_OP) {
     sbIrExpr *left = NULL, *right = NULL;

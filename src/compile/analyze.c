@@ -2,6 +2,7 @@
 
 #include "parse/ast.h"
 #include "data/symbol.h"
+#include "data/integer.h"
 
 i32 sbAst_count_pipe_underscores(sbAst node) {
   if (node == NULL) return 0;
@@ -70,3 +71,30 @@ i32 sbAst_count_pipe_underscores(sbAst node) {
       PANIC("aah! (%lld)", (long long)node->type);
   }
 }
+
+flag sbIr_constant_fold(sbAstOp op, hInteger left, hInteger right, hInteger *result) {
+  switch (op) {
+    case AST_OP_ADD:
+      *result = sbInteger_sum(left, right);
+      break;
+    case AST_OP_SUB:
+      *result = sbInteger_diff(left, right);
+      break;
+    case AST_OP_MUL:
+      *result = sbInteger_mul(left, right);
+      break;
+    case AST_OP_FLDIV:
+      *result = sbInteger_floordiv(left, right);
+      break;
+    case AST_OP_MOD:
+      *result = left % right;
+      break;
+    case AST_OP_UNMINUS:
+      *result = -left;
+      break;
+    default:
+      return FALSE;
+  }
+  return TRUE;
+}
+
