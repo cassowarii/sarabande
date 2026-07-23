@@ -91,9 +91,9 @@ typedef enum sbTokenType {
 } sbTokenType;
 
 typedef struct sbLexToken {
-    sbTokenType type;
+    sbTokenType type : 8;
+    i8 invisible;
     usize size;
-    flag invisible;
     i32 line;
     i32 start_col;
     i32 end_col;

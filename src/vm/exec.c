@@ -357,7 +357,9 @@ void execute_instruction(hVm vm) {
   }
 
   sbOpcode op = get_opcode(vm);
-  if (vm->debugmode) debug("op %02X ", op);
+#ifdef DEBUG
+  if (vm->debugmode) debug("op %s ", g_opcode_names[op]);
+#endif
   u64 param;
   usize count;
   hVal *v, *w, *x, res;

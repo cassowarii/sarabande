@@ -2,10 +2,7 @@
 
 #define STRING1(...) #__VA_ARGS__
 #define STRING2(...) STRING1(__VA_ARGS__)
-#define EMIT(...) do { \
-  if (cm->debugmode) debug(STRING2(__VA_ARGS__) "\n"); \
-  sbVmCompiler_write_code(cm, (u8[]) { __VA_ARGS__ }, sizeof((u8[]) { __VA_ARGS__ })); \
-} while (0)
+#define EMIT(x) (emit(cm, x))
 #define EARG(x) (emit_arg(cm, x))
 
 struct labelpos {
@@ -17,6 +14,7 @@ void compile_chunk(sbVmCompiler *cm, sbIrChunk *chunk);
 void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt);
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr);
 void compile_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref);
+void compile_maybe_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref, sbOpcode op, sbOpcode op_ind);
 void compile_op(sbVmCompiler *cm, sbAstOp op);
 
 void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir, flag debugmode) {
@@ -36,6 +34,11 @@ void sbEmit_compile_program(sbVmProgram *vp, sbIrProgram *ir, flag debugmode) {
 }
 
 /* --- */
+
+void emit(sbVmCompiler *cm, sbOpcode opcode) {
+  if (cm->debugmode) debug("%s\n", g_opcode_names[opcode]);
+  sbVmCompiler_write_code(cm, (u8[]) { opcode }, 1);
+}
 
 void emit_arg(sbVmCompiler *cm, i64 actual_number) {
   if (cm->debugmode) debug("    arg %lld\n", (long long)actual_number);
@@ -172,7 +175,10 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
         record_labelpos(cm, stmt->jump.label, sbVmCompiler_get_position(cm));
         /* leave behind four zeroes at this offset that we can later put the
          * address into */
-        EMIT(0, 0, 0, 0);
+        EARG(0);
+        EARG(0);
+        EARG(0);
+        EARG(0);
       }
       break;
     case IR_S_LABEL:
@@ -220,18 +226,8 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
          * The reason for this has to do with assigning through nested data structures.
          * Doing it this way just makes the whole semantics feel more natural. It's similar
          * to returning a reference from indexing in C++, I guess. */
-        if (is_implicit_ref(stmt->assign.where->op.left)) {
-          compile_ref(cm, stmt->assign.where->op.left, TRUE);
-        } else {
-          compile_expr(cm, stmt->assign.where->op.left);
-        }
         compile_expr(cm, stmt->assign.where->op.right);     /* index we are using */
-        if (is_implicit_ref(stmt->assign.where->op.left)) {
-          EMIT(BC_OP_INDEXLREF_IND);
-        } else {
-          /* THE PROLIFERATION OF THESE!!!!!!!!!! I DO NOT LIKE!!!! */
-          EMIT(BC_OP_INDEXLREF);
-        }
+        compile_maybe_ref(cm, stmt->assign.where->op.left, TRUE, BC_OP_INDEXLREF, BC_OP_INDEXLREF_IND);
         EMIT(BC_REF_PUT);
       } else if (stmt->assign.where->type == IR_E_DOT) {
         /* same as op::index, essentially. the dot returns a reference to the inside of the
@@ -239,13 +235,7 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
         compile_expr(cm, stmt->assign.where->dot.param);
         EMIT(BC_LD_IMM);
         EARG(1);
-        if (is_implicit_ref(stmt->assign.where->dot.target)) {
-          compile_ref(cm, stmt->assign.where->dot.target, TRUE);
-          EMIT(BC_DOT_IND);
-        } else {
-          compile_expr(cm, stmt->assign.where->dot.target);
-          EMIT(BC_DOT);
-        }
+        compile_maybe_ref(cm, stmt->assign.where->dot.target, TRUE, BC_DOT, BC_DOT_IND);
         EMIT(BC_REF_PUT);
       } else {
         PANIC("This type of assignment operation is not supported!");
@@ -302,7 +292,8 @@ void compile_list(sbVmCompiler *cm, sbIrExpr *expr) {
        * by one */
       compile_expr(cm, elem);
       /* swap to put the number on top, then increment */
-      EMIT(BC_SWAP, BC_OP_INCR);
+      EMIT(BC_SWAP);
+      EMIT(BC_OP_INCR);
     } else {
       /* blissfully unaware of the splat */
       compile_expr(cm, elem);
@@ -389,11 +380,6 @@ void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
 }
 
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
-  if (cm->debugmode) {
-    sbIr_print_expr(expr);
-    debug("\n");
-  }
-
   switch(expr->type) {
     case IR_E_OP:
       if (expr->op.type == AST_OP_REF) {
@@ -411,20 +397,7 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
     case IR_E_CALL:
       /* calling convention: store argument count on stack */
       compile_list(cm, expr->call.param);
-      if (is_implicit_ref(expr->call.func)) {
-        /* for expressions with reference type, call 'through' the reference */
-        compile_ref(cm, expr->call.func, TRUE);
-        EMIT(BC_CALL_IND);
-      } else if (expr->call.func->type == IR_E_OP && expr->call.func->op.type == AST_OP_DEREF) {
-        /* for something like (*a)(...), call 'through' the reference as well
-         * (that is, evaluate the thing inside the * and call indirectly, instead
-         * of dereferencing it first) */
-        compile_expr(cm, expr->call.func->op.left);
-        EMIT(BC_CALL_IND);
-      } else {
-        compile_expr(cm, expr->call.func);
-        EMIT(BC_CALL);
-      }
+      compile_maybe_ref(cm, expr->call.func, TRUE, BC_CALL, BC_CALL_IND);
       break;
     case IR_E_DOT:
       compile_expr(cm, expr->dot.param);
@@ -521,43 +494,34 @@ void compile_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref) {
     }
     EARG(expr->var->slot_id);
   } else if (expr->type == IR_E_OP && expr->op.type == AST_OP_INDEX) {
-    /* TODO: Oh my god, it's 90F with no air conditioning, but can we PLEASE figure out
-     * a better way to structure this??!!?!?!?! */
-    if (is_implicit_ref(expr->op.left)) {
-      compile_ref(cm, expr->op.left, is_lref);  /* thing we are indexing into */
-    } else {
-      compile_expr(cm, expr->op.left);  /* thing we are indexing into */
-    }
     compile_expr(cm, expr->op.right);         /* index we are using */
     if (is_lref) {
-      /* a[0] = ? / a::b = ? */
-      if (is_implicit_ref(expr->op.left)) {
-        /* THIS SUCKS!!! */
-        EMIT(BC_OP_INDEXLREF_IND);
-      } else {
-        EMIT(BC_OP_INDEXLREF);
-      }
+      compile_maybe_ref(cm, expr->op.left, TRUE, BC_OP_INDEXLREF, BC_OP_INDEXLREF_IND);
     } else {
-      /* &a[0] / &a::b */
-      if (is_implicit_ref(expr->op.left)) {
-        EMIT(BC_OP_INDEXRREF_IND);
-      } else {
-        EMIT(BC_OP_INDEXRREF);
-      }
+      compile_maybe_ref(cm, expr->op.left, FALSE, BC_OP_INDEXRREF, BC_OP_INDEXRREF_IND);
     }
   } else if (expr->type == IR_E_DOT) {
     compile_expr(cm, expr->dot.param);
     EMIT(BC_LD_IMM);
     EARG(1);
-    if (is_implicit_ref(expr->dot.target)) {
-      compile_ref(cm, expr->dot.target, is_lref);
-      EMIT(BC_DOT_IND);
-    } else {
-      compile_expr(cm, expr->dot.target);
-      EMIT(BC_DOT);
-    }
+    compile_maybe_ref(cm, expr->dot.target, is_lref, BC_DOT, BC_DOT_IND);
   } else {
     PANIC("This type of reference operation is not supported!");
+  }
+}
+
+void compile_maybe_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref, sbOpcode op, sbOpcode op_ind) {
+  if (is_implicit_ref(expr->dot.target)) {
+    compile_ref(cm, expr, is_lref);
+    EMIT(op_ind);
+  } else if (expr->type == IR_E_OP && expr->op.type == AST_OP_DEREF) {
+    /* explicit *<whatever>: do thing indirectly 'through' the reference,
+     * instead of dereferencing and making a copy */
+    compile_expr(cm, expr->op.left);
+    EMIT(op_ind);
+  } else {
+    compile_expr(cm, expr);
+    EMIT(op);
   }
 }
 
@@ -569,11 +533,11 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_FLDIV: EMIT(BC_OP_FLDIV); break;
     case AST_OP_MOD: EMIT(BC_OP_MOD); break;
     case AST_OP_EQ: EMIT(BC_OP_EQ); break;
-    case AST_OP_NE: EMIT(BC_OP_EQ, BC_OP_NOT); break;
+    case AST_OP_NE: EMIT(BC_OP_EQ); EMIT(BC_OP_NOT); break;
     case AST_OP_LT: EMIT(BC_OP_LT); break;
-    case AST_OP_GT: EMIT(BC_OP_LE, BC_OP_NOT); break;
+    case AST_OP_GT: EMIT(BC_OP_LE); EMIT(BC_OP_NOT); break;
     case AST_OP_LE: EMIT(BC_OP_LE); break;
-    case AST_OP_GE: EMIT(BC_OP_LT, BC_OP_NOT); break;
+    case AST_OP_GE: EMIT(BC_OP_LT); EMIT(BC_OP_NOT); break;
     case AST_OP_NOT: EMIT(BC_OP_NOT); break;
     case AST_OP_AND: EMIT(BC_OP_AND); break;
     case AST_OP_OR: EMIT(BC_OP_OR); break;
@@ -582,7 +546,7 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_DEREF: EMIT(BC_OP_DEREF); break;
     /* op range is currently only used in rangeindex; just pass them to it directly */
     case AST_OP_RANGE: break;
-    case AST_OP_DIVBY: EMIT(BC_OP_MOD, BC_LD_IMM); EARG(0); EMIT(BC_OP_EQ); break;
+    case AST_OP_DIVBY: EMIT(BC_OP_MOD); EMIT(BC_LD_IMM); EARG(0); EMIT(BC_OP_EQ); break;
     default:
       PANIC("unknown operation! (%lld / %c)", (long long)op, op);
   }
