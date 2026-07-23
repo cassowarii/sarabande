@@ -82,9 +82,9 @@ static void print_expr(sbIrExpr *e) {
       debug(")");
       break;
     case IR_E_CALL:
-      debug("CALL: ");
+      debug("(CALL: ");
       print_expr(e->call.func);
-      debug(" with params (");
+      debug(" with params ");
       if (e->call.param) {
         print_expr(e->call.param);
       }

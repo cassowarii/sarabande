@@ -26,9 +26,7 @@ hVal sbV_append(hVal *a, hVal *b);
 
 void sbV_index_value(hVm vm);
 
-void sbV_index_lref(hVm vm);
-
-void sbV_index_rref(hVm vm);
+void sbV_index_ref(hVm vm, flag is_lref, flag is_indirect);
 
 hVal sbV_rangeindex(hVal *a, hVal *b, hVal *c);
 

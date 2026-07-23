@@ -136,6 +136,12 @@ void record_labelpos(sbVmCompiler *cm, sbIrLabel *label, u32 offset) {
   sbBuffer_append(&cm->label_positions, &lp, sizeof(struct labelpos));
 }
 
+/* things that implicitly dereference when used in a value context but
+ * can be assigned to on the left side of an = */
+flag is_implicit_ref(sbIrExpr *expr) {
+  return expr->type == IR_E_VAR || expr->type == IR_E_DOT || (expr->type == IR_E_OP && expr->op.type == AST_OP_INDEX);
+}
+
 void compile_list(sbVmCompiler *cm, sbIrExpr *expr);
 void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list);
 void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
@@ -214,18 +220,32 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
          * The reason for this has to do with assigning through nested data structures.
          * Doing it this way just makes the whole semantics feel more natural. It's similar
          * to returning a reference from indexing in C++, I guess. */
-        compile_ref(cm, stmt->assign.where->op.left, TRUE); /* thing we are indexing into */
+        if (is_implicit_ref(stmt->assign.where->op.left)) {
+          compile_ref(cm, stmt->assign.where->op.left, TRUE);
+        } else {
+          compile_expr(cm, stmt->assign.where->op.left);
+        }
         compile_expr(cm, stmt->assign.where->op.right);     /* index we are using */
-        EMIT(BC_OP_INDEXLREF);
+        if (is_implicit_ref(stmt->assign.where->op.left)) {
+          EMIT(BC_OP_INDEXLREF_IND);
+        } else {
+          /* THE PROLIFERATION OF THESE!!!!!!!!!! I DO NOT LIKE!!!! */
+          EMIT(BC_OP_INDEXLREF);
+        }
         EMIT(BC_REF_PUT);
       } else if (stmt->assign.where->type == IR_E_DOT) {
         /* same as op::index, essentially. the dot returns a reference to the inside of the
          * thing, then we can assign to that reference */
-        compile_expr(cm, stmt->assign.where->op.right);
+        compile_expr(cm, stmt->assign.where->dot.param);
         EMIT(BC_LD_IMM);
         EARG(1);
-        compile_ref(cm, stmt->assign.where->op.left, TRUE);
-        EMIT(BC_CALL_IND);
+        if (is_implicit_ref(stmt->assign.where->dot.target)) {
+          compile_ref(cm, stmt->assign.where->dot.target, TRUE);
+          EMIT(BC_DOT_IND);
+        } else {
+          compile_expr(cm, stmt->assign.where->dot.target);
+          EMIT(BC_DOT);
+        }
         EMIT(BC_REF_PUT);
       } else {
         PANIC("This type of assignment operation is not supported!");
@@ -369,6 +389,11 @@ void compile_bind_list(sbVmCompiler *cm, sbIrBindList *list) {
 }
 
 void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
+  if (cm->debugmode) {
+    sbIr_print_expr(expr);
+    debug("\n");
+  }
+
   switch(expr->type) {
     case IR_E_OP:
       if (expr->op.type == AST_OP_REF) {
@@ -386,8 +411,7 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
     case IR_E_CALL:
       /* calling convention: store argument count on stack */
       compile_list(cm, expr->call.param);
-      if (expr->call.func->type == IR_E_DOT
-            || (expr->call.func->type == IR_E_OP && expr->call.func->op.type == AST_OP_INDEX)) {
+      if (is_implicit_ref(expr->call.func)) {
         /* for expressions with reference type, call 'through' the reference */
         compile_ref(cm, expr->call.func, TRUE);
         EMIT(BC_CALL_IND);
@@ -497,23 +521,43 @@ void compile_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref) {
     }
     EARG(expr->var->slot_id);
   } else if (expr->type == IR_E_OP && expr->op.type == AST_OP_INDEX) {
-    compile_ref(cm, expr->op.left, is_lref);  /* thing we are indexing into */
+    /* TODO: Oh my god, it's 90F with no air conditioning, but can we PLEASE figure out
+     * a better way to structure this??!!?!?!?! */
+    if (is_implicit_ref(expr->op.left)) {
+      compile_ref(cm, expr->op.left, is_lref);  /* thing we are indexing into */
+    } else {
+      compile_expr(cm, expr->op.left);  /* thing we are indexing into */
+    }
     compile_expr(cm, expr->op.right);         /* index we are using */
     if (is_lref) {
       /* a[0] = ? / a::b = ? */
-      EMIT(BC_OP_INDEXLREF);
+      if (is_implicit_ref(expr->op.left)) {
+        /* THIS SUCKS!!! */
+        EMIT(BC_OP_INDEXLREF_IND);
+      } else {
+        EMIT(BC_OP_INDEXLREF);
+      }
     } else {
       /* &a[0] / &a::b */
-      EMIT(BC_OP_INDEXRREF);
+      if (is_implicit_ref(expr->op.left)) {
+        EMIT(BC_OP_INDEXRREF_IND);
+      } else {
+        EMIT(BC_OP_INDEXRREF);
+      }
     }
   } else if (expr->type == IR_E_DOT) {
     compile_expr(cm, expr->dot.param);
     EMIT(BC_LD_IMM);
     EARG(1);
-    compile_ref(cm, expr->dot.target, is_lref);
-    EMIT(BC_DOT);
+    if (is_implicit_ref(expr->dot.target)) {
+      compile_ref(cm, expr->dot.target, is_lref);
+      EMIT(BC_DOT_IND);
+    } else {
+      compile_expr(cm, expr->dot.target);
+      EMIT(BC_DOT);
+    }
   } else {
-    PANIC("cannot & non-variable-name! (todo)");
+    PANIC("This type of reference operation is not supported!");
   }
 }
 

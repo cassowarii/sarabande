@@ -12,13 +12,13 @@ typedef sbLibTable {
   hSymbol *keys;
   union {
     sbLibMethod *methods;
-    hVal *values;
+    sbVar *values;
   };
 } sbLibTable;
 */
 
 static void insert_method(hSymbol *keys, sbLibMethod *methods, usize capacity, hSymbol key, sbLibMethod *method);
-static void insert_value(hSymbol *keys, hVal *values, usize capacity, hSymbol key, hVal *value);
+static void insert_value(hSymbol *keys, sbVar *values, usize capacity, hSymbol key, hVal *value);
 static void check_grow_table(hLibTable t);
 
 void sbLibTable_initialize(hLibTable t, usize capacity, flag method_table) {
@@ -74,9 +74,27 @@ hVal *sbLibTable_find_value(hLibTable t, hSymbol key) {
   }
 
   if (t->keys[index]) {
-    return &t->values[index];
+    return sbVar_get_value_ptr(&t->values[index]);
   } else {
     return NULL;
+  }
+}
+
+hVal sbLibTable_find_ref(hLibTable t, hSymbol key) {
+  if (t->method_table) CHECK("cannot find value in method table");
+
+  sbHashValue hash = sbHash_hash_bytes((const char*)&key, sizeof(hSymbol));
+  usize index = hash % t->capacity;
+  while (t->keys[index] && t->keys[index] != key) {
+    index ++;
+    index %= t->capacity;
+  }
+
+  if (t->keys[index]) {
+    /* lvalue ref always safe because these never get deallocated */
+    return sbVar_get_lvalue_ref(&t->values[index]);
+  } else {
+    return HVNIL;
   }
 }
 
@@ -123,7 +141,7 @@ static void insert_method(hSymbol *keys, sbLibMethod *methods, usize capacity, h
   methods[index] = *method;
 }
 
-static void insert_value(hSymbol *keys, hVal *values, usize capacity, hSymbol key, hVal *value) {
+static void insert_value(hSymbol *keys, sbVar *values, usize capacity, hSymbol key, hVal *value) {
   sbHashValue hash = sbHash_hash_bytes((const char*)&key, sizeof(hSymbol));
   usize index = hash % capacity;
 
@@ -133,7 +151,7 @@ static void insert_value(hSymbol *keys, hVal *values, usize capacity, hSymbol ke
   }
 
   keys[index] = key;
-  values[index] = *value;
+  sbVar_set_value(&values[index], value);
 }
 
 static void check_grow_table(hLibTable t) {
@@ -154,11 +172,11 @@ static void check_grow_table(hLibTable t) {
       free(t->methods);
       t->methods = new_methods;
     } else {
-      hVal *new_values = calloc(new_capacity, sizeof(hVal));
+      sbVar *new_values = calloc(new_capacity, sizeof(hVal));
 
       for (usize i = 0; i < t->capacity; i++) {
         if (t->keys[i] != 0) {
-          insert_value(new_keys, new_values, new_capacity, t->keys[i], &t->values[i]);
+          insert_value(new_keys, new_values, new_capacity, t->keys[i], sbVar_get_value_ptr(&t->values[i]));
         }
       }
 

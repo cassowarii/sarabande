@@ -25,7 +25,8 @@ typedef enum sbOpcode {
   BC_SWAP,              // swap top two values on stack
   BC_CALL,              // push return address and jump to new block
   BC_CALL_IND,          // 'a->(...)' indirect call that can return a value
-  BC_DOT,               // 'a.b' indirect call that should return a reference
+  BC_DOT,               // 'a.b' call that should return a reference
+  BC_DOT_IND,           // 'a.b' indirect call that should return a reference
   BC_RET,               // return to calling block
   BC_NUMARG,            // check number of function arguments = this
   BC_MINARG,            // check number of function arguments > this
@@ -53,7 +54,9 @@ typedef enum sbOpcode {
   BC_OP_OR,             // logical or
   BC_OP_INDEXVAL,       // a[...]
   BC_OP_INDEXLREF,      // a[...] = ...
+  BC_OP_INDEXLREF_IND,  // a[...] = ...
   BC_OP_INDEXRREF,      // &a[...]
+  BC_OP_INDEXRREF_IND,  // &a[...]
   BC_OP_RANGEINDEX,     // index [a..b]
   BC_ALLOC_VARS,        // create space in rstack for local variables
   BC_CLOSURE,           // create closure from top elements of stack

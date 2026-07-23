@@ -13,7 +13,7 @@ typedef struct sbLibTable {
   flag method_table;
   union {
       sbLibMethod *methods;
-      hVal *values;
+      sbVar *values;
   };
 } sbLibTable;
 
@@ -26,6 +26,8 @@ void sbLibTable_deinitialize(hLibTable t);
 sbLibMethod *sbLibTable_find_method(hLibTable t, hSymbol key);
 
 hVal *sbLibTable_find_value(hLibTable t, hSymbol key);
+
+hVal sbLibTable_find_ref(hLibTable t, hSymbol key);
 
 void sbLibTable_register_method(hLibTable t, const char *method_name, usize method_name_length, sbLibMethod *method);
 

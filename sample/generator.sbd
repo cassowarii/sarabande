@@ -153,12 +153,16 @@ let generator = (=> {
     }
   }
 
+  def get_classmethod m {
+    &class_methods[m]
+  }
+
   => f {
     if f == op::index {
-      class_methods(op::index)
+      get_classmethod
     } else {
       => method {
-        instance_methods[method](f)
+        &(instance_methods[method](f))
       }
     }
   }

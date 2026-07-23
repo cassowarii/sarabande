@@ -458,17 +458,22 @@ void execute_instruction(hVm vm) {
       swap_stack_top(vm);
       break;
     case BC_CALL:
+    case BC_DOT:
       v = pop_stack(vm);
       sbVm_call_func(vm, v);
       break;
-    case BC_DOT:
+    case BC_DOT_IND:
     case BC_CALL_IND:
       v = pop_stack(vm);
-      if (v->type != IT_REF) {
+      if (v->type == IT_REF) {
+        vars = sbVar_deref(v);
+        w = sbVar_get_value_ptr(vars);
+        sbVm_call_func(vm, w);
+      } else if (v->type & IT_FLAG_BOUND_METHOD) {
+        sbVm_call_func(vm, v);
+      } else {
         PANIC("object illegally returned non-reference value");
       }
-      vars = sbVar_deref(v);
-      sbVm_call_func(vm, sbVar_get_value_ptr(vars));
       break;
     case BC_SEND:
       sbLib_resolve_method(vm);
@@ -608,10 +613,16 @@ void execute_instruction(hVm vm) {
       sbV_index_value(vm);
       break;
     case BC_OP_INDEXLREF:
-      sbV_index_lref(vm);
+      sbV_index_ref(vm, TRUE, FALSE);
+      break;
+    case BC_OP_INDEXLREF_IND:
+      sbV_index_ref(vm, TRUE, TRUE);
       break;
     case BC_OP_INDEXRREF:
-      sbV_index_rref(vm);
+      sbV_index_ref(vm, FALSE, FALSE);
+      break;
+    case BC_OP_INDEXRREF_IND:
+      sbV_index_ref(vm, FALSE, TRUE);
       break;
     case BC_OP_RANGEINDEX:
       v = peek_stack(vm, 2);

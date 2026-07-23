@@ -183,19 +183,22 @@ static sbLibTable *find_method_table(hVal *target) {
 /* resolve_method should have set us up so we can just call in twice */
 static sbCFuncStatus please_call_again(hVm vm, flag init) {
   hVal *target = sbVm_pop(vm);
-  if (target->type <= 0) {
+  if (init && target->type <= 0) {
     PANIC("i have not implemented partial methods for builtin types yet! i'll get to it");
+  } else if (!init && target->type != IT_REF) {
+    PANIC("object illegally did not return a reference!");
   }
 
   if (init) {
     /* first time around: call to dispatch method */
     sbVm_call_func(vm, target);
 
-    /* please call us again if you have any questions*/
+    /* please call us again if you have any questions */
     return CFUNC_NEXT;
   } else {
     /* second time around: call method on its parameters */
-    sbVm_transfer_to_func(vm, target);
+    hVal *bound_method_ptr = sbVar_get_value_ptr(sbVar_deref(target));
+    sbVm_transfer_to_func(vm, bound_method_ptr);
 
     /* please forget we ever existed */
     return CFUNC_TAILCALL;
