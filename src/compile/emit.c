@@ -511,7 +511,7 @@ void compile_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref) {
 }
 
 void compile_maybe_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref, sbOpcode op, sbOpcode op_ind) {
-  if (is_implicit_ref(expr->dot.target)) {
+  if (is_implicit_ref(expr)) {
     compile_ref(cm, expr, is_lref);
     EMIT(op_ind);
   } else if (expr->type == IR_E_OP && expr->op.type == AST_OP_DEREF) {
@@ -541,7 +541,8 @@ void compile_op(sbVmCompiler *cm, sbAstOp op) {
     case AST_OP_NOT: EMIT(BC_OP_NOT); break;
     case AST_OP_AND: EMIT(BC_OP_AND); break;
     case AST_OP_OR: EMIT(BC_OP_OR); break;
-    case AST_OP_INDEX: EMIT(BC_OP_INDEXVAL); break;
+    /* because of constraints with maybe_ref, the index op is reversed. may fix this later */
+    case AST_OP_INDEX: EMIT(BC_SWAP); EMIT(BC_OP_INDEXVAL); break;
     case AST_OP_RANGEINDEX: EMIT(BC_OP_RANGEINDEX); break;
     case AST_OP_DEREF: EMIT(BC_OP_DEREF); break;
     /* op range is currently only used in rangeindex; just pass them to it directly */

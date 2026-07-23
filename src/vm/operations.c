@@ -128,8 +128,8 @@ hVal sbV_append(hVal *a, hVal *b) {
 }
 
 void sbV_index_value(hVm vm) {
-  hVal *a = sbVm_peek(vm, 1);
-  hVal *b = sbVm_peek(vm, 0);
+  hVal *a = sbVm_peek(vm, 0);
+  hVal *b = sbVm_peek(vm, 1);
   if (a->type == IT_LIST && b->type == IT_INTEGER) {
     sbVm_npop(vm, 2);
     hVal result = sbList_index_value(a->list, b->integer);
@@ -149,8 +149,8 @@ void sbV_index_value(hVm vm) {
 }
 
 void sbV_index_ref(hVm vm, flag is_lref, flag is_indirect) {
-  hVal *a = sbVm_peek(vm, 1);
-  hVal *b = sbVm_peek(vm, 0);
+  hVal *a = sbVm_peek(vm, 0);
+  hVal *b = sbVm_peek(vm, 1);
 
   if (is_indirect) {
     if (a->type != IT_REF) {
