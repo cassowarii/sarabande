@@ -210,13 +210,22 @@ void compile_stmt(sbVmCompiler *cm, sbIrStmt *stmt) {
          * then we assign through the reference we receive, i.e.
          *    a[b] = c
          * really means
-         *    *(a{op::refindex}(b)) = c
+         *    *((&a)->.[op::index]->(b)) = c
          * The reason for this has to do with assigning through nested data structures.
          * Doing it this way just makes the whole semantics feel more natural. It's similar
          * to returning a reference from indexing in C++, I guess. */
         compile_ref(cm, stmt->assign.where->op.left, TRUE); /* thing we are indexing into */
         compile_expr(cm, stmt->assign.where->op.right);     /* index we are using */
         EMIT(BC_OP_INDEXLREF);
+        EMIT(BC_REF_PUT);
+      } else if (stmt->assign.where->type == IR_E_DOT) {
+        /* same as op::index, essentially. the dot returns a reference to the inside of the
+         * thing, then we can assign to that reference */
+        compile_expr(cm, stmt->assign.where->op.right);
+        EMIT(BC_LD_IMM);
+        EARG(1);
+        compile_ref(cm, stmt->assign.where->op.left, TRUE);
+        EMIT(BC_CALL_IND);
         EMIT(BC_REF_PUT);
       } else {
         PANIC("This type of assignment operation is not supported!");
@@ -363,6 +372,8 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
   switch(expr->type) {
     case IR_E_OP:
       if (expr->op.type == AST_OP_REF) {
+        /* in expr context, the & operator generally prevents 'collapsing'
+         * of references to values when applied to a[b] or a.b or a::b */
         compile_ref(cm, expr->op.left, FALSE);
       } else {
         compile_expr(cm, expr->op.left);
@@ -375,13 +386,30 @@ void compile_expr(sbVmCompiler *cm, sbIrExpr *expr) {
     case IR_E_CALL:
       /* calling convention: store argument count on stack */
       compile_list(cm, expr->call.param);
-      compile_expr(cm, expr->call.func);
-      EMIT(BC_CALL);
+      if (expr->call.func->type == IR_E_DOT
+            || (expr->call.func->type == IR_E_OP && expr->call.func->op.type == AST_OP_INDEX)) {
+        /* for expressions with reference type, call 'through' the reference */
+        compile_ref(cm, expr->call.func, TRUE);
+        EMIT(BC_CALL_IND);
+      } else if (expr->call.func->type == IR_E_OP && expr->call.func->op.type == AST_OP_DEREF) {
+        /* for something like (*a)(...), call 'through' the reference as well
+         * (that is, evaluate the thing inside the * and call indirectly, instead
+         * of dereferencing it first) */
+        compile_expr(cm, expr->call.func->op.left);
+        EMIT(BC_CALL_IND);
+      } else {
+        compile_expr(cm, expr->call.func);
+        EMIT(BC_CALL);
+      }
       break;
-    case IR_E_SEND:
-      compile_list(cm, expr->send.message);
-      compile_expr(cm, expr->send.target);
-      EMIT(BC_SEND);
+    case IR_E_DOT:
+      compile_expr(cm, expr->dot.param);
+      /* TODO dot should always take 1 parameter, so this is not needed */
+      EMIT(BC_LD_IMM);
+      EARG(1);
+      compile_expr(cm, expr->dot.target);
+      EMIT(BC_DOT);
+      EMIT(BC_OP_DEREF);
       break;
     case IR_E_CONTEXT:
       EMIT(BC_LD_CTX);
@@ -478,6 +506,12 @@ void compile_ref(sbVmCompiler *cm, sbIrExpr *expr, flag is_lref) {
       /* &a[0] / &a::b */
       EMIT(BC_OP_INDEXRREF);
     }
+  } else if (expr->type == IR_E_DOT) {
+    compile_expr(cm, expr->dot.param);
+    EMIT(BC_LD_IMM);
+    EARG(1);
+    compile_ref(cm, expr->dot.target, is_lref);
+    EMIT(BC_DOT);
   } else {
     PANIC("cannot & non-variable-name! (todo)");
   }

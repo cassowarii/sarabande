@@ -148,6 +148,62 @@ void sbV_index_value(hVm vm) {
   }
 }
 
+void sbV_index_lref(hVm vm) {
+  hVal *a = sbVm_peek(vm, 1);
+  hVal *b = sbVm_peek(vm, 0);
+  if (a->type != IT_REF) {
+    PANIC("Object illegally returned non-reference!");
+  }
+  a = sbVar_get_value_ptr(sbVar_deref(a));
+
+  if (a->type == IT_LIST && b->type == IT_INTEGER) {
+    sbVm_npop(vm, 2);
+    hVal result = sbList_index_lvalue_ref(a->list, b->integer);
+    sbVm_push(vm, &result);
+  } else if (a->type == IT_HASH) {
+    sbVm_npop(vm, 2);
+    hVal result = sbHash_find_lvalue_ref(a->hash, b);
+    sbVm_push(vm, &result);
+  } else if (a->type == IT_MODULE && b->type == IT_SYMBOL) {
+    PANIC("TODO");
+  } else {
+    sbVm_swap(vm);                                      /* b a */
+    sbVm_push_immediate(vm, &HVSYM(S_OP_INDEX));        /* b a op::index */
+    sbVm_swap(vm);                                      /* b op::index a */
+    sbVm_push_immediate(vm, &HVINT(2));                 /* b op::index a 2 */
+    sbVm_swap(vm);                                      /* b op::index 2 a */
+    sbLib_resolve_method(vm);
+  }
+}
+
+void sbV_index_rref(hVm vm) {
+  hVal *a = sbVm_peek(vm, 1);
+  hVal *b = sbVm_peek(vm, 0);
+  if (a->type != IT_REF) {
+    PANIC("Object illegally returned non-reference!");
+  }
+  a = sbVar_get_value_ptr(sbVar_deref(a));
+
+  if (a->type == IT_LIST && b->type == IT_INTEGER) {
+    sbVm_npop(vm, 2);
+    hVal result = sbList_index_rvalue_ref(a->list, b->integer);
+    sbVm_push(vm, &result);
+  } else if (a->type == IT_HASH) {
+    sbVm_npop(vm, 2);
+    hVal result = sbHash_find_rvalue_ref(a->hash, b);
+    sbVm_push(vm, &result);
+  } else if (a->type == IT_MODULE && b->type == IT_SYMBOL) {
+    PANIC("TODO");
+  } else {
+    sbVm_swap(vm);                                      /* b a */
+    sbVm_push_immediate(vm, &HVSYM(S_OP_INDEX));        /* b a op::index */
+    sbVm_swap(vm);                                      /* b op::index a */
+    sbVm_push_immediate(vm, &HVINT(2));                 /* b op::index a 2 */
+    sbVm_swap(vm);                                      /* b op::index 2 a */
+    sbLib_resolve_method(vm);
+  }
+}
+
 hVal sbV_rangeindex(hVal *a, hVal *b, hVal *c) {
   if (b->type == IT_INTEGER && c->type == IT_INTEGER) {
     usize length;

@@ -361,11 +361,11 @@ static sbIrExpr *expr_call(hIrChunk ck, sbIrExpr *to_call, sbIrExpr *param) {
   });
 }
 
-static sbIrExpr *expr_send(hIrChunk ck, sbIrExpr *target, sbIrExpr *message) {
+static sbIrExpr *expr_dot(hIrChunk ck, sbIrExpr *target, sbIrExpr *param) {
   return new_expr(ck, &(sbIrExpr) {
-    .type = IR_E_SEND,
-    .send.target = target,
-    .send.message = message,
+    .type = IR_E_DOT,
+    .dot.target = target,
+    .dot.param = param,
   });
 }
 
@@ -998,22 +998,13 @@ static sbIrExpr *compile_ast_expr(hIrChunk ck, sbAst node, flag list_context) {
   if (node == NO_NODE) return NULL;
 
   if (node->type == AST_NODE_FUNCCALL) {
-    if (node->seq.left->type == AST_NODE_DOT) {
-      /* For a.b(c,d,e), we can optimize a bit to avoid allocating closures
-       * for built-in types that get methods called on them */
-      sbIrExpr *called = compile_ast_expr(ck, node->seq.left->seq.left, FALSE);
-      sbIrExpr *method = expr_list(ck, compile_ast_expr(ck, node->seq.left->seq.right, FALSE));
-      sbIrExpr *params = compile_ast_list_after(ck, node->seq.right, method);
-      return expr_send(ck, called, params);
-    } else {
-      sbIrExpr *called = compile_ast_expr(ck, node->seq.left, FALSE);
-      sbIrExpr *params = compile_ast_list(ck, node->seq.right);
-      return expr_call(ck, called, params);
-    }
+    sbIrExpr *called = compile_ast_expr(ck, node->seq.left, FALSE);
+    sbIrExpr *params = compile_ast_list(ck, node->seq.right);
+    return expr_call(ck, called, params);
   } else if (node->type == AST_NODE_DOT) {
     sbIrExpr *target = compile_ast_expr(ck, node->seq.left, FALSE);
-    sbIrExpr *param = expr_list(ck, compile_ast_expr(ck, node->seq.right, FALSE));
-    return expr_call(ck, target, param);
+    sbIrExpr *param = compile_ast_expr(ck, node->seq.right, FALSE);
+    return expr_dot(ck, target, param);
   } else if (node->type == AST_VAL_FUNC) {
     sbIrChunk *func = compile_ast_function(ck->program, node->seq.left, node->seq.right);
     return expr_func(ck, func);

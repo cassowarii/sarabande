@@ -3,6 +3,7 @@
 #include "data/symbol.h"
 
 static void print_stmt(sbIrStmt *s);
+static void print_expr(sbIrExpr *e);
 
 void sbIrProgram_print(hIrProgram ir) {
   usize nchunks = ir->chunks.size / sizeof(sbIrChunk*);
@@ -23,6 +24,10 @@ void sbIrProgram_print(hIrProgram ir) {
 
     debug("\n");
   }
+}
+
+void sbIr_print_expr(sbIrExpr *e) {
+  print_expr(e);
 }
 
 /* --- */
@@ -85,12 +90,12 @@ static void print_expr(sbIrExpr *e) {
       }
       debug(")");
       break;
-    case IR_E_SEND:
-      debug("SEND: ");
-      print_expr(e->send.target);
-      debug(" <~( ");
-      print_expr(e->send.message);
-      debug(" )");
+    case IR_E_DOT:
+      debug("(");
+      print_expr(e->dot.target);
+      debug(" . ");
+      print_expr(e->dot.param);
+      debug(")");
       break;
     case IR_E_LIST:
       if (e->list.next) {

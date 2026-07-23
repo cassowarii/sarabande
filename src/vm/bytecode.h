@@ -24,6 +24,8 @@ typedef enum sbOpcode {
   BC_NPOP,              // pop N values from stack given by top number
   BC_SWAP,              // swap top two values on stack
   BC_CALL,              // push return address and jump to new block
+  BC_CALL_IND,          // 'a->(...)' indirect call that can return a value
+  BC_DOT,               // 'a.b' indirect call that should return a reference
   BC_RET,               // return to calling block
   BC_NUMARG,            // check number of function arguments = this
   BC_MINARG,            // check number of function arguments > this
